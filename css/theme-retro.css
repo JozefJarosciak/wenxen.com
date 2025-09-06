@@ -257,7 +257,7 @@ body.retro-mode #calendar-xen-total #estXenUsd {
 
 /* Ensure consistent grid layout with monospace font */
 body.retro-mode .settings-grid {
-  align-items: start;
+  align-items: stretch;
 }
 body.retro-mode .settings-card {
   width: 100%;

@@ -418,7 +418,7 @@ body.dark-mode #calendar-xen-total #estXenUsd {
 
 /* Ensure consistent grid layout */
 body.dark-mode .settings-grid {
-  align-items: start;
+  align-items: stretch;
 }
 body.dark-mode .settings-card {
   width: 100%;

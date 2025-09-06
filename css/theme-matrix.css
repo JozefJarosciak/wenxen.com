@@ -582,7 +582,7 @@ body.matrix-mode .settings-card .button-row {
 
 /* Settings grid layout consistency */
 body.matrix-mode .settings-grid {
-  align-items: start;
+  align-items: stretch;
 }
 
 body.matrix-mode .settings-card {
