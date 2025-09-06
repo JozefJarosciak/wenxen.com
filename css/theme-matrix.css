@@ -170,6 +170,27 @@ body.matrix-mode .modal-content p {
   font-family: inherit;
 }
 
+/* Onboarding modal specific styling for matrix theme */
+body.matrix-mode .onboarding-step {
+  background: rgba(0, 255, 0, 0.05);
+  border-left-color: var(--accent-color, #00ff00);
+}
+
+body.matrix-mode .step-content strong {
+  color: var(--btn-fg, #00ff00);
+  font-family: inherit;
+  text-shadow: 0 0 2px #00ff00;
+}
+
+body.matrix-mode .step-detail {
+  color: var(--muted, #00aa00);
+  font-family: inherit;
+}
+
+body.matrix-mode .onboarding-footer {
+  border-top-color: rgba(0, 255, 0, 0.2);
+}
+
 /* Site footer */
 body.matrix-mode .site-footer {
   border-top-color: #00aa00;

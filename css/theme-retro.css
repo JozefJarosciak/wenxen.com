@@ -90,6 +90,26 @@ body.retro-mode .modal-content p {
   color: var(--btn-fg, #c7fff7);
   font-family: inherit;
 }
+
+/* Onboarding modal specific styling for retro theme */
+body.retro-mode .onboarding-step {
+  background: rgba(255, 234, 122, 0.1);
+  border-left-color: var(--accent-color, #ffea7a);
+}
+
+body.retro-mode .step-content strong {
+  color: var(--btn-fg, #c7fff7);
+  font-family: inherit;
+}
+
+body.retro-mode .step-detail {
+  color: var(--muted, #8ab4ff);
+  font-family: inherit;
+}
+
+body.retro-mode .onboarding-footer {
+  border-top-color: rgba(199, 255, 247, 0.2);
+}
 /* Ensure ALL elements inside progressContainer have matching background */
 body.retro-mode #progressContainer * {
   background: #0619a9 !important; /* force same as progressContainer */

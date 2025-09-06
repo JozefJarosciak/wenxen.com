@@ -1,7 +1,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <base href="/tracker/">
+  <base href="/">
   <title>WenXen.com - Xen Tracker for Ethereum</title>
   <script
     src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -455,11 +455,11 @@
 
   <!-- Footer -->
   <footer class="site-footer" role="contentinfo">
-    <span>Copyright <span id="copyrightYear"></span> Xen.pub</span>
+    <span>Copyright <span id="copyrightYear"></span> WenXen.com/Xen.pub</span>
     <span class="inline-sep">|</span>
     <a href="#" id="privacyLink">Privacy</a>
     <span class="inline-sep">|</span>
-    <a href="https://github.com/JozefJarosciak/xentracker" id="githubLink" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href="https://github.com/JozefJarosciak/wenxen.com" id="githubLink" target="_blank" rel="noopener noreferrer">GitHub</a>
     <span class="inline-sep">|</span>
     <a href="https://xen.pub/donate.php" id="donateLink" target="_blank" rel="noopener noreferrer">Donate</a>
   </footer>
@@ -471,10 +471,10 @@
     <h3 id="privacyTitle" style="margin:0 0 8px 0;">Privacy &amp; Terms Notice</h3>
     <div class="modal-body" style="max-height:50vh; overflow:auto;">
       <p>
-        This tracker is provided by Xen.pub on an open-source basis. It runs entirely in your browser and uses only public Ethereum RPC endpoints and your own free Etherscan API key. Xen.pub does not collect or store your data or keys on our servers.
+        This tracker is provided by WenXen.com/Xen.pub on an open-source basis. It runs entirely in your browser and uses only public Ethereum RPC endpoints and your own free Etherscan API key. Xen.pub does not collect or store your data or keys on our servers.
       </p>
       <p>
-        By using this site, you agree that you are solely responsible for all actions you take. Transactions you initiate are signed in your own wallet; Xen.pub cannot reverse or recover anything you do. The software is provided “as is,” without warranties of any kind. To the fullest extent permitted by law, Xen.pub disclaims liability for any loss or damages arising from or related to the use of this site or its code.
+        By using this site, you agree that you are solely responsible for all actions you take. Transactions you initiate are signed in your own wallet; WenXen.com/Xen.pub cannot reverse or recover anything you do. The software is provided “as is,” without warranties of any kind. To the fullest extent permitted by law, Xen.pub disclaims liability for any loss or damages arising from or related to the use of this site or its code.
       </p>
       <p>
         Because this project is open source, you may review the code and host it yourself if you prefer. You can also run it locally on your own infrastructure (laptop/desktop) without any deployment to cloud.
@@ -504,6 +504,50 @@
   </div>
 </div>
 
+<!-- Onboarding Modal -->
+<div id="onboardingModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="onboardingTitle">
+  <div class="modal-content onboarding-content">
+    <h3 id="onboardingTitle" style="margin:0 0 16px 0;">Welcome to WenXen.com! 🎉</h3>
+    
+    <div class="onboarding-intro">
+      <p>Tired of manually entering every single XEN mint into a tracker? We were too.</p>
+      
+      <p>Our tracker simplifies everything. Just provide your Ethereum address and a free Etherscan API key, and we automatically discover all your past and future mints. No more guesswork or forgotten entries.</p>
+      
+      <p>This tool is fully open source and runs entirely in your browser, connecting directly to the Ethereum network. It doesn't rely on any third-party servers, so your data stays local and the tracker works even when other services are down. You can even run it in a standalone mode for complete control.</p>
+    </div>
+
+    <div class="onboarding-steps">
+      <h4 style="margin: 16px 0 12px 0; color: var(--text-color);">Get Started in 2 Steps:</h4>
+      
+      <div class="onboarding-step">
+        <div class="step-icon">📝</div>
+        <div class="step-content">
+          <strong>Step 1: Add Your Address(es)</strong>
+          <div class="step-detail">Enter your Ethereum addresses in the "Addresses" section (one per line).</div>
+        </div>
+      </div>
+      
+      <div class="onboarding-step">
+        <div class="step-icon">🔑</div>
+        <div class="step-content">
+          <strong>Step 2: Add Your API Key</strong>
+          <div class="step-detail">Add your free Etherscan API key to enable faster, more reliable scanning. You can get one at etherscan.io/apidashboard.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="onboarding-footer">
+      <p style="margin: 16px 0 8px 0; font-size: 0.9em; opacity: 0.8;">
+        ✨ Once set up, just click "Scan" to discover all your XEN activity! The first scan might take a little longer, but all subsequent ones will be fast.
+      </p>
+    </div>
+
+    <div class="modal-actions">
+      <button id="onboardingGetStartedBtn" type="button">Get Started in Settings</button>
+    </div>
+  </div>
+</div>
 
 <script src="./ABI/xen-ABI.js?v=1"></script>
 <script src="./ABI/xenft-ABI.js?v=1"></script>
@@ -526,23 +570,20 @@
 
     // Target local CSS files (e.g., href="css/style.css")
     document.querySelectorAll('link[href^="css/"]').forEach(link => {
-      const url = new URL(link.href);
-      url.search = versionQuery;
-      link.href = url.toString();
+      const href = link.getAttribute('href');
+      link.href = href + (href.includes('?') ? '&' : '?') + versionQuery;
     });
 
     // Target local JS files (e.g., src="./js/app.js")
     document.querySelectorAll('script[src^="./js/"]').forEach(script => {
-      const url = new URL(script.src);
-      url.search = versionQuery;
-      script.src = url.toString();
+      const src = script.getAttribute('src');
+      script.src = src + (src.includes('?') ? '&' : '?') + versionQuery;
     });
 
     // Also bust cache for ABI scripts moved to ./ABI/
     document.querySelectorAll('script[src^="./ABI/"]').forEach(script => {
-      const url = new URL(script.src);
-      url.search = versionQuery;
-      script.src = url.toString();
+      const src = script.getAttribute('src');
+      script.src = src + (src.includes('?') ? '&' : '?') + versionQuery;
     });
   })();
 </script>

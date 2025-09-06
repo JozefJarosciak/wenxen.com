@@ -103,6 +103,24 @@ body.light-mode .modal-actions button.secondary {
   background: transparent;
   color: var(--muted, #6b7280);
 }
+
+/* Onboarding modal specific styling for light theme */
+body.light-mode .onboarding-step {
+  background: rgba(59, 130, 246, 0.05);
+  border-left-color: var(--accent-color, #3b82f6);
+}
+
+body.light-mode .step-content strong {
+  color: var(--btn-fg, #111827);
+}
+
+body.light-mode .step-detail {
+  color: var(--muted, #6b7280);
+}
+
+body.light-mode .onboarding-footer {
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
 /* Ensure ALL elements inside progressContainer have matching background */
 body.light-mode #progressContainer * {
   background: #fff5f5 !important; /* force same as progressContainer */

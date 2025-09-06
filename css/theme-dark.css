@@ -175,6 +175,24 @@ body.dark-mode .modal-content h3 {
 body.dark-mode .modal-content p {
   color: var(--btn-fg, #e5e7eb);
 }
+
+/* Onboarding modal specific styling for dark theme */
+body.dark-mode .onboarding-step {
+  background: rgba(59, 130, 246, 0.1);
+  border-left-color: var(--accent-color, #3b82f6);
+}
+
+body.dark-mode .step-content strong {
+  color: var(--btn-fg, #e5e7eb);
+}
+
+body.dark-mode .step-detail {
+  color: var(--muted, #9ca3af);
+}
+
+body.dark-mode .onboarding-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
 /* Ensure ALL elements inside progressContainer have matching background */
 body.dark-mode #progressContainer * {
   background: #0f172a !important; /* force same as progressContainer */

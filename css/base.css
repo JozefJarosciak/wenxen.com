@@ -638,6 +638,79 @@ body.dark-mode #progressContainer #rpcStatus,
   flex-grow: 1
 }
 
+/* Onboarding Modal Styles */
+.onboarding-content {
+  max-width: 500px;
+  width: 90vw;
+}
+
+.onboarding-intro p {
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+  font-size: 0.95em;
+}
+
+.onboarding-steps {
+  margin: 20px 0;
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 12px;
+  background: rgba(0, 120, 250, 0.05);
+  border-left: 3px solid var(--accent-color, #0078fa);
+  border-radius: 6px;
+}
+
+.step-icon {
+  font-size: 1.5em;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-content {
+  flex-grow: 1;
+}
+
+.step-content strong {
+  color: var(--text-color, #111);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.step-detail {
+  font-size: 0.9em;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.onboarding-footer {
+  text-align: center;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding-top: 16px;
+  margin-top: 20px;
+}
+
+#onboardingGetStartedBtn {
+  background: var(--accent-color, #0078fa);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  font-size: 1em;
+}
+
+#onboardingGetStartedBtn:hover {
+  background: var(--accent-hover, #0066d9);
+  transform: translateY(-1px);
+}
+
 .gas-note {
   font-size: 0.8em;
   color: #666;

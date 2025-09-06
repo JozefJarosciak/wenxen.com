@@ -262,6 +262,13 @@ function acceptPrivacy(){
   try { localStorage.setItem('privacyAccepted', '1'); } catch {}
   setSettingsTextInputsEnabled(true);
   closePrivacyModal();
+  
+  // Show onboarding modal if setup is not complete
+  if (shouldShowOnboarding()) {
+    setTimeout(() => {
+      showOnboardingModal();
+    }, 300); // Small delay to let privacy modal close first
+  }
 }
 
 function declinePrivacy(){
@@ -281,6 +288,48 @@ function ensurePrivacyConsentOnSettings(currentTabId){
   }
 }
 
+// Onboarding Modal Functions
+function isSetupComplete() {
+  try {
+    const ethAddress = localStorage.getItem('ethAddress');
+    const etherscanApiKey = localStorage.getItem('etherscanApiKey');
+    
+    // Check if both fields have values (not empty or just whitespace)
+    return !!(ethAddress && ethAddress.trim() && etherscanApiKey && etherscanApiKey.trim());
+  } catch {
+    return false;
+  }
+}
+
+function shouldShowOnboarding() {
+  // Show onboarding if privacy is accepted but setup is not complete
+  return isPrivacyAccepted() && !isSetupComplete();
+}
+
+function showOnboardingModal() {
+  const modal = document.getElementById('onboardingModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function hideOnboardingModal() {
+  const modal = document.getElementById('onboardingModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function completeOnboarding() {
+  hideOnboardingModal();
+  // Switch to Settings tab
+  if (window.setActiveTab) {
+    window.setActiveTab('tab-settings');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // Footer year
   try { const y = document.getElementById('copyrightYear'); if (y) y.textContent = String(new Date().getFullYear()); } catch {}
@@ -292,6 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (acceptBtn) acceptBtn.addEventListener('click', acceptPrivacy);
   const declineBtn = document.getElementById('privacyDeclineBtn');
   if (declineBtn) declineBtn.addEventListener('click', declinePrivacy);
+  
+  // Onboarding modal button
+  const onboardingBtn = document.getElementById('onboardingGetStartedBtn');
+  if (onboardingBtn) onboardingBtn.addEventListener('click', completeOnboarding);
   // Defensive: if user focuses a settings field without consent, block and show modal
   const settingsRoot = document.getElementById('tab-settings');
   if (settingsRoot) {
@@ -376,6 +429,13 @@ document.addEventListener('DOMContentLoaded', () => {
       updateThemeMenuUI();
     }
   } catch {}
+
+  // Check if onboarding should be shown on page load
+  setTimeout(() => {
+    if (shouldShowOnboarding()) {
+      showOnboardingModal();
+    }
+  }, 500); // Small delay to ensure everything is loaded
 });
 
 // --- About tab loader ---
@@ -3036,6 +3096,11 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
   localStorage.setItem("ethAddress", addresses);
   localStorage.setItem("customRPC", customRPC);
   localStorage.setItem("etherscanApiKey", apiKey);
+  
+  // Check if setup is now complete and hide onboarding modal if it's showing
+  if (isSetupComplete()) {
+    hideOnboardingModal();
+  }
 }
 function loadUserPreferences() {
   document.getElementById("ethAddress").value = localStorage.getItem("ethAddress") || "";
