@@ -263,10 +263,12 @@ function acceptPrivacy(){
   setSettingsTextInputsEnabled(true);
   closePrivacyModal();
   
-  // Show onboarding modal if setup is not complete
-  if (shouldShowOnboarding()) {
+  // If setup is not complete, go to Settings tab (user came from Welcome modal)
+  if (!isSetupComplete()) {
     setTimeout(() => {
-      showOnboardingModal();
+      if (window.setActiveTab) {
+        window.setActiveTab('tab-settings');
+      }
     }, 300); // Small delay to let privacy modal close first
   }
 }
@@ -302,8 +304,8 @@ function isSetupComplete() {
 }
 
 function shouldShowOnboarding() {
-  // Show onboarding if privacy is accepted but setup is not complete
-  return isPrivacyAccepted() && !isSetupComplete();
+  // Show onboarding if setup is not complete (regardless of privacy status)
+  return !isSetupComplete();
 }
 
 function showOnboardingModal() {
@@ -323,6 +325,16 @@ function hideOnboardingModal() {
 }
 
 function completeOnboarding() {
+  // Check if privacy needs to be accepted first
+  if (!isPrivacyAccepted()) {
+    hideOnboardingModal();
+    // Show privacy modal, and after acceptance we'll go to settings
+    setTimeout(() => {
+      openPrivacyModal();
+    }, 300); // Small delay to let onboarding modal close first
+    return;
+  }
+  
   hideOnboardingModal();
   // Switch to Settings tab
   if (window.setActiveTab) {
@@ -366,8 +378,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isPrivacyAccepted()) return; // ok
       const target = e.target;
       // Allow interactions inside the privacy modal itself
-      const modal = document.getElementById('privacyModal');
-      if (modal && modal.contains(target)) return;
+      const privacyModal = document.getElementById('privacyModal');
+      if (privacyModal && privacyModal.contains(target)) return;
+      // Allow interactions inside the onboarding modal itself
+      const onboardingModal = document.getElementById('onboardingModal');
+      if (onboardingModal && onboardingModal.contains(target)) return;
       // Allow explicit privacy link to open the modal (we open it below anyway)
       if (target && (target.id === 'privacyLink' || target.closest('#privacyLink'))) return;
 
