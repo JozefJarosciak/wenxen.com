@@ -1,0 +1,226 @@
+/* Generated from style.css split by theme. */
+body.light-mode {
+  --border: #e5e7eb;
+  --panel: #fff;
+  --btn-bg: #f8fafc;
+  --btn-fg: #111827;
+  --muted: #6b7280;
+  --input-bg: #fff;
+  --btn-hover-bg: #dbeafe;
+  --btn-hover-border: #93c5fd;
+}
+body.light-mode #themeSelect option {
+  background: #ffffff;
+  color: #111827;
+}
+body.light-mode #resetDbSelect option, body.light-mode #mintAction option {
+  background: #ffffff;
+  color: #111827;
+}
+body.light-mode {
+  background-color: #ffffff;
+  color: #000000
+}
+body.light-mode input, body.light-mode textarea, body.light-mode button {
+  background-color: #fff;
+  color: #000;
+  border: 1px solid #ccc
+}
+body.light-mode .tabulator {
+  background-color: #fff;
+  color: #000
+}
+body.light-mode .tabulator .tabulator-header {
+  background-color: #f5f5f5;
+  color: #000;
+  border-color: #ccc
+}
+body.light-mode .tabulator .tabulator-cell {
+  background-color: #fff;
+  color: #000;
+  border-color: #ccc
+}
+body.light-mode .tabulator .tabulator-row {
+  border-color: #ccc
+}
+body.light-mode .tabulator .tabulator-footer {
+  background-color: #f5f5f5;
+  color: #000;
+  border-color: #ccc
+}
+body.light-mode .btn-mint {
+  background: transparent;
+  color: var(--btn-fg, #111827);
+  border: 1px solid var(--border, #e5e7eb)
+}
+body.light-mode .btn-mint:hover {
+  background: #dbeafe;
+  border-color: #93c5fd
+}
+body.light-mode #calendar-xen-total #estXenUsd {
+  color: #085903;
+  font-weight: 600;
+}
+/* Explicitly ensure content is left-aligned */
+body.light-mode .settings-card {
+  text-align: left;
+}
+body.light-mode .settings-card h3,
+body.light-mode .settings-card p,
+body.light-mode .settings-card label,
+body.light-mode .field {
+  text-align: left;
+}
+/* Ensure buttons are left-aligned */
+body.light-mode .settings-card .button-row,
+body.light-mode .settings-card button,
+body.light-mode .settings-card .button-like {
+  text-align: left;
+}
+body.light-mode .settings-card .button-row {
+  justify-content: flex-start;
+}
+/* Modal styling for light theme */
+body.light-mode .modal-content {
+  background: var(--panel, #fff);
+  color: var(--btn-fg, #111827);
+  border: 1px solid var(--border, #e5e7eb);
+}
+body.light-mode .modal-content h3,
+body.light-mode .modal-content p {
+  color: var(--btn-fg, #111827);
+}
+body.light-mode .modal-actions button {
+  background: var(--btn-bg, #f8fafc);
+  color: var(--btn-fg, #111827);
+  border: 1px solid var(--border, #e5e7eb);
+}
+body.light-mode .modal-actions button:hover {
+  background: var(--btn-hover-bg, #dbeafe);
+  border-color: var(--btn-hover-border, #93c5fd);
+}
+body.light-mode .modal-actions button.secondary {
+  background: transparent;
+  color: var(--muted, #6b7280);
+}
+/* Ensure ALL elements inside progressContainer have matching background */
+body.light-mode #progressContainer * {
+  background: #fff5f5 !important; /* force same as progressContainer */
+}
+body.light-mode #tokenProgressText,
+body.light-mode #addressProgressText,
+body.light-mode #addressProgressContainer,
+body.light-mode #tokenProgressContainer,
+body.light-mode #scanTypeLine,
+body.light-mode #etrText,
+body.light-mode #rpcStatus {
+  background: #fff5f5 !important; /* same as progressContainer */
+}
+/* Remove borders from progress text elements */
+body.light-mode #tokenProgressText,
+body.light-mode #addressProgressText,
+body.light-mode #rpcStatus {
+  border: none !important;
+}
+
+/* Flatpickr calendar styling for light theme */
+body.light-mode .flatpickr-calendar {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+}
+
+body.light-mode .flatpickr-months {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+body.light-mode .flatpickr-current-month {
+  color: #111827;
+}
+
+body.light-mode .flatpickr-current-month .numInputWrapper {
+  color: #111827;
+}
+
+body.light-mode .flatpickr-current-month input {
+  background: transparent;
+  color: #111827;
+  border: none;
+}
+
+body.light-mode .flatpickr-weekdays {
+  background: #f9fafb;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+body.light-mode .flatpickr-weekday {
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+body.light-mode .flatpickr-days {
+  background: #ffffff;
+}
+
+body.light-mode .flatpickr-day {
+  background: transparent;
+  color: #111827;
+  border: 1px solid transparent;
+}
+
+body.light-mode .flatpickr-day:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+body.light-mode .flatpickr-day.selected {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  font-weight: 700;
+}
+
+body.light-mode .flatpickr-day.today {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  border-color: #2563eb;
+  font-weight: 600;
+}
+
+body.light-mode .flatpickr-day.prevMonthDay,
+body.light-mode .flatpickr-day.nextMonthDay {
+  color: #9ca3af;
+  opacity: 0.6;
+}
+
+body.light-mode .flatpickr-months .flatpickr-month {
+  color: #111827;
+}
+
+body.light-mode .flatpickr-months .flatpickr-prev-month,
+body.light-mode .flatpickr-months .flatpickr-next-month {
+  color: #111827;
+  fill: #111827;
+}
+
+body.light-mode .flatpickr-months .flatpickr-prev-month:hover,
+body.light-mode .flatpickr-months .flatpickr-next-month:hover {
+  color: #2563eb;
+  fill: #2563eb;
+}
+
+body.light-mode .flatpickr-today-btn {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+body.light-mode .flatpickr-today-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}

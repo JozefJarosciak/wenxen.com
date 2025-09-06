@@ -1,0 +1,414 @@
+/* Generated from style.css split by theme. */
+body.retro-mode {
+  --border: #4e5bd4;
+  --panel:  #0a1db8;
+  --btn-bg: #0a1db8;
+  --btn-fg: #c7fff7;
+  --muted:  #8ab4ff;
+  --input-bg: #06138a;
+  --btn-hover-bg: #2749dc;
+  --btn-hover-border: #4e5bd4;
+
+  background-color: #0414A7;
+  color: #c7fff7;
+  font-family: 'VT323', monospace;
+  letter-spacing: 0.3px;
+}
+body.retro-mode a {
+ color: #ffea7a; 
+}
+body.retro-mode .muted {
+ color: var(--muted); 
+}
+body.retro-mode select {
+ background: var(--panel); color: var(--btn-fg); border: 1px solid var(--border); 
+}
+body.retro-mode #networkName {
+ background: #0a1db8; color: #c7fff7; border: 1px solid var(--border); 
+}
+body.retro-mode .wallet-reveal-btn {
+ background: var(--panel); color: var(--btn-fg); border-color: var(--border); 
+}
+body.retro-mode .menu-toggle {
+ background: var(--panel); color: var(--btn-fg); border-color: var(--border); 
+}
+body.retro-mode .menu-panel {
+ background: var(--panel); border-color: var(--border); box-shadow: 0 15px 35px rgba(3,8,58,.6); 
+}
+body.retro-mode .menu-title {
+ color: var(--muted); 
+}
+body.retro-mode .chip {
+ background-color: #07169f; border-color: #2749dc; color: #c7fff7; 
+}
+body.retro-mode .chip:hover {
+ background-color: #0a1db8; 
+}
+body.retro-mode .chip.active {
+ background-color: #00ffff; color: #06138a; border-color: #00ffff; 
+}
+body.retro-mode #progressContainer {
+ background: #0619a9; border-color: #4e5bd4; color: #c7fff7; 
+}
+body.retro-mode #progressContainer #scanTypeLine {
+ color: #c7fff7; 
+}
+body.retro-mode #progressContainer #etrText {
+ color: #c7fff7; 
+}
+body.retro-mode #tokenProgressBar {
+ background: #06138a; color: #ffea7a; 
+}
+/* Enhanced modal styling for retro theme */
+body.retro-mode .modal-content {
+  background: var(--panel, #0a1db8);
+  color: var(--btn-fg, #c7fff7);
+  border: 1px solid var(--border, #4e5bd4);
+  box-shadow: 0 10px 30px rgba(3, 8, 58, 0.8);
+}
+/* Modal buttons in retro theme */
+body.retro-mode .modal-actions button {
+  background: var(--btn-bg, #0a1db8);
+  color: var(--btn-fg, #c7fff7);
+  border: 1px solid var(--border, #4e5bd4);
+  font-family: inherit;
+}
+body.retro-mode .modal-actions button:hover {
+  background: var(--btn-hover-bg, #2749dc);
+  border-color: var(--btn-hover-border, #4e5bd4);
+}
+body.retro-mode .modal-actions button.secondary {
+  background: transparent;
+  color: var(--muted, #8ab4ff);
+}
+/* Modal text elements in retro theme */
+body.retro-mode .modal-content h3 {
+  color: var(--btn-fg, #c7fff7);
+  font-family: inherit;
+}
+body.retro-mode .modal-content p {
+  color: var(--btn-fg, #c7fff7);
+  font-family: inherit;
+}
+/* Ensure ALL elements inside progressContainer have matching background */
+body.retro-mode #progressContainer * {
+  background: #0619a9 !important; /* force same as progressContainer */
+}
+body.retro-mode #tokenProgressText,
+body.retro-mode #addressProgressText,
+body.retro-mode #addressProgressContainer,
+body.retro-mode #tokenProgressContainer,
+body.retro-mode #scanTypeLine,
+body.retro-mode #etrText,
+body.retro-mode #rpcStatus {
+  background: #0619a9 !important; /* same as progressContainer */
+}
+/* Remove borders from progress text elements */
+body.retro-mode #tokenProgressText,
+body.retro-mode #addressProgressText,
+body.retro-mode #rpcStatus {
+  border: none !important;
+}
+body.retro-mode .site-footer {
+ border-top-color: #2749dc; color: #bfe9ff; 
+}
+body.retro-mode .markdown-body pre {
+ background: #05138a; color: #c7fff7; 
+}
+body.retro-mode .tabulator {
+ background-color: #051399; color: #c7fff7; 
+}
+body.retro-mode .tabulator .tabulator-header {
+ background-color: var(--panel); color: #c7fff7; border-color: var(--border); 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col {
+ background: transparent; color: #c7fff7; border-right: 1px solid var(--border); 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col:last-child {
+ border-right: none; 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+ color: #c7fff7; font-weight: 600; 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover {
+ background: rgba(255,255,255,0.08); 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col.tabulator-col-sorted {
+ background: rgba(255,255,255,0.10); 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col .tabulator-sorter .tabulator-sorter-element {
+ border-bottom-color: #bfe9ff; 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-col[aria-sort="desc"] .tabulator-sorter .tabulator-sorter-element {
+ border-top-color: #bfe9ff; 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-header-filter select {
+ background: #06138a; color: #c7fff7; border: 1px solid var(--border); border-radius: 8px; 
+}
+body.retro-mode .tabulator .tabulator-header .tabulator-header-filter input::placeholder {
+ color: #9bc0ff; 
+}
+body.retro-mode .tabulator .tabulator-cell {
+ background-color: #051399; color: #c7fff7; border-color: #2749dc; 
+}
+body.retro-mode .tabulator .tabulator-footer {
+ background-color: #0a1db8; color: #c7fff7; border-color: var(--border); 
+}
+body.retro-mode {
+ color-scheme: dark; 
+}
+body.retro-mode #stakeRegularPerAddressSummary {
+ color: #bfe9ff; 
+}
+body.retro-mode #mobile-tooltip {
+ background:#06138a; color:#c7fff7; border-color:#4e5bd4; 
+}
+body.retro-mode #resetDbSelect, body.retro-mode #mintAction {
+  background: var(--input-bg, #06138a);
+  color: #c7fff7;
+  border-color: var(--border);
+}
+body.retro-mode #resetDbSelect option, body.retro-mode #mintAction option {
+  background: #06138a;
+  color: #c7fff7;
+}
+body.retro-mode #summaryContainer {
+  background-color: #0619a9;
+  border-color: #4e5bd4;
+  color: #c7fff7;
+}
+body.retro-mode {
+ --input-bg: #06138a; 
+}
+body.retro-mode #tab-settings .field select {
+  background: var(--input-bg);
+}
+body.retro-mode #tab-settings .settings-card.danger {
+ background: var(--input-bg); 
+}
+/* Ensure danger card title is visible in retro mode */
+body.retro-mode .settings-card.danger h3 {
+  color: #ff7a7a; /* bright red for retro theme */
+}
+/* Ensure button-like elements use correct theme colors */
+body.retro-mode .button-like {
+  background: var(--btn-bg, #0a1db8);
+  color: var(--btn-fg, #c7fff7);
+}
+body.retro-mode .button-like:hover {
+  background: var(--btn-hover-bg, #2749dc);
+  border-color: var(--btn-hover-border, #4e5bd4);
+}
+body.retro-mode #resetDbSelect {
+  background: var(--input-bg) !important;
+  color: #c7fff7 !important;
+  border-color: var(--border) !important;
+}
+body.retro-mode #stakeTermDays {
+  background: var(--input-bg) !important;
+  color: #c7fff7 !important;
+  border-color: var(--border) !important;
+}
+body.retro-mode .split-scan {
+ border-color: var(--border); 
+}
+body.retro-mode .split-scan .btn {
+ background: var(--btn-bg); color: var(--btn-fg); 
+}
+body.retro-mode .split-scan .split-caret {
+ border-left-color: var(--border); 
+}
+body.retro-mode .split-scan .scan-badge {
+ background: #06138a; color: #c7fff7; 
+}
+body.retro-mode .split-scan .menu {
+  background: var(--panel);
+  color: #c7fff7;
+  border-color: var(--border);
+  box-shadow: 0 8px 20px rgba(3,8,58,0.6);
+}
+body.retro-mode .split-scan .menu li:hover {
+ background: rgba(255,255,255,.08); 
+}
+body.retro-mode #calendar-xen-total #estXenUsd {
+  color: #b9ffb6; /* retro lime on blue */
+  font-weight: 600;
+}
+
+/* Ensure consistent grid layout with monospace font */
+body.retro-mode .settings-grid {
+  align-items: start;
+}
+body.retro-mode .settings-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Ensure text doesn't expand cards differently with monospace font */
+body.retro-mode .settings-card p,
+body.retro-mode .settings-card label,
+body.retro-mode .settings-card small {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+/* Ensure form elements have consistent sizing */
+body.retro-mode .field input[type="text"],
+body.retro-mode .field input[type="password"],
+body.retro-mode .field input[type="number"],
+body.retro-mode .field textarea,
+body.retro-mode .field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  line-height: 1.5;
+  font-size: 0.9em; /* Adjust for monospace font */
+}
+/* Prevent button text from expanding cards */
+body.retro-mode .button-row button,
+body.retro-mode .button-like {
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+/* Ensure consistent eye icon positioning with monospace font */
+body.retro-mode .reveal-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  line-height: 1;
+}
+body.retro-mode .reveal-btn {
+  padding: 2px;
+  color: var(--muted, #8ab4ff);
+  font-size: inherit;
+}
+body.retro-mode .input-with-toggle {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+/* Ensure content is left-aligned like in light mode */
+body.retro-mode .settings-card {
+  text-align: left;
+}
+body.retro-mode .settings-card h3,
+body.retro-mode .settings-card p,
+body.retro-mode .settings-card label,
+body.retro-mode .field {
+  text-align: left;
+}
+/* Ensure buttons are left-aligned */
+body.retro-mode .settings-card .button-row,
+body.retro-mode .settings-card button,
+body.retro-mode .settings-card .button-like {
+  text-align: left;
+}
+body.retro-mode .settings-card .button-row {
+  justify-content: flex-start;
+}
+
+/* Flatpickr calendar styling for retro theme */
+body.retro-mode .flatpickr-calendar {
+  background: var(--panel, #0a1db8);
+  border: 1px solid var(--border, #4e5bd4);
+  box-shadow: 0 15px 35px rgba(3, 8, 58, 0.6);
+  border-radius: 8px;
+}
+
+body.retro-mode .flatpickr-months {
+  background: var(--panel, #0a1db8);
+  border-bottom: 1px solid var(--border, #4e5bd4);
+}
+
+body.retro-mode .flatpickr-current-month {
+  color: var(--btn-fg, #c7fff7);
+  font-family: inherit;
+}
+
+body.retro-mode .flatpickr-current-month .numInputWrapper {
+  color: var(--btn-fg, #c7fff7);
+}
+
+body.retro-mode .flatpickr-current-month input {
+  background: transparent;
+  color: var(--btn-fg, #c7fff7);
+  border: none;
+  font-family: inherit;
+}
+
+body.retro-mode .flatpickr-weekdays {
+  background: var(--input-bg, #06138a);
+  color: var(--muted, #8ab4ff);
+  border-bottom: 1px solid var(--border, #4e5bd4);
+}
+
+body.retro-mode .flatpickr-weekday {
+  color: var(--muted, #8ab4ff);
+  font-family: inherit;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+body.retro-mode .flatpickr-days {
+  background: var(--input-bg, #06138a);
+}
+
+body.retro-mode .flatpickr-day {
+  background: transparent;
+  color: var(--btn-fg, #c7fff7);
+  border: 1px solid transparent;
+  font-family: inherit;
+}
+
+body.retro-mode .flatpickr-day:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border, #4e5bd4);
+}
+
+body.retro-mode .flatpickr-day.selected {
+  background: var(--border, #4e5bd4);
+  color: var(--btn-fg, #c7fff7);
+  border-color: var(--border, #4e5bd4);
+  font-weight: 700;
+}
+
+body.retro-mode .flatpickr-day.today {
+  background: rgba(0, 255, 255, 0.2);
+  color: #00ffff;
+  border-color: #00ffff;
+  font-weight: 600;
+}
+
+body.retro-mode .flatpickr-day.prevMonthDay,
+body.retro-mode .flatpickr-day.nextMonthDay {
+  color: var(--muted, #8ab4ff);
+  opacity: 0.6;
+}
+
+body.retro-mode .flatpickr-months .flatpickr-month {
+  color: var(--btn-fg, #c7fff7);
+}
+
+body.retro-mode .flatpickr-months .flatpickr-prev-month,
+body.retro-mode .flatpickr-months .flatpickr-next-month {
+  color: var(--btn-fg, #c7fff7);
+  fill: var(--btn-fg, #c7fff7);
+}
+
+body.retro-mode .flatpickr-months .flatpickr-prev-month:hover,
+body.retro-mode .flatpickr-months .flatpickr-next-month:hover {
+  color: var(--border, #4e5bd4);
+  fill: var(--border, #4e5bd4);
+}
+
+body.retro-mode .flatpickr-today-btn {
+  background: var(--btn-bg, #0a1db8);
+  color: var(--btn-fg, #c7fff7);
+  border: 1px solid var(--border, #4e5bd4);
+  font-family: inherit;
+  border-radius: 6px;
+}
+
+body.retro-mode .flatpickr-today-btn:hover {
+  background: var(--btn-hover-bg, #2749dc);
+  border-color: var(--btn-hover-border, #4e5bd4);
+}

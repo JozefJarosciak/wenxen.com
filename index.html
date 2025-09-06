@@ -1,0 +1,553 @@
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <base href="/tracker/">
+  <title>WenXen.com - Xen Tracker for Ethereum</title>
+  <script
+    src="https://code.jquery.com/jquery-3.7.1.min.js"
+    integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+    crossorigin="anonymous"></script>
+  <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+  <!-- Dark theme for Tabulator (toggled via JS) -->
+  <link id="tabulatorMidnightCss" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet" disabled>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+  <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.7.5/dist/web3.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <!-- Dark theme for Flatpickr (toggled via JS) -->
+  <link id="flatpickrDarkCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" disabled>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/theme-light.css">
+  <link rel="stylesheet" href="css/theme-dark.css">
+  <link rel="stylesheet" href="css/theme-retro.css">
+  <link rel="stylesheet" href="css/theme-matrix.css">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <!-- Retro theme font (C64-like monospace) -->
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/npm/simple-icons@7/icons/ethereum.svg">
+
+
+</head>
+<body>
+<div class="header-controls">
+  <div class="wallet-container"><span id="networkName"></span>
+    <button id="connectWalletBtn"><span id="connectWalletText">Connect Wallet</span></button>
+    <button id="toggleConnectMask" class="wallet-reveal-btn" aria-label="Mask wallet text" title="Mask">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2.1 3.51L3.51 2.1l18.39 18.39-1.41 1.41-3.06-3.06A11.33 11.33 0 0112 20c-6 0-10-5.33-10-8 0-1.13 1.02-3.08 3.06-4.89L2.1 3.51zM7.5 8.91A7.6 7.6 0 004 12c0 1.2 3 6 8 6 1.63 0 3.09-.42 4.35-1.13l-1.8-1.8A4 4 0 018 12c0-.43.07-.85.2-1.24l-.7-.7zM12 6c6 0 10 5.33 10 8 0 .84-.48 2-1.42 3.22l-1.43-1.43c.51-.77.85-1.48.85-1.79 0-1.2-3-6-8-6-1.03 0-2 .2-2.89.56l-1.5-1.5C9.11 6.39 10.51 6 12 6zm0 4a2 2 0 011.73 3l-2.73-2.73c.29-.17.62-.27 1-.27z"/></svg>
+    </button>
+    <!-- Header dropdown menu: Theme and future actions -->
+    <div class="header-menu" id="headerMenuRoot">
+      <button id="headerMenuToggle" class="menu-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="headerMenu" title="Menu">▾</button>
+      <div id="headerMenu" class="menu-panel" role="menu" hidden>
+        <div class="menu-section">
+          <div class="menu-title">Theme <span id="themeMenuCurrent" class="menu-current">Dark</span></div>
+          <button class="menu-item" role="menuitemradio" aria-checked="false" data-theme="light">
+            <span class="menu-icon" aria-hidden="true">☀️</span>
+            <span>Light</span>
+          </button>
+          <button class="menu-item" role="menuitemradio" aria-checked="true" data-theme="dark">
+            <span class="menu-icon" aria-hidden="true">🌙</span>
+            <span>Dark</span>
+          </button>
+          <button class="menu-item" role="menuitemradio" aria-checked="false" data-theme="retro">
+            <span class="menu-icon" aria-hidden="true">🕹️</span>
+            <span>Retro</span>
+          </button>
+          <button class="menu-item" role="menuitemradio" aria-checked="false" data-theme="matrix">
+            <span class="menu-icon" aria-hidden="true">💚</span>
+            <span>Matrix</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<h1 class="site-title">
+  <span class="brand">WenXen.com</span>
+  <sup class="brand-suffix">
+    <span class="brand-suffix-text">for Ethereum</span>
+    <span id="headerGasNow" class="gas-sup" title="Current gas (gwei)"></span>
+  </sup>
+</h1>
+<div class="tabs">
+  <div class="tab-buttons" role="tablist" aria-label="Main navigation">
+    <button class="tab-button active" data-target="tab-dashboard" role="tab" aria-selected="true">Dashboard</button>
+    <button class="tab-button" data-target="tab-mint" role="tab" aria-selected="false">Mint/Stake</button>
+    <button class="tab-button" data-target="tab-settings" role="tab" aria-selected="false">Settings</button>
+    <button class="tab-button" data-target="tab-about" role="tab" aria-selected="false">About</button>
+  </div>
+  <section id="tab-dashboard" class="tab-panel active" role="tabpanel" aria-labelledby="Dashboard">
+    <div class="dashboard-top">
+
+
+
+      <div class="calendar-wrap">
+        <button id="centerCalendarBtn" class="chip chip-ghost" aria-label="Center calendar on today"> Center Calendar</button>
+        <div class="calendar-wrap">
+          <div id="calendar"></div>
+          <div id="calendar-xen-total">
+            <span>Total XEN: <strong id="estXenTotal">0</strong> <span id="estXenUsd"></span></span>
+          </div>
+
+        </div>
+      </div>
+      <div class="details-wrap"><h2 class="details-title">Mint Details</h2>
+        <div class="controls-container">
+          <div class="button-group">
+            <!-- Split Scan button with inline selector -->
+            <div class="split-scan">
+              <button id="scanBtn" class="btn" type="button" disabled>
+                <span id="scanBtnLabel">Scan</span>
+                <span id="scanModeBadge" class="scan-badge">All</span>
+              </button>
+              <button id="scanModeToggle" class="btn split-caret" type="button"
+                      aria-haspopup="listbox" aria-expanded="false" aria-controls="scanModeMenu"
+                      title="Choose what to scan">▾</button>
+              <ul id="scanModeMenu" class="menu" role="listbox" aria-label="Scan mode" hidden>
+                <li role="option" data-value="all"     aria-selected="true">All</li>
+                <li role="option" data-value="cointool">Cointool</li>
+                <li role="option" data-value="xenft">XENFTs</li>
+                <li role="option" data-value="stake-xenft">Stake XENFTs</li>
+                <li role="option" data-value="stake">Stakes</li>
+              </ul>
+            </div>
+
+            <span class="checkbox-group">
+    <input type="checkbox" id="forceRescan" style="margin: 0;">
+    <label for="forceRescan" style="margin: 0;">Force Rescan</label>
+  </span>
+          </div>
+
+
+          <div id="progressContainer">
+            <div id="scanTypeLine"><strong id="scanTypeText"></strong></div>
+            <div id="addressProgressContainer"><span id="addressProgressText"></span><span
+              id="rpcStatus"></span></div>
+            <div id="tokenProgressContainer" style="margin-top: 10px;">
+              <progress id="tokenProgressBar" value="0" max="100"></progress>
+              <span id="etrText" aria-live="polite"></span><span id="tokenProgressText"
+                                                                 aria-live="polite"></span>
+            </div>
+            <div id="scanActions" style="display:flex; justify-content:flex-start; margin-top:8px;">
+              <button id="cancelScanBtn" style="display:none;">Stop Scan</button>
+            </div>
+          </div>
+          <div id="summaryContainer">
+            <div id="itemCount"></div>
+            <div id="perAddressSummary"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-chips">
+      <span>Filters:</span>
+      <button class="chip" data-filter="">All</button>
+      <button class="chip" data-filter="this-month">This Month</button>
+      <button class="chip" data-filter="next-month">Next Month</button>
+      <button class="chip" data-filter="this-year">This Year</button>
+      <button class="chip" data-filter="next-year">Next Year</button>
+      <button class="chip" data-filter="year-plus-2">Year +2</button>
+      <button class="chip" data-filter="year-plus-3">Year +3</button>
+
+      <span class="inline-sep"> | </span>
+      <div class="table-actions">
+        <button id="downloadBtn" class="btn-secondary" type="button" style="display:none;">Download CSV</button>
+        <button id="downloadJsonBtn" class="btn-secondary" type="button" style="display:none;">JSON</button>
+      </div>
+    </div>
+
+    <!-- VMUs per Day Chart (collapsible) -->
+    <div id="vmu-chart-wrap" class="collapsible" style="margin:8px 0;">
+      <button id="vmuChartToggle" class="collapsible-toggle" aria-expanded="false" aria-controls="vmuChartBody" type="button">+ Show Chart</button>
+      <div id="vmuChartBody" class="collapsible-body" hidden>
+        <div class="chart-controls" style="display:flex; align-items:center; gap:10px; margin: 4px 0 8px 0;">
+          <span class="muted">Metric:</span>
+          <div class="toggle-group" role="tablist" aria-label="Chart Metric">
+            <button id="vmuChartModeVMUs" class="toggle active" type="button" data-mode="vmus" aria-selected="true">VMUs</button>
+            <button id="vmuChartModeUSD" class="toggle" type="button" data-mode="usd" aria-selected="false">$ Value</button>
+          </div>
+        </div>
+        <div id="vmuChart" style="width:100%; height:260px;"></div>
+      </div>
+    </div>
+
+
+
+    <div id="cointool-table"></div>
+  </section>
+  <section id="tab-mint" class="tab-panel" role="tabpanel" aria-labelledby="Mint/Stake"><h2>Mint / Stake</h2>
+
+
+
+
+    <!-- Action selector: Mint or Stake (always visible) -->
+    <div class="mint-controls" id="actionControls">
+      <div class="mint-field">
+        <label for="mintAction">Action</label>
+        <select id="mintAction" class="mint-input">
+          <option value="mint" selected>Mint</option>
+          <option value="stake">Stake</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Mint controls (hidden when Action=Stake) -->
+    <div class="mint-controls" id="mintControls">
+      <!-- NEW: platform selector -->
+      <div class="mint-field">
+        <br>
+        <label for="mintPlatform">Mint via</label>
+        <select id="mintPlatform" class="mint-input">
+          <option value="cointool" selected>Cointool</option>
+          <option value="xenft">XENFT (Torrent)</option>
+        </select>
+      </div>
+
+      <!-- NEW: options visible only for XENFT -->
+      <div id="xenftOptionsRow" style="display:none; margin-top:10px;">
+        <div class="mint-field">
+          <label for="xenftKind">XENFT Type</label>
+          <select id="xenftKind" class="mint-input">
+            <option value="regular" selected>Regular (no burn)</option>
+            <option value="apex">APEX (burn XEN)</option>
+          </select>
+        </div>
+        <div id="apexTierWrap" class="mint-field" style="display:none;">
+          <label for="apexTier">APEX Tier</label>
+          <select id="apexTier" class="mint-input">
+            <option value="rare" selected>Rare (500,000,000)</option>
+            <option value="epic">Epic (1,000,000,000)</option>
+            <option value="legendary">Legendary (2,500,000,000)</option>
+            <option value="exotic">Exotic (5,000,000,000)</option>
+            <option value="xunicorn">Xunicorn (10,000,000,000)</option>
+          </select>
+        </div>
+
+        <div id="xenftBurnWrap" class="mint-field" style="display:none;">
+          <label for="xenftBurn">Burn (XEN tokens)</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" id="xenftBurn" placeholder="e.g. 5000000000" min="0" step="1" class="mint-input" />
+            <span id="xenftBurnHuman" class="muted" aria-live="polite"></span>
+          </div>
+          <small class="muted">If APEX, approve will be requested automatically for the amount you enter.</small>
+
+        </div>
+
+      </div>
+
+      <div class="mint-field"><label for="mintVmus">VMUs</label><input type="number" id="mintVmus" value="1"
+                                                                       min="1" step="1" class="mint-input"></div>
+      <br>
+      <div class="mint-field"><label for="mintTermDays">Term (days)</label>
+        <div class="mint-term-row"><input
+          type="number"
+          id="mintTermDays"
+          name="mint-term-days"
+          placeholder="e.g. 365"
+          min="1"
+          step="1"
+          class="mint-input"
+          inputmode="numeric"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+          <button id="btnSetMaxTerm" type="button" class="btn-secondary">Set Max Term</button>
+        </div>
+        <div id="termDatePreview" class="muted"></div>
+      </div>
+    </div>
+    <br>
+    <div class="mint-actions" id="mintActions">
+      <button id="startMintBtn" class="btn-mint">Start Minting</button>
+      <div id="mintConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to mint.</div>
+    </div>
+
+    <!-- Stake controls (hidden by default; shown when Action=Stake) -->
+    <div id="stakeControls" class="mint-controls" style="display:none; margin-top:10px;">
+      <div class="mint-field">
+        <label for="stakeAmount">Amount (XEN)</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="number" id="stakeAmount" placeholder="e.g. 1000000" min="0" step="1" class="mint-input" />
+          <button id="btnStakeGetBalance" type="button" class="btn-secondary">Get Balance</button>
+        </div>
+        <div id="stakePercentOptions" class="muted" style="margin-top:6px; display:none;">
+          Use:
+          <button type="button" class="linklike" data-pct="10">10%</button>
+          <button type="button" class="linklike" data-pct="25">25%</button>
+          <button type="button" class="linklike" data-pct="50">50%</button>
+          <button type="button" class="linklike" data-pct="75">75%</button>
+          <button type="button" class="linklike" data-pct="100">100%</button>
+        </div>
+      </div>
+
+      <div class="mint-field"><label for="stakeTermDays">Term (days)</label>
+        <div class="mint-term-row"><input
+          type="number"
+          id="stakeTermDays"
+          name="stake-term-days"
+          placeholder="e.g. 1000"
+          min="1"
+          max="1000"
+          step="1"
+          class="mint-input"
+          inputmode="numeric"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+          <button id="btnStakeSetMaxTerm" type="button" class="btn-secondary">Set Max Term</button>
+        </div>
+        <div id="stakeDatePreview" class="muted"></div>
+      </div>
+    </div>
+    <br>
+    <div class="mint-actions" id="stakeActions" style="display:none;">
+      <button id="startStakeBtn" class="btn-mint">Start Staking</button>
+      <div id="stakeConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to stake.</div>
+    </div>
+  </section>
+  <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="Settings">
+    <div class="settings-grid">
+
+      <!-- Addresses -->
+      <div class="settings-card">
+        <h3>Addresses</h3>
+        <p class="settings-note">Paste one Ethereum address per line.</p>
+        <div class="field required" id="field-ethAddress">
+          <label for="ethAddress">Ethereum Addresses (one per line)</label>
+          <div class="input-with-toggle">
+            <textarea id="ethAddress" rows="4" placeholder="0x...abc&#10;0x...def" required></textarea>
+            <div class="reveal-row">
+              <button type="button" id="toggleEthAddressMask" class="reveal-btn" aria-label="Mask addresses" title="Mask">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M2.1 3.51L3.51 2.1l18.39 18.39-1.41 1.41-3.06-3.06A11.33 11.33 0 0112 20c-6 0-10-5.33-10-8 0-1.13 1.02-3.08 3.06-4.89L2.1 3.51zM7.5 8.91A7.6 7.6 0 004 12c0 1.2 3 6 8 6 1.63 0 3.09-.42 4.35-1.13l-1.8-1.8A4 4 0 018 12c0-.43.07-.85.2-1.24l-.7-.7zM12 6c6 0 10 5.33 10 8 0 .84-.48 2-1.42 3.22l-1.43-1.43c.51-.77.85-1.48.85-1.79 0-1.2-3-6-8-6-1.03 0-2 .2-2.89.56l-1.5-1.5C9.11 6.39 10.51 6 12 6zm0 4a2 2 0 011.73 3l-2.73-2.73c.29-.17.62-.27 1-.27z"/></svg>
+              </button>
+            </div>
+          </div>
+          <small class="error-message">At least one Ethereum address is required.</small>
+        </div>
+      </div>
+
+      <!-- Network & APIs -->
+      <div class="settings-card">
+        <h3>Network &amp; APIs</h3>
+        <div class="field required" id="field-etherscanApiKey">
+          <label for="etherscanApiKey">Etherscan API Key</label>
+          <div class="input-with-toggle">
+            <input type="text" id="etherscanApiKey" placeholder="Your Etherscan API Key" required autocomplete="new-password" />
+            <div class="reveal-row">
+              <button type="button" id="toggleApiKeyVisibility" class="reveal-btn" aria-label="Show API key" title="Show">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 5c6 0 10 5.33 10 8s-4 8-10 8S2 15.67 2 13 6 5 12 5zm0 2C7 7 4 12 4 13s3 6 8 6 8-5 8-6-3-6-8-6zm0 3a3 3 0 110 6 3 3 0 010-6z"/></svg>
+              </button>
+            </div>
+          </div>
+          <small class="error-message">Etherscan API key is required.</small>
+          <div id="etherscanApiHelp" class="settings-status" style="display:none;">No key? <a href="https://etherscan.io/apidashboard" target="_blank" rel="noopener noreferrer">Get a free Etherscan API key</a> (5 req/s, up to 100,000 calls/day).</div>
+        </div>
+        <div class="field required" id="field-customRPC">
+          <label for="customRPC">Custom ETH RPCs (one per line)</label>
+          <textarea id="customRPC" rows="4" required></textarea>
+          <div class="button-row" style="margin-top:6px;">
+            <button id="importRpcBtn" type="button">Find Active RPCs (by latency)</button>
+          </div>
+          <div id="importRpcStatus" class="settings-status" aria-live="polite"></div>
+          <small class="error-message">Enter at least one RPC endpoint.</small>
+        </div>
+      </div>
+
+      <!-- Scan Performance -->
+      <div class="settings-card">
+        <h3>Scan Performance</h3>
+        <div class="field" id="field-chunkSize">
+          <label for="chunkSize">Chunk Size (txs per scan chunk)</label>
+          <!-- enforce 10,000+ -->
+          <input type="number" id="chunkSize" min="10000" step="1000" placeholder="50000" required />
+          <small class="error-message">Chunk Size must be 10,000 or higher.</small>
+        </div>
+      </div>
+
+
+
+      <!-- Live Data -->
+      <div class="settings-card">
+        <h3>Live Data</h3>
+
+        <div class="grid-2">
+          <!-- XEN Price -->
+          <div>
+            <strong style="display:block; margin-bottom:6px;">XEN Price (USD)</strong>
+            <div class="button-row">
+              <button id="refreshXenPriceBtn" type="button">Refresh XEN Price</button>
+            </div>
+            <div id="xenPriceStatus" class="settings-status"></div>
+          </div>
+
+          <!-- cRank / globalRank -->
+          <div>
+            <strong style="display:block; margin-bottom:6px;">XEN cRank (globalRank)</strong>
+            <div class="button-row">
+              <button id="refreshCrankBtn" type="button">Refresh cRank</button>
+            </div>
+            <div id="crankStatus" class="settings-status"></div>
+          </div>
+
+          <!-- Gas Price Refresh -->
+      <div class="field" id="field-gasRefreshSeconds">
+        <label for="gasRefreshSeconds">Gas Price Refresh Interval (seconds)</label>
+        <!-- enforce 5–60 -->
+        <input type="number" id="gasRefreshSeconds" min="5" max="60" step="1" placeholder="5" required />
+        <small class="error-message">Gas refresh must be between 5 and 60 seconds.</small>
+      </div>
+
+      <!-- Theme selector moved to header menu -->
+
+        </div>
+
+        <div class="settings-divider"></div>
+      </div> <!-- ✅ close Live Data card here -->
+
+      <!-- Backup & Restore -->
+      <div class="settings-card">
+        <h3>Backup &amp; Restore</h3>
+        <small class="settings-note">Includes all mints and settings.</small><br>
+        <div class="button-row" style="margin-bottom:6px;">
+          <button id="exportBackupBtn" type="button">Export Backup (.json)</button>
+        </div>
+        <div class="button-row" style="margin-bottom:6px;">
+          <button id="importBackupBtn" type="button">Import Backup…</button>
+          <input type="file" id="importBackupInput" accept="application/json"
+                 style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"/>
+        </div>
+
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="settings-card danger">
+        <h3>Danger Zone</h3>
+        <p class="settings-note">Deletes local app data (except settings).</p><br>
+        <div style="margin-top:4px; margin-bottom:8px;">
+          <label for="resetDbSelect" class="settings-note" style="display:block; margin-bottom:6px;">Delete target</label>
+          <select id="resetDbSelect" aria-label="Select which database(s) to delete" style="width:100%;">
+            <option value="all">All data</option>
+            <option value="DB_Cointool">Cointool (mints)</option>
+            <option value="DB_Xenft">XENFT (NFT scans)</option>
+            <option value="DB-Xenft-Stake">XENFT Stake (stakes)</option>
+            <option value="DB-Xen-Stake">XEN Stake (regular)</option>
+          </select>
+          <small class="settings-note" style="display:block; margin-top:6px;">This action is permanent for the selected item.</small>
+        </div>
+        <button id="resetBtn" type="button" class="secondary">Reset</button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- About tab -->
+  <section id="tab-about" class="tab-panel" role="tabpanel" aria-labelledby="About">
+    <h2>About</h2>
+    <div id="aboutMarkdown" class="markdown-body">Loading…</div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer" role="contentinfo">
+    <span>Copyright <span id="copyrightYear"></span> Xen.pub</span>
+    <span class="inline-sep">|</span>
+    <a href="#" id="privacyLink">Privacy</a>
+    <span class="inline-sep">|</span>
+    <a href="https://github.com/JozefJarosciak/xentracker" id="githubLink" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <span class="inline-sep">|</span>
+    <a href="https://xen.pub/donate.php" id="donateLink" target="_blank" rel="noopener noreferrer">Donate</a>
+  </footer>
+
+</div>
+<!-- Privacy Modal -->
+<div id="privacyModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="privacyTitle">
+  <div class="modal-content">
+    <h3 id="privacyTitle" style="margin:0 0 8px 0;">Privacy &amp; Terms Notice</h3>
+    <div class="modal-body" style="max-height:50vh; overflow:auto;">
+      <p>
+        This tracker is provided by Xen.pub on an open-source basis. It runs entirely in your browser and uses only public Ethereum RPC endpoints and your own free Etherscan API key. Xen.pub does not collect or store your data or keys on our servers.
+      </p>
+      <p>
+        By using this site, you agree that you are solely responsible for all actions you take. Transactions you initiate are signed in your own wallet; Xen.pub cannot reverse or recover anything you do. The software is provided “as is,” without warranties of any kind. To the fullest extent permitted by law, Xen.pub disclaims liability for any loss or damages arising from or related to the use of this site or its code.
+      </p>
+      <p>
+        Because this project is open source, you may review the code and host it yourself if you prefer. You can also run it locally on your own infrastructure (laptop/desktop) without any deployment to cloud.
+      </p>
+      <p>
+        If you do not agree to these terms, do not use the site.
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button id="privacyAcceptBtn" type="button">I Agree</button>
+      <button id="privacyDeclineBtn" type="button" class="secondary">I Don't Agree</button>
+    </div>
+  </div>
+</div>
+<div id="actionModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="actionModalTitle">
+  <div class="modal-content"><h3 id="actionModalTitle" style="margin:0 0 8px 0;">Choose action</h3>
+    <p style="margin:0 0 10px 0;">What do you want to do with this mint?</p><label for="actionSelect"
+                                                                                   class="sr-only">Action</label><select
+      id="actionSelect" style="width:100%; padding:6px 8px; margin-bottom:12px;">
+      <option value="claim" selected>Claim</option>
+      <option value="remint">Remint</option>
+    </select>
+    <div class="modal-actions">
+      <button id="actionConfirmBtn" type="button">OK</button>
+      <button id="actionCancelBtn" type="button" class="secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<script src="./ABI/xen-ABI.js?v=1"></script>
+<script src="./ABI/xenft-ABI.js?v=1"></script>
+<script src="./ABI/xenft-stake-ABI.js?v=1"></script>
+<script src="./ABI/cointool-ABI.js?v=1"></script>
+<script src="./js/app.js?v=1"></script>
+<script src="./js/app-mint.js?v=1"></script>
+<script src="./js/xenft.js?v=1"></script>
+<script src="./js/xenft-stake.js?v=1"></script>
+<script src="./js/unify.js?v=1"></script>
+<script src="./js/xen-stake.js?v=1"></script>
+<!-- Markdown parser for About tab -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+  // Cache-busting script to ensure latest files are loaded on every refresh.
+  (function() {
+    const timestamp = new Date().getTime();
+    const versionQuery = 'v=' + timestamp;
+
+    // Target local CSS files (e.g., href="css/style.css")
+    document.querySelectorAll('link[href^="css/"]').forEach(link => {
+      const url = new URL(link.href);
+      url.search = versionQuery;
+      link.href = url.toString();
+    });
+
+    // Target local JS files (e.g., src="./js/app.js")
+    document.querySelectorAll('script[src^="./js/"]').forEach(script => {
+      const url = new URL(script.src);
+      url.search = versionQuery;
+      script.src = url.toString();
+    });
+
+    // Also bust cache for ABI scripts moved to ./ABI/
+    document.querySelectorAll('script[src^="./ABI/"]').forEach(script => {
+      const url = new URL(script.src);
+      url.search = versionQuery;
+      script.src = url.toString();
+    });
+  })();
+</script>
+<div id="mobile-tooltip" style="display: none;"></div>
+</body>
+</html>
+
+

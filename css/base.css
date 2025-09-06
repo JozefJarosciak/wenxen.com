@@ -1,0 +1,1467 @@
+/* Generated from style.css split by theme. */
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px
+}
+
+input, button, textarea {
+  margin: 5px 0;
+  padding: 8px
+}
+
+label {
+  display: block;
+  margin-top: 10px
+}
+
+#progressContainer {
+  margin-top: 20px;
+  display: none
+}
+
+#addressProgressText {
+  font-weight: bold
+}
+
+#cointool-table {
+  margin-top: 10px;
+  display: inline-block;
+  margin: 0
+}
+
+.flatpickr-today-btn {
+  margin-left: 8px;
+  padding: 4px 8px;
+  font-size: 0.85em;
+  line-height: 1;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none
+}
+
+.flatpickr-today-btn:hover {
+  background: #f3f3f3
+}
+
+.flatpickr-today-btn:active {
+  transform: translateY(1px)
+}
+
+
+.field.dark-mode .error-message {
+  display: none;
+  color: #ef4444;
+  font-size: 0.85rem;
+}
+
+
+
+.header-controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 15px;
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  z-index: 1000
+}
+
+.wallet-container {
+  display: flex;
+  align-items: center;
+  gap: 10px
+}
+
+/* Wallet eye toggle next to connect button */
+.wallet-reveal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  background: var(--btn-bg, #f8fafc);
+  color: var(--btn-fg, #111827);
+  padding: 2px;
+  width: 14px;  /* safe default to avoid flash of huge icon */
+  height: 14px; /* will be resized to 50% of button height by JS */
+  cursor: pointer;
+}
+.wallet-reveal-btn svg {
+ width: 100%; height: 100%; display: block; 
+}
+.wallet-reveal-btn:hover {
+ filter: brightness(0.98); 
+}
+
+#networkName {
+  font-size: 0.9em;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background-color: #eee
+}
+
+
+/* Header dropdown menu (Theme, future actions) */
+.header-menu {
+ position: relative; display: inline-block; margin-left: 6px; 
+}
+.menu-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; line-height: 1;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--btn-bg, #f8fafc);
+  color: var(--btn-fg, #111827);
+  cursor: pointer;
+}
+.menu-toggle:hover {
+ filter: brightness(0.97); 
+}
+.menu-panel {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  min-width: 180px; padding: 8px; z-index: 1200;
+  background: var(--panel, #fff);
+  color: inherit;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+.menu-section {
+ display: flex; flex-direction: column; gap: 4px; 
+}
+.menu-title {
+ display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: var(--muted, #6b7280); margin: 2px 2px 6px; 
+}
+.menu-current {
+ color: inherit; font-weight: 600; 
+}
+.menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; background: transparent; border: 0; text-align: left; cursor: pointer;
+  color: inherit; font: inherit; border-radius: 8px;
+}
+.menu-item:hover {
+ background: rgba(0,0,0,0.05); 
+}
+.menu-item[aria-checked="true"] {
+ outline: 1px solid var(--border, #e5e7eb); 
+}
+.menu-icon {
+ width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; 
+}
+
+/* Dark theme adjustments for menu */
+
+.claim-button {
+  color: #007bff;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: bold
+}
+
+
+.tabs {
+  margin-top: 10px
+}
+
+
+
+
+.tab-panel {
+  display: none;
+  padding-top: 12px
+}
+
+.tab-panel.active {
+  display: block
+}
+
+.input-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap
+}
+
+.dashboard-top {
+  display: flex;
+  gap: 5px;
+  align-items: flex-start;
+  margin: 4px 0 8px
+}
+
+.calendar-wrap {
+  width: 400px;
+  min-height: 320px;
+  position: relative
+}
+
+.calendar-wrap #calendar {
+  transform: scale(1.5);
+  transform-origin: top left
+}
+
+.details-wrap {
+  flex: 1 1 auto;
+  min-width: 420px
+}
+
+.details-title {
+  margin: 0 0 8px
+}
+
+/* Site title styling */
+.site-title {
+  margin-top: 28px;
+  margin-bottom: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: flex-start;
+}
+.site-title .brand {
+ letter-spacing: 0.5px; 
+}
+.site-title .brand {
+  font-size: 1.3em;   /* 30% bigger */
+  line-height: 1;
+}
+.site-title .brand-suffix {
+  color: #6b7280; /* gray */
+  font-size: 0.7em; /* ~30% smaller */
+  margin-left: 6px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+  gap: 2px;
+}
+.site-title .brand-suffix-text {
+ line-height: 1; display: block; 
+}
+.site-title .brand-suffix .gas-sup {
+  display: block;       /* force its own line within the suffix */
+  margin: 2px 0 0 0;   /* stack under the suffix text */
+  vertical-align: baseline;
+  font-size: 0.63em;   /* 30% smaller than previous 0.9em */
+}
+
+#progressContainer {
+  margin-top: 12px
+}
+
+#calendar {
+  margin: 4px 0
+}
+
+.mint-gasline {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin: 8px 0 14px 0
+}
+
+.muted {
+  color: #6b7280
+}
+
+.mint-controls {
+  display: grid;
+  grid-template-columns:180px 1fr;
+  gap: 18px 24px;
+  align-items: end;
+  max-width: 720px
+}
+
+.mint-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px
+}
+
+.mint-input {
+  width: 180px;
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  outline: none
+}
+
+.mint-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .15)
+}
+
+.mint-term-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: auto;
+  flex-wrap: nowrap;
+}
+
+.mint-actions {
+  margin-top: 1px;
+  display: flex;
+  gap: 10px;
+  align-items: center
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #111827;
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb
+}
+
+.btn-mint {
+  background: transparent;
+  color: #111827;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.2;
+  font-size: 0.9em;
+  appearance: none;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease
+}
+
+.btn-mint:hover {
+  background: #dbeafe;
+  border-color: #93c5fd
+}
+
+.btn-mint:disabled {
+  opacity: .6;
+  cursor: not-allowed
+}
+
+#vmu-chart-wrap .collapsible-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border, #e5e7eb);
+  color: var(--btn-fg, #111827);
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+#vmu-chart-wrap .collapsible-body {
+ margin-top: 8px; 
+}
+
+/* Chart controls (metric toggle) */
+#vmu-chart-wrap .chart-controls .toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+}
+#vmu-chart-wrap .chart-controls .toggle-group .toggle {
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--btn-fg, #111827);
+}
+#vmu-chart-wrap .chart-controls .toggle-group .toggle.active {
+  background: #dbeafe;
+  color: #111827;
+}
+
+
+
+#perAddressSummary {
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: #888
+}
+
+/* Removed password-like masking; masking now uses .masked blur class */
+
+
+.checkbox-group {
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 5px
+}
+
+.checkbox-group input {
+  margin: 0
+}
+
+.checkbox-group label {
+  margin: 0
+}
+
+.filter-chips {
+  margin: 15px 0;
+  display: flex;
+  gap: 10px;
+  align-items: center
+}
+
+.chip {
+  background-color: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 16px;
+  padding: 5px 15px;
+  cursor: pointer;
+  font-size: 0.9em
+}
+
+.chip:hover {
+  background-color: #d0d0d0
+}
+
+.chip.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff
+}
+
+.inline-sep {
+  opacity: 0.6;
+  user-select: none
+}
+
+.chip-ghost {
+  background: transparent;
+  border-style: dashed
+}
+
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .35);
+  z-index: 1000
+}
+
+.modal.hidden {
+  display: none
+}
+
+.modal-content {
+  background: #fff;
+  color: #111;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-width: 280px;
+  max-width: 92vw;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25)
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px
+}
+
+#scanBtn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+#scanXenftBtn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden
+}
+
+#summaryContainer {
+  background-color: #e9f4ff;
+  border: 1px solid #b5d9ff;
+  border-radius: 8px;
+  padding: 5px 5px; /* text width + 10px total */
+  margin-top: 8px;
+  font-size: 0.92em;
+  line-height: 1.4;
+  display: inline-block;
+  width: -moz-fit-content;
+  width: fit-content;
+}
+
+/* Progress container: faint matte reddish with subtle border; smaller text */
+#progressContainer {
+  display: none;                 /* hidden by default */
+  background: #fff5f5;           /* soft red */
+  border: 1px solid #f5c2c7;     /* slightly darker frame */
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 10px 0;
+  font-size: 0.92em;             /* slightly smaller text */
+  width: -moz-fit-content;       /* match summaryContainer */
+  width: fit-content;            /* match summaryContainer */
+}
+#progressContainer.visible {
+ display: block; 
+}
+#progressContainer #scanTypeLine {
+ margin-bottom: 4px; color: #7f1d1d; 
+}
+#progressContainer #addressProgressContainer {
+ display:flex; gap:8px; align-items: baseline; 
+}
+#progressContainer #tokenProgressContainer {
+ margin-top: 8px !important; 
+}
+/* Make progress texts at least 30% smaller */
+#progressContainer #addressProgressText,
+#progressContainer #tokenProgressText {
+  font-size: 0.7em;
+}
+
+/* Dark theme tweaks for the scanning progress panel */
+body.dark-mode #progressContainer #addressProgressText,
+body.dark-mode #progressContainer #tokenProgressText,
+body.dark-mode #progressContainer #rpcStatus,
+
+.button-like {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  background: var(--btn-bg, #efefef);
+  color: inherit;
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none
+}
+
+.button-like:hover {
+  filter: brightness(0.97)
+}
+
+.button-like:active {
+  transform: translateY(1px)
+}
+
+#tokenProgressContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap
+}
+
+#etrText {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.85;
+  min-width: 6ch
+}
+
+#tokenProgressBar {
+  width: min(560px, 100%);
+  height: 10px
+}
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px
+}
+
+.checkbox-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0
+}
+
+
+
+
+.modal {
+  position: fixed;
+  z-index: 2000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.5)
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%;
+  max-width: 400px;
+  border-radius: 8px
+}
+
+.close-button {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px
+}
+
+.modal-actions button {
+  flex-grow: 1
+}
+
+.gas-note {
+  font-size: 0.8em;
+  color: #666;
+  margin-top: 20px
+}
+
+
+
+.toast {
+  visibility: hidden;
+  min-width: 250px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 4px;
+  padding: 16px;
+  position: fixed;
+  z-index: 3000;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 30px
+}
+
+.toast.show {
+  visibility: visible;
+  -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+  animation: fadein 0.5s, fadeout 0.5s 2.5s
+}
+
+.toast.error {
+  background-color: #c0392b
+}
+
+.toast.success {
+  background-color: #27ae60
+}
+
+@-webkit-keyframes fadein {
+  from {
+    bottom: 0;
+    opacity: 0
+  }
+  to {
+    bottom: 30px;
+    opacity: 1
+  }
+}
+
+@keyframes fadein {
+  from {
+    bottom: 0;
+    opacity: 0
+  }
+  to {
+    bottom: 30px;
+    opacity: 1
+  }
+}
+
+@-webkit-keyframes fadeout {
+  from {
+    bottom: 30px;
+    opacity: 1
+  }
+  to {
+    bottom: 0;
+    opacity: 0
+  }
+}
+
+@keyframes fadeout {
+  from {
+    bottom: 30px;
+    opacity: 1
+  }
+  to {
+    bottom: 0;
+    opacity: 0
+  }
+}
+
+@media (max-width: 768px) {
+  .header-controls {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px
+  }
+}
+
+/* (Removed problematic Flatpickr header overrides) */
+
+button:focus, a:focus, input:focus, .claim-button:focus, .chip:focus {
+  outline: 2px solid #4da3ff !important;
+  outline-offset: 2px
+}
+
+
+/* === Retro Theme (Commodore 64‑inspired) === */
+
+body.retro-mode input,
+body.retro-mode textarea,
+body.retro-mode button,
+
+/* Header controls */
+
+/* Chips */
+
+/* Progress container */
+body.retro-mode #progressContainer #addressProgressText,
+body.retro-mode #progressContainer #tokenProgressText,
+body.retro-mode #progressContainer #rpcStatus,
+
+/* Modal */
+
+/* Footer & markdown */
+body.retro-mode .markdown-body code,
+
+/* Tabulator (table) */
+body.retro-mode .tabulator .tabulator-header .tabulator-header-filter input,
+
+/* Misc */
+
+
+/* Dark mode: make estXenUsd a light green */
+/* Hint browsers for native form control theming */
+
+/* Dark theme variables to unify panel/input/border/muted colors */
+
+/* Theme select adapts to theme (control + dropdown items) */
+body.dark-mode #themeSelect,
+
+/* Make other selects match themeSelect look */
+#resetDbSelect, #mintAction, #themeSelect {
+  border: 1px solid var(--border, #e5e7eb);
+  font-size: 1em;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--input-bg, #fff);
+  color: inherit;
+}
+
+/* Summary container tuned for dark mode */
+/* Summary container tuned for retro mode */
+
+/* Fix button hovers in dark mode (Mint/Stake + Settings) */
+body.dark-mode #tab-mint .btn-mint:hover,
+
+body.dark-mode #tab-settings button:hover,
+body.dark-mode #tab-settings .button-like:hover,
+
+/* Unify Settings tab backgrounds to match etherscanApiKey input bg */
+body.dark-mode #tab-settings .settings-card,
+body.dark-mode #tab-settings button,
+body.dark-mode #tab-settings .button-like,
+body.dark-mode #tab-settings .field input[type="text"],
+body.dark-mode #tab-settings .field input[type="password"],
+body.dark-mode #tab-settings .field input[type="number"],
+body.dark-mode #tab-settings .field textarea,
+
+/* Retro: unify Settings tab to retro input background */
+body.retro-mode #tab-settings .settings-card,
+body.retro-mode #tab-settings button,
+body.retro-mode #tab-settings .button-like,
+body.retro-mode #tab-settings .field input[type="text"],
+body.retro-mode #tab-settings .field input[type="password"],
+body.retro-mode #tab-settings .field input[type="number"],
+body.retro-mode #tab-settings .field textarea,
+
+/* Explicit key fields to ensure adherence even if overridden elsewhere */
+body.retro-mode #etherscanApiKey,
+body.retro-mode #chunkSize,
+body.retro-mode #gasRefreshSeconds,
+body.retro-mode #mintAction,
+/* Mint/Stake specific numeric fields */
+body.retro-mode #mintVmus,
+body.retro-mode #mintTermDays,
+body.retro-mode #stakeAmount,
+
+
+
+/* Markdown rendering (About tab) */
+.markdown-body {
+  max-width: 900px;
+  margin: 8px auto 0 auto;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  margin: 1.2em 0 0.6em;
+  line-height: 1.25;
+}
+.markdown-body p {
+ margin: 0.6em 0; 
+}
+.markdown-body ul, .markdown-body ol {
+ margin: 0.6em 0 0.6em 1.2em; 
+}
+.markdown-body code {
+ background: #f6f8fa; padding: 0 3px; border-radius: 4px; 
+}
+.markdown-body pre {
+ background: #f6f8fa; padding: 10px; overflow: auto; border-radius: 6px; 
+}
+.markdown-body table {
+ border-collapse: collapse; width: 100%; 
+}
+.markdown-body th, .markdown-body td {
+ border: 1px solid #e5e7eb; padding: 6px 8px; 
+}
+.markdown-body img {
+ max-width: 100%; height: auto; 
+}
+.markdown-body a {
+ color: #2563eb; 
+}
+
+@media (max-width: 768px) {
+  .markdown-body { font-size: 0.98rem; padding: 0 8px; }
+}
+
+/* Footer */
+.site-footer {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+  color: #6b7280; /* muted gray */
+  font-size: 0.85em;
+  text-align: center;
+}
+.site-footer a {
+ color: inherit; text-decoration: underline; 
+}
+.site-footer .inline-sep {
+ margin: 0 6px; color: #9ca3af; 
+}
+
+
+/* Improve Tabulator header in dark mode: readable text, subtle separators, clear hover/sort */
+/* Hover and active states for sortable headers */
+/* Sort arrows in dark mode */
+/* Header filter inputs */
+body.dark-mode .tabulator .tabulator-header .tabulator-header-filter input,
+
+
+
+
+
+
+
+
+
+#tab-mint .mint-field label {
+  margin-top: 0
+}
+
+#tab-mint .mint-input {
+  margin: 0
+}
+
+#tab-mint .btn-secondary {
+  margin: 0
+}
+
+/* Ensure Set Term button matches input height in Mint tab */
+#tab-mint #btnSetMaxTerm {
+  height: 34px;             /* match .mint-input height */
+  padding-top: 0;           /* let height control vertical size */
+  padding-bottom: 0;
+  display: inline-flex;     /* keep text vertically centered */
+  align-items: center;
+}
+
+/* Match stake Get Balance button height/alignment */
+#tab-mint #btnStakeGetBalance {
+  height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Stack stake controls to avoid overlap; put Term below Amount */
+#stakeControls.mint-controls {
+  grid-template-columns: 1fr;
+  max-width: 720px;
+}
+
+/* Make stake percentage buttons smaller */
+#stakePercentOptions .linklike {
+  font-size: 0.85em;
+  padding: 0 4px;
+  opacity: 0.9;
+}
+
+button.btn-mint {
+  background: transparent;
+  color: var(--btn-fg, #111827);
+  border: 1px solid var(--border, #e5e7eb)
+}
+
+
+.btn-mint:disabled {
+  opacity: .6;
+  cursor: not-allowed
+}
+
+#calendar .flatpickr-day.prevMonthDay,
+#calendar .flatpickr-day.nextMonthDay {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+
+/* ===== Settings layout ===== */
+.settings-grid {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: repeat(3, minmax(400px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+  max-width: 1400px;      /* optional: keeps line length comfy */
+  margin-inline: auto;    /* center the grid */
+  align-items: start;     /* prevent cards from stretching to tallest */
+}
+
+@media (max-width: 1200px) {
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(400px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-card {
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--panel, #fff);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: fit-content;
+}
+
+.settings-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.settings-card p {
+  margin: 0 0 10px 0;
+  color: var(--muted, #6b7280);
+  font-size: 0.95rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field small,
+.muted {
+  color: var(--muted, #6b7280);
+}
+
+.field input[type="text"],
+.field input[type="password"],
+.field input[type="number"],
+.field textarea,
+.field select {
+  width: 100%;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  background: var(--input-bg, #fff);
+}
+
+.input-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.button-like {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--panel, #fff);
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--border, #e5e7eb);
+  margin: 8px 0 12px 0;
+}
+
+.settings-note {
+  font-size: 0.9rem;
+  color: var(--muted, #6b7280);
+}
+
+.settings-status {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  color: var(--muted, #6b7280);
+}
+
+/* Show/Hide toggles for inputs */
+.input-with-toggle {
+ position: relative; display: inline-block; width: 100%; 
+}
+.reveal-row {
+ display: flex; justify-content: flex-end; margin-top: 4px; 
+}
+.reveal-btn {
+ border: 0; background: transparent; color: var(--muted, #6b7280); padding: 2px; cursor: pointer; 
+}
+.reveal-btn:hover {
+ color: var(--btn-fg, #111827); 
+}
+
+/* Masking style for multi-line textarea */
+.masked {
+  filter: blur(6px);
+}
+
+.settings-card.danger {
+  border-color: #ef4444;
+  background: var(--panel, #fff);
+}
+.settings-card.danger h3 {
+  color: #b91c1c;
+}
+.settings-card .secondary {
+  background: transparent;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* --- Settings tab: unify button look & hover --- */
+#tab-settings button,
+#tab-settings .button-like,
+#tab-settings label[role="button"] {
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--btn-bg, #f8fafc);
+  color: var(--btn-fg, #111827);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+#tab-settings button:hover,
+#tab-settings .button-like:hover,
+#tab-settings label[role="button"]:hover {
+  background: var(--btn-hover-bg, #dbeafe); /* light blue */
+  border-color: var(--btn-hover-border, #93c5fd);
+}
+
+#tab-settings button:focus-visible,
+#tab-settings .button-like:focus-visible,
+#tab-settings label[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+.table-toolbar {
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  margin: 6px 0 8px;
+}
+
+/* Smaller, secondary count text next to bulk buttons */
+.table-toolbar .bulk-count {
+  font-size: 0.9em;
+  opacity: .85;
+}
+
+/* Visually indicate disabled row-selection checkboxes */
+.tabulator .tabulator-cell input[type="checkbox"][disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Link-like compact buttons (for percent options) */
+button.linklike {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 0 6px;
+  font: inherit;
+}
+button.linklike:hover {
+ text-decoration: underline; 
+}
+
+.table-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+@media (max-width: 640px){
+  .table-toolbar{ justify-content: flex-start; }
+}
+
+/* Split Scan button */
+.split-scan {
+  position: relative;
+  display: inline-flex;
+  border-radius: 8px;
+  border: 1px solid var(--border, #ddd);
+}
+.split-scan .btn {
+ padding: 8px 12px; background: var(--btn-bg, #fff); border: 0; cursor: pointer; 
+}
+.split-scan .split-caret {
+ width: 36px; border-left: 1px solid var(--border, #ddd); 
+}
+.split-scan .btn[disabled] {
+ opacity: .6; cursor: not-allowed; 
+}
+.split-scan .scan-badge {
+ margin-left: 8px; padding: 2px 6px; border-radius: 999px; font-size: 12px; opacity: .85; background: var(--chip-bg, #f1f3f5); 
+}
+.split-scan .menu {
+ position: absolute; top: 100%; right: 0; min-width: 160px; margin: 4px 0 0; padding: 6px 0; list-style: none; background: #fff; border: 1px solid var(--border, #ddd); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); z-index: 1000; 
+}
+.split-scan .menu[hidden] {
+ display: none; 
+}
+.split-scan .menu li {
+ padding: 8px 12px; cursor: pointer; 
+}
+.split-scan .menu li[aria-selected="true"] {
+ font-weight: 600; 
+}
+.split-scan .menu li:hover {
+ background: rgba(0,0,0,.04); 
+}
+
+/* Dark mode styling for split scan and menu */
+
+/* Retro mode styling for split scan and its menu */
+
+/* Custom styles for the main scan button */
+.split-scan #scanBtn {
+  background-color: #df4545; /* A prominent blue to match other action buttons */
+  color: #fff;              /* White text for better contrast */
+  font-size: 1.1em;         /* Make the font slightly larger */
+  font-weight: 600;          /* Make the text bolder */
+  border-radius: 8px;
+  margin-right: 4px;
+  margin-left: 4px;
+}
+
+
+.split-scan #scanModeToggle {
+  font-weight: 700;          /* Make the text bolder */
+  font-size: 1.1em;
+}
+/* Add a hover effect for when the button is not disabled */
+.split-scan #scanBtn:not(:disabled):hover {
+  outline: 2px solid #383839; /* Adds a dark blue frame */
+  outline-offset: 1px;       /* Adds a small space between the button and the frame */
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #ccc;
+
+}
+
+
+.tab-button {
+  background: transparent;
+  border: 0;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 600;          /* Make the text bolder */
+  font-size: 1.07em;
+}
+
+.tab-button.active {
+  border-bottom: 2px solid #007bff;
+  background-color: #4376f1; /* A prominent blue to match other action buttons */
+  color: #fff;
+}
+
+/* ========================
+   Responsive UI Overrides
+   ======================== */
+/* Improve readability everywhere without changing desktop layout */
+body {
+ line-height: 1.5; 
+}
+
+/* Make core containers fluid */
+#cointool-table {
+ display: block; width: 100%; 
+}
+.dashboard-top {
+ flex-wrap: wrap; 
+}
+.calendar-wrap {
+ width: min(100%, 400px); 
+}
+.mint-term-row {
+ /* keep desktop behavior */ 
+}
+#summaryContainer {
+ /* desktop keeps original width */ 
+}
+
+/* Mobile-first refinements (keep desktop look intact) */
+@media (max-width: 768px) {
+  body { margin: 12px; }
+
+  /* Avoid overlay; let header flow normally */
+  .header-controls {
+    position: static;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  h1 { font-size: 1.25rem; margin-top: 8px; }
+
+  /* Touch-friendly sizes and iOS zoom prevention */
+  button, .btn, .btn-secondary, .btn-mint, .chip, .tab-button,
+  input, select, textarea, label[role="button"] {
+    font-size: 16px; /* prevents iOS zoom */
+    min-height: 44px;
+  }
+
+  .chip { padding: 8px 14px; }
+
+  .tabs { margin-top: 6px; }
+  .tab-buttons { overflow-x: auto; white-space: nowrap; padding-bottom: 4px; }
+
+  .dashboard-top { flex-direction: column; gap: 10px; }
+  .calendar-wrap { width: 100%; min-height: 0; }
+  .calendar-wrap #calendar { transform: none; }
+  .details-wrap { min-width: 0; width: 100%; }
+
+  .mint-controls {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+  }
+  .mint-input { width: 100%; }
+  .mint-term-row { width: auto; }
+  .mint-actions { flex-wrap: wrap; }
+
+  .filter-chips { flex-wrap: wrap; row-gap: 6px; }
+
+  #summaryContainer { display:block; width: 95%; max-width: 95%; margin-inline:auto; }
+  #progressContainer { width: 95%; max-width: 95%; margin-inline:auto; }
+  #progressContainer.visible { display:block; }
+
+  /* Chart height responsive */
+  #vmuChart { height: clamp(220px, 35vh, 320px) !important; }
+}
+
+/* (Reverted to library defaults above) */
+
+/* (No-op for Flatpickr; using library defaults for now) */
+
+/* Fix: prevent month/year header from being pushed down by default top padding */
+#calendar .flatpickr-current-month {
+  padding: 0 !important; /* override vendor padding: 7.48px 0 0 0 */
+}
+
+/* Make the Stake XENFTs breakdown match the Cointool muted style */
+#stakePerAddressSummary {
+  margin-top: 6px;
+  font-size: 0.8em;
+  color: #888;
+}
+#xenftPerAddressSummary {
+  margin-top: 6px;
+  font-size: 0.8em;
+  color: #888;
+}
+
+/* Gas superscript near main header (already added previously) */
+.gas-sup {
+  font-size: 0.5em;
+  color: #777;
+  vertical-align: super;
+  margin-left: 8px;
+  font-weight: 500;
+  position: relative;     /* needed so the ::after positions under the text */
+  display: inline-block;  /* ensures a stable box for the underline */
+}
+
+/* 1px countdown underline */
+.gas-sup::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  color: #505050;
+  bottom: -2px;           /* nudge under the text; tweak if you want closer */
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.7;
+  transform-origin: left center;
+  transform: scaleX(var(--p, 1));  /* --p = 1 (full) .. 0 (empty) */
+}
+
+.field.required label::after {
+  content: ' *';
+  color: #ef4444; /* red-500 */
+  font-weight: 600;
+}
+
+/* Required asterisk stays as-is */
+
+/* Invalid field state */
+.field.invalid input,
+.field.invalid textarea,
+.field.invalid select {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, .15);
+}
+
+/* Error message (hidden by default; shown when .invalid is applied) */
+.field .error-message {
+  display: none;
+  color: #ef4444;
+  font-size: 0.85rem;
+}
+
+.field.invalid .error-message {
+  display: block;
+}
+
+/* Light red error text in dark mode for better readability */
+
+#scanModeBadge {
+ display: none !important; 
+}
+
+/* Make the regular Stakes breakdown match the other muted styles */
+#stakeRegularPerAddressSummary {
+  margin-top: 6px;
+  font-size: 0.8em;
+  color: #888;
+}
+
+/* Total XEN display below the calendar */
+#calendar-xen-total {
+  text-align: left; /* Centers the text block */
+  margin-top: 5px;   /* Adds some space below the calendar */
+  font-size: 1em;   /* Optional: makes the text slightly larger */
+}
+
+/* Style for the USD value ($) */
+/* Use different colors for light vs dark to ensure readability */
+
+.tabulator .tabulator-tableHolder .tabulator-row .tabulator-cell {
+  cursor: default;
+}
+
+/* 2. Specifically apply the "hand" pointer ONLY to clickable elements. */
+.tabulator .tabulator-cell a,
+.tabulator .tabulator-cell .claim-button,
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable {
+  cursor: pointer;
+}
+
+/* --- Mobile Long-Press Tooltip --- */
+#mobile-tooltip {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stays in view even when scrolling */
+  background-color: #222;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9em;
+  max-width: 250px;
+  z-index: 10000; /* Ensures it appears on top of everything */
+  pointer-events: none; /* Prevents the tooltip itself from being interactive */
+  white-space: pre-wrap; /* Respects newlines in the tooltip text */
+}

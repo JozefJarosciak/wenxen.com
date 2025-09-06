@@ -1,0 +1,452 @@
+/* Generated from style.css split by theme. */
+/* Comprehensive Flatpickr calendar styling for dark theme */
+body.dark-mode .flatpickr-calendar {
+  background: var(--panel, #1f2937);
+  border: 1px solid var(--border, #374151);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+}
+
+body.dark-mode .flatpickr-months {
+  background: var(--panel, #1f2937);
+  border-bottom: 1px solid var(--border, #374151);
+}
+
+body.dark-mode .flatpickr-current-month {
+  color: var(--btn-fg, #e5e7eb);
+}
+
+body.dark-mode .flatpickr-current-month .numInputWrapper {
+  color: var(--btn-fg, #e5e7eb);
+}
+
+body.dark-mode .flatpickr-current-month input {
+  background: transparent;
+  color: var(--btn-fg, #e5e7eb);
+  border: none;
+}
+
+body.dark-mode .flatpickr-weekdays {
+  background: var(--input-bg, #111827);
+  color: var(--muted, #9ca3af);
+  border-bottom: 1px solid var(--border, #374151);
+}
+
+body.dark-mode .flatpickr-weekday {
+  color: var(--muted, #9ca3af);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+body.dark-mode .flatpickr-days {
+  background: var(--input-bg, #111827);
+}
+
+body.dark-mode .flatpickr-day {
+  background: transparent;
+  color: var(--btn-fg, #e5e7eb);
+  border: 1px solid transparent;
+}
+
+body.dark-mode .flatpickr-day:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border, #374151);
+}
+
+body.dark-mode .flatpickr-day.selected {
+  background: #4da3ff;
+  color: #fff;
+  border-color: #4da3ff;
+  font-weight: 700;
+}
+
+body.dark-mode .flatpickr-day.today {
+  background: rgba(77, 163, 255, 0.2);
+  color: #4da3ff;
+  border-color: #4da3ff;
+  font-weight: 600;
+}
+
+body.dark-mode .flatpickr-day.prevMonthDay,
+body.dark-mode .flatpickr-day.nextMonthDay {
+  color: var(--muted, #9ca3af);
+  opacity: 0.5;
+}
+
+body.dark-mode .flatpickr-months .flatpickr-month {
+  color: var(--btn-fg, #e5e7eb);
+}
+
+body.dark-mode .flatpickr-months .flatpickr-prev-month,
+body.dark-mode .flatpickr-months .flatpickr-next-month {
+  color: var(--btn-fg, #e5e7eb);
+  fill: var(--btn-fg, #e5e7eb);
+}
+
+body.dark-mode .flatpickr-months .flatpickr-prev-month:hover,
+body.dark-mode .flatpickr-months .flatpickr-next-month:hover {
+  color: #4da3ff;
+  fill: #4da3ff;
+}
+
+body.dark-mode .flatpickr-today-btn {
+  background: var(--btn-bg, #1f2937);
+  color: var(--btn-fg, #e5e7eb);
+  border: 1px solid var(--border, #374151);
+  border-radius: 6px;
+}
+
+body.dark-mode .flatpickr-today-btn:hover {
+  background: var(--btn-hover-bg, #374151);
+  border-color: var(--btn-hover-border, #4b5563);
+}
+body.dark-mode #networkName {
+  background-color: #444
+}
+body.dark-mode .menu-toggle {
+ background: var(--panel, #1f2937); color: var(--btn-fg, #e5e7eb); border-color: var(--border, #374151); 
+}
+body.dark-mode .menu-panel {
+ background: var(--panel, #1f2937); border-color: var(--border, #374151); box-shadow: 0 15px 35px rgba(0,0,0,.45); 
+}
+body.dark-mode .menu-item:hover {
+ background: rgba(255,255,255,0.06); 
+}
+body.dark-mode .claim-button {
+  color: #4da3ff
+}
+body.dark-mode #perAddressSummary {
+  color: #aaa
+}
+body.dark-mode .chip-ghost {
+  border-color: #666
+}
+body.dark-mode #progressContainer {
+  background: #0f172a;            /* deep slate */
+  border-color: #334155;          /* slate-600 */
+  color: #e5e7eb;                 /* slate-200 */
+}
+body.dark-mode #progressContainer #scanTypeLine {
+ color: #e5e7eb; 
+}
+body.dark-mode #progressContainer #etrText {
+  color: #e5e7eb;
+}
+body.dark-mode #tokenProgressBar {
+  background: #1f2937;
+  color: #93c5fd; /* progress fill color in some browsers */
+}
+body.dark-mode .chip {
+  background-color: #444;
+  border-color: #666
+}
+body.dark-mode .chip:hover {
+  background-color: #555
+}
+body.dark-mode .chip.active {
+  background-color: #4da3ff;
+  border-color: #4da3ff
+}
+/* Enhanced modal styling for dark theme */
+body.dark-mode .modal-content {
+  background: var(--panel, #1f2937);
+  color: var(--btn-fg, #e5e7eb);
+  border: 1px solid var(--border, #374151);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+/* Modal buttons in dark theme */
+body.dark-mode .modal-actions button {
+  background: var(--btn-bg, #1f2937);
+  color: var(--btn-fg, #e5e7eb);
+  border: 1px solid var(--border, #374151);
+}
+body.dark-mode .modal-actions button:hover {
+  background: var(--btn-hover-bg, #374151);
+  border-color: var(--btn-hover-border, #4b5563);
+}
+body.dark-mode .modal-actions button.secondary {
+  background: transparent;
+  color: var(--muted, #9ca3af);
+}
+/* Modal text elements in dark theme */
+body.dark-mode .modal-content h3 {
+  color: var(--btn-fg, #e5e7eb);
+}
+body.dark-mode .modal-content p {
+  color: var(--btn-fg, #e5e7eb);
+}
+/* Ensure ALL elements inside progressContainer have matching background */
+body.dark-mode #progressContainer * {
+  background: #0f172a !important; /* force same as progressContainer */
+}
+body.dark-mode #tokenProgressText,
+body.dark-mode #addressProgressText,
+body.dark-mode #addressProgressContainer,
+body.dark-mode #tokenProgressContainer,
+body.dark-mode #scanTypeLine,
+body.dark-mode #etrText,
+body.dark-mode #rpcStatus {
+  background: #0f172a !important; /* same as progressContainer */
+}
+/* Remove borders from progress text elements */
+body.dark-mode #tokenProgressText,
+body.dark-mode #addressProgressText,
+body.dark-mode #rpcStatus {
+  border: none !important;
+}
+body.dark-mode .gas-note {
+  color: #aaa
+}
+body.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0
+}
+body.dark-mode input, body.dark-mode textarea, body.dark-mode button {
+  background-color: #333;
+  color: #e0e0e0;
+  border: 1px solid #444
+}
+body.dark-mode #estXenUsd {
+ color: #0bef04; 
+}
+body.dark-mode {
+ color-scheme: dark; 
+}
+body.dark-mode {
+  --border: #374151;    /* slate-700 */
+  --panel: #1f2937;     /* slate-800 */
+  --btn-bg: #1f2937;    /* panel */
+  --btn-fg: #e5e7eb;    /* slate-200 */
+  --muted: #9ca3af;     /* slate-400 */
+  --input-bg: #111827;  /* slate-900 */
+  --btn-hover-bg: #374151; /* slate-700 */
+  --btn-hover-border: #4b5563; /* slate-600 */
+}
+/* Improve readability for Settings labels and headings in dark mode */
+body.dark-mode .field label,
+body.dark-mode .settings-card h3 { color: #e5e7eb; }
+body.dark-mode .settings-card p, 
+body.dark-mode .settings-note, 
+body.dark-mode .settings-status { color: var(--muted, #9ca3af); }
+body.dark-mode .settings-card {
+  background: var(--panel, #1f2937);
+  border-color: var(--border, #374151);
+  box-shadow: none;
+}
+body.dark-mode .settings-card.danger {
+  background: var(--panel, #1f2937);
+  border-color: #7f1d1d; /* keep semantic red */
+}
+body.dark-mode .settings-card.danger h3 {
+  color: #fca5a5; /* red-300 for better visibility in dark mode */
+}
+body.dark-mode .settings-divider {
+ background: var(--border, #374151); 
+}
+body.dark-mode .field small {
+ color: var(--muted, #9ca3af); 
+}
+body.dark-mode .field select#themeSelect {
+  background: var(--input-bg, #111827);
+  color: #e5e7eb;
+  border-color: var(--border, #374151);
+}
+body.dark-mode #themeSelect option {
+  background: var(--panel, #1f2937);
+  color: #e5e7eb;
+}
+body.dark-mode #resetDbSelect, body.dark-mode #mintAction {
+  background: var(--input-bg, #111827);
+  color: #e5e7eb;
+  border-color: var(--border, #374151);
+}
+body.dark-mode #resetDbSelect option, body.dark-mode #mintAction option {
+  background: var(--panel, #1f2937);
+  color: #e5e7eb;
+}
+body.dark-mode #summaryContainer {
+  background-color: #0f172a; /* slate-950-ish */
+  border-color: #334155;     /* slate-600 */
+  color: #e5e7eb;            /* slate-200 */
+}
+body.dark-mode #tab-mint .btn-secondary:hover {
+  background: #374151; /* slate-700 */
+  border-color: #4b5563; /* slate-600 */
+  color: #e5e7eb;
+}
+body.dark-mode #tab-settings label[role="button"]:hover {
+  background: #1f2937; /* panel */
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+body.dark-mode #tab-settings .field select {
+  background: var(--input-bg, #111827);
+}
+body.dark-mode #tab-settings .settings-card.danger {
+ background: var(--input-bg, #111827); 
+}
+/* Ensure button-like elements use correct theme colors */
+body.dark-mode .button-like {
+  background: var(--btn-bg, #1f2937);
+  color: var(--btn-fg, #e5e7eb);
+}
+body.dark-mode .button-like:hover {
+  background: var(--btn-hover-bg, #374151);
+  border-color: var(--btn-hover-border, #4b5563);
+}
+body.dark-mode .tabulator {
+  background-color: #222;
+  color: #e0e0e0
+}
+body.dark-mode .tabulator .tabulator-header {
+  background-color: var(--panel, #1f2937);
+  color: #e5e7eb;
+  border-color: var(--border, #374151);
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col {
+  background: transparent;
+  color: #e5e7eb;
+  border-right: 1px solid var(--border, #374151);
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col:last-child {
+  border-right: none;
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover {
+  background: rgba(255,255,255,0.06);
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col.tabulator-col-sorted {
+  background: rgba(255,255,255,0.08);
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col .tabulator-sorter .tabulator-sorter-element {
+  border-bottom-color: #cbd5e1; /* slate-300 */
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-col[aria-sort="desc"] .tabulator-sorter .tabulator-sorter-element {
+  border-top-color: #cbd5e1;
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-header-filter select {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid var(--border, #374151);
+  border-radius: 8px;
+}
+body.dark-mode .tabulator .tabulator-header .tabulator-header-filter input::placeholder {
+  color: #9ca3af;
+}
+body.dark-mode .tabulator .tabulator-cell {
+  background-color: #222;
+  color: #e0e0e0;
+  border-color: #444
+}
+body.dark-mode .tabulator .tabulator-row {
+  border-color: #444
+}
+body.dark-mode .tabulator .tabulator-footer {
+  background-color: #333;
+  color: #e0e0e0;
+  border-color: #444
+}
+body.dark-mode .btn-mint {
+  background: transparent;
+  color: var(--btn-fg, #111827);
+  border: 1px solid var(--border, #e5e7eb)
+}
+body.dark-mode .btn-mint:hover {
+  background: #dbeafe;
+  border-color: #93c5fd
+}
+body.dark-mode .split-scan {
+  border-color: var(--border, #374151);
+}
+body.dark-mode .split-scan .btn {
+  background: var(--btn-bg, #1f2937);
+  color: var(--btn-fg, #e5e7eb);
+}
+body.dark-mode .split-scan .split-caret {
+  border-left-color: var(--border, #374151);
+}
+body.dark-mode .split-scan .scan-badge {
+  background: #374151;
+  color: #e5e7eb;
+}
+body.dark-mode .split-scan .menu {
+  background: var(--panel, #1f2937);
+  color: #e5e7eb;
+  border-color: var(--border, #374151);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+}
+body.dark-mode .split-scan .menu li:hover {
+  background: rgba(255,255,255, .06);
+}
+body.dark-mode #stakePerAddressSummary {
+  color: #aaa;
+}
+body.dark-mode #xenftPerAddressSummary {
+  color: #aaa;
+}
+body.dark-mode .field .error-message {
+  color: #fca5a5; /* red-300 */
+}
+body.dark-mode #stakeRegularPerAddressSummary {
+  color: #aaa;
+}
+body.dark-mode #calendar-xen-total #estXenUsd {
+  color: #86efac; /* light green in dark mode */
+  font-weight: 600;
+}
+
+/* Ensure consistent grid layout */
+body.dark-mode .settings-grid {
+  align-items: start;
+}
+body.dark-mode .settings-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Ensure form elements have consistent sizing */
+body.dark-mode .field input[type="text"],
+body.dark-mode .field input[type="password"],
+body.dark-mode .field input[type="number"],
+body.dark-mode .field textarea,
+body.dark-mode .field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  line-height: 1.5;
+}
+body.dark-mode .button-row button,
+body.dark-mode .button-like {
+  box-sizing: border-box;
+}
+/* Ensure consistent eye icon positioning in settings */
+body.dark-mode .reveal-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+body.dark-mode .reveal-btn {
+  padding: 2px;
+  color: var(--muted, #9ca3af);
+}
+/* Ensure content is left-aligned like in light mode */
+body.dark-mode .settings-card {
+  text-align: left;
+}
+body.dark-mode .settings-card h3,
+body.dark-mode .settings-card p,
+body.dark-mode .settings-card label,
+body.dark-mode .field {
+  text-align: left;
+}
+/* Ensure buttons are left-aligned */
+body.dark-mode .settings-card .button-row,
+body.dark-mode .settings-card button,
+body.dark-mode .settings-card .button-like {
+  text-align: left;
+}
+body.dark-mode .settings-card .button-row {
+  justify-content: flex-start;
+}
