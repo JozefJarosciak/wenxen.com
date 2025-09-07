@@ -1039,6 +1039,23 @@ function estimateXENForRow(row){
 
 
 
+function formatNumberForMobile(num) {
+  const isMobile = window.innerWidth <= 768;
+  if (!isMobile) return num.toLocaleString();
+  
+  const numValue = Number(num);
+  if (numValue >= 1e12) {
+    return (numValue / 1e12).toFixed(2) + 'T';
+  } else if (numValue >= 1e9) {
+    return (numValue / 1e9).toFixed(2) + 'B';
+  } else if (numValue >= 1e6) {
+    return (numValue / 1e6).toFixed(2) + 'M';
+  } else if (numValue >= 1e3) {
+    return (numValue / 1e3).toFixed(2) + 'K';
+  }
+  return numValue.toLocaleString();
+}
+
 function updateXENTotalBadge() {
   const badge = document.getElementById("estXenTotal");
   if (!badge || typeof cointoolTable === 'undefined' || !cointoolTable) return;
@@ -1050,8 +1067,8 @@ function updateXENTotalBadge() {
     total += BigInt(xenValue);
   });
 
-  badge.textContent = total.toLocaleString();
-  renderXenUsdEstimate(total);   // ← NEW: show “($226.45)” style USD next to the total
+  badge.textContent = formatNumberForMobile(total);
+  renderXenUsdEstimate(total);   // ← NEW: show "($226.45)" style USD next to the total
 }
 
 
@@ -5006,13 +5023,13 @@ function applySettingsSnapshot(settings) {
       const summaryToggle = document.getElementById('summaryToggle');
       if (summaryContainer && summaryToggle) {
         if (wantCollapsed) {
-          summaryContainer.classList.add('collapsed');
-          summaryToggle.textContent = '+';
-          summaryToggle.title = 'Expand summary';
+          summaryContainer.style.display = 'none';
+          summaryToggle.textContent = '+ Show Details';
+          summaryToggle.title = 'Show summary details';
         } else {
-          summaryContainer.classList.remove('collapsed');
-          summaryToggle.textContent = '−';
-          summaryToggle.title = 'Collapse summary';
+          summaryContainer.style.display = 'block';
+          summaryToggle.textContent = '− Hide Details';
+          summaryToggle.title = 'Hide summary details';
         }
       }
     }
@@ -5493,26 +5510,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const isCollapsed = savedState === 'true';
     
     if (isCollapsed) {
-      summaryContainer.classList.add('collapsed');
-      summaryToggle.textContent = '+';
-      summaryToggle.title = 'Expand summary';
+      summaryContainer.style.display = 'none';
+      summaryToggle.textContent = '+ Show Details';
+      summaryToggle.title = 'Show summary details';
     }
 
     summaryToggle.addEventListener('click', (e) => {
       e.preventDefault();
-      const isCurrentlyCollapsed = summaryContainer.classList.contains('collapsed');
+      const isCurrentlyHidden = summaryContainer.style.display === 'none';
       
-      if (isCurrentlyCollapsed) {
-        // Expand
-        summaryContainer.classList.remove('collapsed');
-        summaryToggle.textContent = '−';
-        summaryToggle.title = 'Collapse summary';
+      if (isCurrentlyHidden) {
+        // Show
+        summaryContainer.style.display = 'block';
+        summaryToggle.textContent = '− Hide Details';
+        summaryToggle.title = 'Hide summary details';
         localStorage.setItem('summaryCollapsed', 'false');
       } else {
-        // Collapse
-        summaryContainer.classList.add('collapsed');
-        summaryToggle.textContent = '+';
-        summaryToggle.title = 'Expand summary';
+        // Hide
+        summaryContainer.style.display = 'none';
+        summaryToggle.textContent = '+ Show Details';
+        summaryToggle.title = 'Show summary details';
         localStorage.setItem('summaryCollapsed', 'true');
       }
     });
