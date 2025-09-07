@@ -1470,12 +1470,12 @@ body {
   
   /* Tighter row spacing on mobile - better fit to font height */
   .tabulator-cell {
-    padding: 4px 6px !important; /* Reduce vertical padding */
-    line-height: 1.2 !important; /* Tighter line height */
+    padding: 2px 2px !important; /* Further reduce vertical padding */
+    /*line-height: 1 !important; /* Even tighter line height */
   }
   
   .tabulator-row {
-    min-height: 28px !important; /* Reduce minimum row height */
+    /*min-height: 10px !important; /* Further reduce minimum row height */
   }
   
   /* Only fix header filter inputs - the main issue */
