@@ -4893,7 +4893,8 @@ function collectSettingsSnapshot() {
     // New: persist show/mask states (default API key visible on first run)
     etherscanApiKeyVisible: (function(){ const v=localStorage.getItem("etherscanApiKeyVisible"); return v==null?'1':v; })(),
     ethAddressMasked: (localStorage.getItem("ethAddressMasked") || '0'),
-    connectWalletMasked: (localStorage.getItem("connectWalletMasked") || '0')
+    connectWalletMasked: (localStorage.getItem("connectWalletMasked") || '0'),
+    summaryCollapsed: (localStorage.getItem("summaryCollapsed") || 'false')
   };
   const throttle = localStorage.getItem("etherscanThrottleMs");
   if (throttle) settings.etherscanThrottleMs = throttle;
@@ -4962,6 +4963,28 @@ function applySettingsSnapshot(settings) {
       // If chart UI exists now, apply immediately
       if (document.getElementById('vmuChartToggle')) {
         setVmuChartExpandedState(wantOpen);
+      }
+    }
+  } catch (_) {}
+
+  // Apply summary collapsed state from settings
+  try {
+    if (settings.summaryCollapsed != null) {
+      const wantCollapsed = String(settings.summaryCollapsed) === 'true';
+      localStorage.setItem('summaryCollapsed', wantCollapsed ? 'true' : 'false');
+      // If summary UI exists now, apply immediately
+      const summaryContainer = document.getElementById('summaryContainer');
+      const summaryToggle = document.getElementById('summaryToggle');
+      if (summaryContainer && summaryToggle) {
+        if (wantCollapsed) {
+          summaryContainer.classList.add('collapsed');
+          summaryToggle.textContent = '+';
+          summaryToggle.title = 'Expand summary';
+        } else {
+          summaryContainer.classList.remove('collapsed');
+          summaryToggle.textContent = '−';
+          summaryToggle.title = 'Collapse summary';
+        }
       }
     }
   } catch (_) {}
@@ -5429,6 +5452,40 @@ document.addEventListener('DOMContentLoaded', () => {
     githubBtn.addEventListener('click', (e) => {
       e.preventDefault();
       window.open('https://github.com/JozefJarosciak/wenxen.com', '_blank', 'noopener,noreferrer');
+    });
+  }
+
+  // wire summary container collapse/expand
+  const summaryContainer = document.getElementById('summaryContainer');
+  const summaryToggle = document.getElementById('summaryToggle');
+  if (summaryContainer && summaryToggle) {
+    // Load saved state from localStorage
+    const savedState = localStorage.getItem('summaryCollapsed');
+    const isCollapsed = savedState === 'true';
+    
+    if (isCollapsed) {
+      summaryContainer.classList.add('collapsed');
+      summaryToggle.textContent = '+';
+      summaryToggle.title = 'Expand summary';
+    }
+
+    summaryToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const isCurrentlyCollapsed = summaryContainer.classList.contains('collapsed');
+      
+      if (isCurrentlyCollapsed) {
+        // Expand
+        summaryContainer.classList.remove('collapsed');
+        summaryToggle.textContent = '−';
+        summaryToggle.title = 'Collapse summary';
+        localStorage.setItem('summaryCollapsed', 'false');
+      } else {
+        // Collapse
+        summaryContainer.classList.add('collapsed');
+        summaryToggle.textContent = '+';
+        summaryToggle.title = 'Expand summary';
+        localStorage.setItem('summaryCollapsed', 'true');
+      }
     });
   }
 

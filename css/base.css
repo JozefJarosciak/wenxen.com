@@ -1665,3 +1665,109 @@ body.retro-mode .github-btn:hover {
 body.matrix-mode .github-btn:hover {
   background: rgba(0, 255, 0, 0.1);
 }
+
+/* Summary container collapsible styling */
+.collapsible-summary {
+  position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.summary-content {
+  padding: 0;
+  transition: all 0.3s ease;
+}
+
+.summary-toggle {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #374151;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  outline: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.summary-toggle:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.1);
+}
+
+.summary-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+.collapsible-summary.collapsed > *:not(.summary-toggle) {
+  display: none;
+}
+
+.collapsible-summary.collapsed {
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+/* Theme-specific styling */
+body.dark-mode .collapsible-summary {
+  border-color: #374151;
+  background: rgba(31, 41, 55, 0.8);
+}
+
+body.dark-mode .summary-toggle {
+  background: rgba(31, 41, 55, 0.9);
+  color: #e5e7eb;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+body.dark-mode .summary-toggle:hover {
+  background: rgba(31, 41, 55, 1);
+}
+
+body.retro-mode .collapsible-summary {
+  border-color: #4e5bd4;
+  background: rgba(6, 19, 138, 0.8);
+}
+
+body.retro-mode .summary-toggle {
+  background: rgba(6, 19, 138, 0.9);
+  color: #c7fff7;
+  border-color: rgba(199, 255, 247, 0.3);
+  font-family: 'VT323', monospace;
+}
+
+body.retro-mode .summary-toggle:hover {
+  background: rgba(6, 19, 138, 1);
+}
+
+body.matrix-mode .collapsible-summary {
+  border-color: #00ff00;
+  background: rgba(0, 17, 0, 0.8);
+}
+
+body.matrix-mode .summary-toggle {
+  background: rgba(0, 17, 0, 0.9);
+  color: #00ff00;
+  border-color: rgba(0, 255, 0, 0.3);
+  font-family: 'Courier New', Monaco, 'Lucida Console', monospace;
+}
+
+body.matrix-mode .summary-toggle:hover {
+  background: rgba(0, 17, 0, 1);
+}
