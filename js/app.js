@@ -1208,13 +1208,16 @@ function ensureBulkBar(){
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'bulkBar';
-    // Prefer to place after the filter chips block if present
-    const chips = document.querySelector('.filter-chips');
-    if (chips && typeof chips.insertAdjacentElement === 'function') {
-      chips.insertAdjacentElement('afterend', bar);
+    // Anchor the bulk bar after the chart and before the table
+    const chartWrap = document.getElementById('vmu-chart-wrap');
+    if (chartWrap && typeof chartWrap.insertAdjacentElement === 'function') {
+      chartWrap.insertAdjacentElement('afterend', bar);
     } else {
+      // Fallback to inserting before the table if chart isn't found
       const tableEl = document.getElementById('cointool-table');
-      tableEl.parentNode.insertBefore(bar, tableEl); // show above table
+      if (tableEl && tableEl.parentNode) {
+        tableEl.parentNode.insertBefore(bar, tableEl);
+      }
     }
   }
 
@@ -2979,8 +2982,10 @@ function computeLiveStatus(row) {
 
   // ✅ Stakes: Check redeemed status, then calculate based on maturity timestamp
   if (data.SourceType === 'Stake' || data.SourceType === 'Stake XENFT') {
+    const actions = Array.isArray(data.Actions) ? data.Actions : [];
+    const hasWithdraw = actions.some(a => a.type === 'withdraw');
     // Check if already claimed/redeemed
-    if (Number(data.redeemed) === 1 || String(data.Status).toLowerCase() === 'claimed') {
+    if (hasWithdraw || Number(data.redeemed) === 1 || String(data.Status).toLowerCase() === 'claimed') {
       return 'Claimed';
     }
     // Calculate status based on maturity timestamp
@@ -5188,38 +5193,44 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
     const now = new Date();
     let y = now.getFullYear();
     let m = now.getMonth(); // 0..11
-    let value;
+    let maturityValue;
+    let statusValue = ''; // Default to no status filter
 
     switch (action) {
+      case 'all-maturing':
+        maturityValue = ''; // No date filter
+        statusValue = 'Maturing';
+        break;
       case 'this-month':
-        value = `${y} ${MONTHS[m]}`;
+        maturityValue = `${y} ${MONTHS[m]}`;
+        statusValue = 'Maturing';
         break;
       case 'next-month':
         m = (m + 1) % 12;
         if (m === 0) y += 1;
-        value = `${y} ${MONTHS[m]}`;
+        maturityValue = `${y} ${MONTHS[m]}`;
         break;
       case 'this-year':
-        value = String(y);
+        maturityValue = String(y);
         break;
       case 'next-year':
-        value = String(y + 1);
+        maturityValue = String(y + 1);
         break;
       case 'year-plus-2':
-        value = String(y + 2);
+        maturityValue = String(y + 2);
         break;
       case 'year-plus-3':
-        value = String(y + 3);
+        maturityValue = String(y + 3);
         break;
       default:
-        value = '';
+        maturityValue = '';
     }
 
     // Apply the maturity filter (month/year or year only; no day part)
-    setMaturityHeaderFilterText(value);
+    setMaturityHeaderFilterText(maturityValue);
 
-    // Keep Status header filter at All
-    try { window.cointoolTable?.setHeaderFilterValue('Status', ''); } catch (_) {}
+    // Apply the status filter
+    try { window.cointoolTable?.setHeaderFilterValue('Status', statusValue); } catch (_) {}
     try { window.cointoolTable?.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
   });
 })();

@@ -20,11 +20,11 @@
   <link id="flatpickrDarkCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" disabled>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="css/base.css?v=20250907101457">
-  <link rel="stylesheet" href="css/theme-light.css?v=20250907101457">
-  <link rel="stylesheet" href="css/theme-dark.css?v=20250907101457">
-  <link rel="stylesheet" href="css/theme-retro.css?v=20250907101457">
-  <link rel="stylesheet" href="css/theme-matrix.css?v=20250907101457">
+  <link rel="stylesheet" href="css/base.css?v=20250907103959">
+  <link rel="stylesheet" href="css/theme-light.css?v=20250907103959">
+  <link rel="stylesheet" href="css/theme-dark.css?v=20250907103959">
+  <link rel="stylesheet" href="css/theme-retro.css?v=20250907103959">
+  <link rel="stylesheet" href="css/theme-matrix.css?v=20250907103959">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <!-- Retro theme font (C64-like monospace) -->
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -41,7 +41,12 @@
     </button>
     <!-- Header dropdown menu: Theme and future actions -->
     <div class="header-menu" id="headerMenuRoot">
-      <button id="headerMenuToggle" class="menu-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="headerMenu" title="Menu">▾</button>
+      <button id="headerMenuToggle" class="menu-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="headerMenu" title="Settings">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.43.992a6.759 6.759 0 0 1 0 1.25c.008.379.137.752.43.992l1.003.827c.424.35.534.955.26 1.431l-1.296 2.247a1.125 1.125 0 0 1-1.37.49l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.063-.374-.313-.686-.645-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.075-.124l-1.217.456a1.125 1.125 0 0 1-1.37-.49l-1.296-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.759 6.759 0 0 1 0-1.25c-.007-.379-.137-.752-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.431l1.296-2.247a1.125 1.125 0 0 1 1.37.49l1.217.456c.355.133.75.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z"></path>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path>
+    </svg>
+</button>
       <div id="headerMenu" class="menu-panel" role="menu" hidden>
         <div class="menu-section">
           <div class="menu-title">Theme <span id="themeMenuCurrent" class="menu-current">Dark</span></div>
@@ -147,6 +152,7 @@
     <div class="filter-chips">
       <span>Filters:</span>
       <button class="chip" data-filter="">All</button>
+      <button class="chip" data-filter="all-maturing">All Maturing</button>
       <button class="chip" data-filter="this-month">This Month</button>
       <button class="chip" data-filter="next-month">Next Month</button>
       <button class="chip" data-filter="this-year">This Year</button>
@@ -549,18 +555,18 @@
 </div>
 
 <!-- Google Analytics -->
-<script src="./js/GA-support.js?v=20250907101457"></script>
+<script src="./js/GA-support.js?v=20250907103959"></script>
 
-<script src="./ABI/xen-ABI.js?v=20250907101457"></script>
-<script src="./ABI/xenft-ABI.js?v=20250907101457"></script>
-<script src="./ABI/xenft-stake-ABI.js?v=20250907101457"></script>
-<script src="./ABI/cointool-ABI.js?v=20250907101457"></script>
-<script src="./js/app.js?v=20250907101457"></script>
-<script src="./js/app-mint.js?v=20250907101457"></script>
-<script src="./js/xenft.js?v=20250907101457"></script>
-<script src="./js/xenft-stake.js?v=20250907101457"></script>
-<script src="./js/unify.js?v=20250907101457"></script>
-<script src="./js/xen-stake.js?v=20250907101457"></script>
+<script src="./ABI/xen-ABI.js?v=20250907103959"></script>
+<script src="./ABI/xenft-ABI.js?v=20250907103959"></script>
+<script src="./ABI/xenft-stake-ABI.js?v=20250907103959"></script>
+<script src="./ABI/cointool-ABI.js?v=20250907103959"></script>
+<script src="./js/app.js?v=20250907103959"></script>
+<script src="./js/app-mint.js?v=20250907103959"></script>
+<script src="./js/xenft.js?v=20250907103959"></script>
+<script src="./js/xenft-stake.js?v=20250907103959"></script>
+<script src="./js/unify.js?v=20250907103959"></script>
+<script src="./js/xen-stake.js?v=20250907103959"></script>
 <!-- Markdown parser for About tab -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
