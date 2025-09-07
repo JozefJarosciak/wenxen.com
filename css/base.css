@@ -855,11 +855,13 @@ body.dark-mode #themeSelect,
 /* Summary container tuned for dark mode */
 /* Summary container tuned for retro mode */
 
-/* Fix button hovers in dark mode (Mint/Stake + Settings) */
-body.dark-mode #tab-mint .btn-mint:hover,
-
+/* Fix button hovers in dark mode (Settings) */
 body.dark-mode #tab-settings button:hover,
-body.dark-mode #tab-settings .button-like:hover,
+body.dark-mode #tab-settings .button-like:hover {
+  background: #374151; /* slate-700 */
+  border-color: #4b5563; /* slate-600 */
+  color: #e5e7eb;
+}
 
 /* Unify Settings tab backgrounds to match etherscanApiKey input bg */
 body.dark-mode #tab-settings .settings-card,
@@ -1006,17 +1008,6 @@ body.dark-mode .tabulator .tabulator-header .tabulator-header-filter input,
   opacity: 0.9;
 }
 
-button.btn-mint {
-  background: transparent;
-  color: var(--btn-fg, #111827);
-  border: 1px solid var(--border, #e5e7eb)
-}
-
-
-.btn-mint:disabled {
-  opacity: .6;
-  cursor: not-allowed
-}
 
 #calendar .flatpickr-day.prevMonthDay,
 #calendar .flatpickr-day.nextMonthDay {

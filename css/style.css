@@ -302,12 +302,6 @@ body.dark-mode .claim-button {
   flex-wrap: nowrap;
 }
 
-.mint-actions {
-  margin-top: 1px;
-  display: flex;
-  gap: 10px;
-  align-items: center
-}
 
 .btn-secondary {
   background: #f3f4f6;
@@ -322,29 +316,6 @@ body.dark-mode .claim-button {
   background: #e5e7eb
 }
 
-.btn-mint {
-  background: transparent;
-  color: #111827;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 10px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-weight: 600;
-  line-height: 1.2;
-  font-size: 0.9em;
-  appearance: none;
-  transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease
-}
-
-.btn-mint:hover {
-  background: #dbeafe;
-  border-color: #93c5fd
-}
-
-.btn-mint:disabled {
-  opacity: .6;
-  cursor: not-allowed
-}
 
 #vmu-chart-wrap .collapsible-toggle {
   display: inline-flex;
@@ -929,7 +900,6 @@ body.retro-mode #summaryContainer {
 }
 
 /* Fix button hovers in dark mode (Mint/Stake + Settings) */
-body.dark-mode #tab-mint .btn-mint:hover,
 body.dark-mode #tab-mint .btn-secondary:hover {
   background: #374151; /* slate-700 */
   border-color: #4b5563; /* slate-600 */
@@ -1174,21 +1144,7 @@ body.light-mode .tabulator .tabulator-footer {
   opacity: 0.9;
 }
 
-button.btn-mint, body.light-mode .btn-mint, body.dark-mode .btn-mint {
-  background: transparent;
-  color: var(--btn-fg, #111827);
-  border: 1px solid var(--border, #e5e7eb)
-}
 
-body.light-mode .btn-mint:hover, body.dark-mode .btn-mint:hover {
-  background: #dbeafe;
-  border-color: #93c5fd
-}
-
-.btn-mint:disabled {
-  opacity: .6;
-  cursor: not-allowed
-}
 
 #calendar .flatpickr-day.prevMonthDay,
 #calendar .flatpickr-day.nextMonthDay {
@@ -1567,7 +1523,6 @@ body { line-height: 1.5; }
   }
   .mint-input { width: 100%; }
   .mint-term-row { width: auto; }
-  .mint-actions { flex-wrap: wrap; }
 
   .filter-chips { flex-wrap: wrap; row-gap: 6px; }
 

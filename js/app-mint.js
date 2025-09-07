@@ -158,6 +158,17 @@ async function startCointoolMint(vmu, termDays){
   est = Math.ceil(est * 1.2);
   const receipt = await contract.methods.t(vmu, dataHex, saltHex).send({ from: connectedAccount, gas: est });
   console.log(`[MINT/COINTOOL] https://etherscan.io/tx/${receipt?.transactionHash || '(pending)'}`);
+  if (typeof showToast === 'function') showToast(`Mint submitted: ${receipt.transactionHash}`, 'success');
+  else alert(`Mint submitted: ${receipt.transactionHash}`);
+  // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
+  try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
+  // Delayed scan to catch the mined transaction (typical block time ~12s)
+  setTimeout(async () => {
+    try { 
+      if (typeof window.scanMints === 'function') await window.scanMints();
+      if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
+    } catch {}
+  }, 15000);
 }
 
 async function startXenftMint(vmu, termDays, kind, burnRaw){
@@ -174,6 +185,17 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
     est = Math.ceil(est * 1.2);
     const r = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).send({ from: connectedAccount, gas: est });
     console.log(`[MINT/XENFT-APEX] https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`);
+    if (typeof showToast === 'function') showToast(`XENFT APEX mint submitted: ${r.transactionHash}`, 'success');
+    else alert(`XENFT APEX mint submitted: ${r.transactionHash}`);
+    // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
+    try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
+    // Delayed scan to catch the mined transaction
+    setTimeout(async () => {
+      try { 
+        if (window.xenft && typeof window.xenft.scan === 'function') await window.xenft.scan();
+        if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
+      } catch {}
+    }, 15000);
     return;
   }
   // Regular XENFT
@@ -181,6 +203,17 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
   est = Math.ceil(est * 1.2);
   const r = await xenft.methods.bulkClaimRank(vmu, termDays).send({ from: connectedAccount, gas: est });
   console.log(`[MINT/XENFT] https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`);
+  if (typeof showToast === 'function') showToast(`XENFT mint submitted: ${r.transactionHash}`, 'success');
+  else alert(`XENFT mint submitted: ${r.transactionHash}`);
+  // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
+  try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
+  // Delayed scan to catch the mined transaction
+  setTimeout(async () => {
+    try { 
+      if (window.xenft && typeof window.xenft.scan === 'function') await window.xenft.scan();
+      if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
+    } catch {}
+  }, 15000);
 }
 
 // --- Staking ---
@@ -211,7 +244,15 @@ async function startStakeFlow(){
     const tx = await xen.methods.stake(amountWei, termDays).send({ from: connectedAccount, gas: est });
     if (typeof showToast === 'function') showToast(`Stake submitted: ${tx.transactionHash}`, 'success');
     else alert(`Stake submitted: ${tx.transactionHash}`);
+    // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
     try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
+    // Delayed scan to catch the mined transaction
+    setTimeout(async () => {
+      try { 
+        if (window.xenStake && typeof window.xenStake.scan === 'function') await window.xenStake.scan();
+        if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
+      } catch {}
+    }, 15000);
   } catch (err) {
     console.error('[STAKE] failed', err);
     alert(err?.message || 'Stake failed.');
