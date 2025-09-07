@@ -23,8 +23,8 @@ The application provides detailed tracking for:
 Users can perform claims directly from the interface:
 -   Claim/Create XENFTs
 -   Claim/Create Cointool mints  
+-   Claim/Create XENFT Stakes  
 -   Execute batch-claims for multiple Cointool mints
--   Claim/Create XENFT Stakes
 
 **Future development will include support for additional XEN-related smart contracts.*
 

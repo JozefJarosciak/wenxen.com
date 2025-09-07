@@ -4,6 +4,9 @@
 // A single, shared timer for the long-press detection
 let longPressTimer;
 
+// About tab loading state
+let _aboutLoaded = false;
+
 /**
  * Attaches a long-press listener to an element to show a mobile-friendly tooltip.
  * @param {HTMLElement} element The cell element to attach the listener to.
@@ -123,7 +126,6 @@ function updateThemeMenuUI(){
 }
 
 function buildEstXenTooltip(row, estNumber){
-  const ONE_ETHER = 1_000_000_000_000_000_000n;
   const hasPrice = Number.isFinite(xenUsdPrice);
   const usdStr = (n) => hasPrice ? ` (${formatUSD(n * xenUsdPrice)})` : "";
 
@@ -247,13 +249,19 @@ function setSettingsTextInputsEnabled(enabled){
 function openPrivacyModal(){
   const m = document.getElementById('privacyModal');
   if (!m) return;
-  m.classList.remove('hidden');
+  // Set aria-hidden first to prevent accessibility issues
   m.setAttribute('aria-hidden', 'false');
+  m.classList.remove('hidden');
 }
 
 function closePrivacyModal(){
   const m = document.getElementById('privacyModal');
   if (!m) return;
+  // Blur any focused elements within the modal to prevent accessibility issues
+  const focusedElement = m.querySelector(':focus');
+  if (focusedElement) {
+    focusedElement.blur();
+  }
   m.classList.add('hidden');
   m.setAttribute('aria-hidden', 'true');
 }
@@ -311,14 +319,21 @@ function shouldShowOnboarding() {
 function showOnboardingModal() {
   const modal = document.getElementById('onboardingModal');
   if (modal) {
-    modal.classList.remove('hidden');
+    // Set aria-hidden first to prevent accessibility issues
     modal.setAttribute('aria-hidden', 'false');
+    // Then show the modal
+    modal.classList.remove('hidden');
   }
 }
 
 function hideOnboardingModal() {
   const modal = document.getElementById('onboardingModal');
   if (modal) {
+    // Blur any focused elements within the modal to prevent accessibility issues
+    const focusedElement = modal.querySelector(':focus');
+    if (focusedElement) {
+      focusedElement.blur();
+    }
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
   }
@@ -454,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- About tab loader ---
-let _aboutLoaded = false;
 async function ensureAboutLoaded(){
   if (_aboutLoaded) return;
   const mount = document.getElementById('aboutMarkdown');
@@ -828,7 +842,7 @@ function openRemintTermDialog(){
 }
 
 // Send CoinTool transaction(s) for given ids, respecting per-tx VMU cap
-async function sendCointoolTx({ ids, dataHex, salt, w3, mintData, action }) {
+async function sendCointoolTx({ ids, dataHex, salt, w3, action }) {
   if (!Array.isArray(ids) || ids.length === 0) throw new Error('No VMU ids');
   if (!w3 || !connectedAccount) throw new Error('Wallet not connected');
 
@@ -1359,7 +1373,7 @@ async function handleBulkAction(mode){
   // --- CoinTool path (batched to MAX_VMU_PER_TX) ---
   if (ctRows.length) {
     // optional: single prompt for remint term
-    let term = null;
+    let term;
     if (mode === 'remint') {
       term = await openRemintTermDialog();
       if (term == null) { return; }
@@ -1743,7 +1757,7 @@ function updateVmuChart() {
   console.debug('[VMU-CHART] updateVmuChart size:', {w,h});
   if (!(node && w > 0 && h > 0)) { console.debug('[VMU-CHART] skip update due to zero size'); return; }
   const rows = _collectActiveRows();
-  let dates = [], values = [];
+  let dates, values;
   if (_vmuChartMetric === 'usd') {
     const out = _groupXenUsdByDate(rows);
     dates = out.dates; values = out.values;
@@ -2094,11 +2108,6 @@ window.progressUI = {
     const etr = document.getElementById('etrText');
     if (!etr) return;
     etr.textContent = (sec && sec > 2) ? `ETA: ${formatSeconds(sec)}` : '';
-  },
-  setIdle(sinceSec){
-    const el = document.getElementById('rpcStatus');
-    if (!el) return;
-    el.textContent = (sinceSec && sinceSec >= 3) ? `⏳ ${sinceSec}s since last reply` : '';
   },
   show(show=true){
     const pc = document.getElementById('progressContainer');
@@ -2937,10 +2946,16 @@ function chooseActionDialog(defaultChoice = 'claim', rowData = null){
       if (remintOpt) remintOpt.disabled = false;
       select.value = defaultChoice || 'claim';
     }
-    modal.classList.remove('hidden');
+    // Set aria-hidden first to prevent accessibility issues
     modal.setAttribute('aria-hidden', 'false');
+    modal.classList.remove('hidden');
 
     function cleanup(val){
+      // Blur any focused elements within the modal to prevent accessibility issues
+      const focusedElement = modal.querySelector(':focus');
+      if (focusedElement) {
+        focusedElement.blur();
+      }
       modal.classList.add('hidden');
       modal.setAttribute('aria-hidden', 'true');
       ok.removeEventListener('click', onOk);
@@ -3502,14 +3517,12 @@ async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKe
       console.warn(`${indent}  ! Transient error (${human}). Retrying in ${backoff}ms...`);
       if (typeof onStatus === "function") onStatus(`${indent}  ! ${human}. Retrying...`);
       await new Promise(r => setTimeout(r, backoff));
-      continue;
 
     } catch (e) {
       const backoff = Math.min(2500, 200 * Math.pow(1.6, attempt));
       console.warn(`${indent}  ! Request failed (${e.message}). Retrying in ${backoff}ms...`);
       if (typeof onStatus === "function") onStatus(`${indent}  ! Network error. Retrying...`);
       await new Promise(r => setTimeout(r, backoff));
-      continue;
     }
   }
 
@@ -3559,8 +3572,6 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   const tokenProgressBar = document.getElementById("tokenProgressBar");
   const rpcStatusEl = document.getElementById("rpcStatus");
 
-  // status helper
-  const updateStatus = (msg) => { if (progressEl) progressEl.textContent = msg; };
 
   // heartbeat (lets you see if we're waiting on network)
   window.__scanLastActivityTs = Date.now();
@@ -3624,7 +3635,6 @@ async function fetchPostMintActions(address, etherscanApiKey) {
       const rate = chunksDone / Math.max(1, elapsed);
       const remainingChunks = Math.max(0, totalChunks - chunksDone);
       const remainingSec = rate > 0 ? remainingChunks / rate : 0;
-      const pct = Math.floor((chunksDone / totalChunks) * 100);
 
       if (progressEl) {
         progressUI.setStage('Fetching transactions', chunksDone, totalChunks, `blocks ${startBlock}→${endBlock}`);
@@ -4019,7 +4029,6 @@ async function scanMints() {
 
   window.progressUI.show(true);
   window.progressUI.setType('Cointool');
-  const addressProgressText = document.getElementById("addressProgressText");
   const tokenProgressBar = document.getElementById("tokenProgressBar");
   const tokenProgressText = document.getElementById("tokenProgressText");
   const etrText = document.getElementById("etrText");
@@ -4500,12 +4509,6 @@ async function connectWallet() {
       (window.xenft && window.xenft.CONTRACT_ADDRESS) ||
       '0x0a252663DBCc0b073063D6420a40319e438Cfa59';
 
-    const XF_ABI = (typeof window.xenftAbi !== 'undefined' && Array.isArray(window.xenftAbi))
-      ? [...window.xenftAbi,
-        {"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"},{"internalType":"address","name":"to","type":"address"}],
-          "name":"bulkClaimMintReward","outputs":[],"stateMutability":"nonpayable","type":"function"}]
-      : [{"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"},{"internalType":"address","name":"to","type":"address"}],
-        "name":"bulkClaimMintReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
     try {
       const torrent = new w3.eth.Contract(window.xenftAbi, TORRENT_ADDR);
@@ -4547,7 +4550,7 @@ async function connectWallet() {
     dataHex = buildRemintData(minter, term);
   }
 
-  await sendCointoolTx({ ids, dataHex, salt, w3, mintData: row, action });
+  await sendCointoolTx({ ids, dataHex, salt, w3, action });
 }
 
 
@@ -4556,22 +4559,7 @@ function cleanHexAddr(addr) {
   return '0x' + String(addr).trim().replace(/^0x/i, '').toLowerCase();
 }
 
-function ensureHexBytes(s) {
-  if (!s) return s;
-  const str = String(s).trim();
-  return str.startsWith('0x') ? str : web3.utils.utf8ToHex(str);
-}
 
-async function resolveXenAddress() {
-  // Handles both a plain string constant or a per-chain map
-  // e.g. XEN_CRYPTO_ADDRESS = "0x..."  OR  { "1": "0x...", "56": "0x..." , eth: "0x..." }
-  const cid = (typeof web3Wallet !== 'undefined') ? await web3Wallet.eth.getChainId() : null;
-  const val = (typeof XEN_CRYPTO_ADDRESS === 'string')
-    ? XEN_CRYPTO_ADDRESS
-    : (XEN_CRYPTO_ADDRESS?.[String(cid)] ?? XEN_CRYPTO_ADDRESS?.eth ?? XEN_CRYPTO_ADDRESS?.ETH);
-  if (!val) throw new Error('XEN address not configured for this network.');
-  return cleanHexAddr(val);
-}
 
 window.onload = async () => {
   loadUserPreferences();
@@ -5191,7 +5179,7 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
     const now = new Date();
     let y = now.getFullYear();
     let m = now.getMonth(); // 0..11
-    let value = '';
+    let value;
 
     switch (action) {
       case 'this-month':

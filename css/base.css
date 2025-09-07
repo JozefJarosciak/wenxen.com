@@ -1,3 +1,17 @@
+:root {
+  --text-color: #111;
+  --accent-color: #0078fa;
+  --accent-hover: #0066d9;
+  --chip-bg: #f1f3f5;
+  --p: 1;
+  --border: #e5e7eb;
+  --btn-bg: #f8fafc;
+  --btn-fg: #111827;
+  --panel: #fff;
+  --muted: #6b7280;
+  --input-bg: #fff;
+}
+
 /* Generated from style.css split by theme. */
 body {
   font-family: Arial, sans-serif;
@@ -24,7 +38,6 @@ label {
 }
 
 #cointool-table {
-  margin-top: 10px;
   display: inline-block;
   margin: 0
 }
@@ -517,7 +530,6 @@ label {
   font-size: 0.92em;
   line-height: 1.4;
   display: inline-block;
-  width: -moz-fit-content;
   width: fit-content;
 }
 
@@ -530,7 +542,6 @@ label {
   padding: 8px 10px;
   margin: 10px 0;
   font-size: 0.92em;             /* slightly smaller text */
-  width: -moz-fit-content;       /* match summaryContainer */
   width: fit-content;            /* match summaryContainer */
 }
 #progressContainer.visible {

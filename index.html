@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -253,7 +255,6 @@
           inputmode="numeric"
           autocomplete="off"
           autocapitalize="off"
-          autocorrect="off"
           spellcheck="false"
         />
           <button id="btnSetMaxTerm" type="button" class="btn-secondary">Set Max Term</button>
@@ -298,7 +299,6 @@
           inputmode="numeric"
           autocomplete="off"
           autocapitalize="off"
-          autocorrect="off"
           spellcheck="false"
         />
           <button id="btnStakeSetMaxTerm" type="button" class="btn-secondary">Set Max Term</button>
@@ -453,25 +453,24 @@
     <div id="aboutMarkdown" class="markdown-body">Loading…</div>
   </section>
 
-  <!-- Footer -->
-  <footer class="site-footer" role="contentinfo">
-    <span>Copyright <span id="copyrightYear"></span> WenXen.com (by Xen.pub)</span>
-    <span class="inline-sep">|</span>
-    <a href="#" id="privacyLink">Privacy</a>
-    <span class="inline-sep">|</span>
-    <a href="https://github.com/JozefJarosciak/wenxen.com" id="githubLink" target="_blank" rel="noopener noreferrer">GitHub</a>
-    <span class="inline-sep">|</span>
-    <a href="https://xen.pub/donate.php" id="donateLink" target="_blank" rel="noopener noreferrer">Donate</a>
-  </footer>
-
 </div>
+<!-- Footer -->
+<footer class="site-footer" role="contentinfo">
+  <span>Copyright <span id="copyrightYear"></span> WenXen.com (by Xen.pub)</span>
+  <span class="inline-sep">|</span>
+  <a href="#" id="privacyLink">Privacy</a>
+  <span class="inline-sep">|</span>
+  <a href="https://github.com/JozefJarosciak/wenxen.com" id="githubLink" target="_blank" rel="noopener noreferrer">GitHub</a>
+  <span class="inline-sep">|</span>
+  <a href="https://xen.pub/donate.php" id="donateLink" target="_blank" rel="noopener noreferrer">Donate</a>
+</footer>
 <!-- Privacy Modal -->
 <div id="privacyModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="privacyTitle">
   <div class="modal-content">
     <h3 id="privacyTitle" style="margin:0 0 8px 0;">Privacy &amp; Terms Notice</h3>
     <div class="modal-body" style="max-height:50vh; overflow:auto;">
       <p>
-        This tracker is provided by WenXen.com on an open-source basis. It runs entirely in your browser and uses only public Ethereum RPC endpoints and your own free Etherscan API key. WenXen.pub does not collect or store your data or keys on our servers.
+        This tracker is provided by WenXen.com on an open-source basis. It runs entirely in your browser and uses only public Ethereum RPC endpoints and your own free Etherscan API key. We do not collect or store your data or keys on our servers.
       </p>
       <p>
         By using this site, you agree that you are solely responsible for all actions you take. WenXen.com cannot reverse anything you do. The software is provided “as is,” without warranties of any kind. To the fullest extent permitted by law, WenXen.com disclaims liability for any loss or damages arising from or related to the use of this site or its code.
@@ -480,7 +479,7 @@
         Because this project is open source, you may review the code and host it yourself if you prefer. You can also run it locally on your own infrastructure (laptop/desktop) without any deployment to cloud.
       </p>
       <p>
-        If you do not agree to these terms, do not use the site.
+        Don’t use the site if you disagree with the terms!
       </p>
     </div>
     <div class="modal-actions">
@@ -515,7 +514,7 @@
       <p>🔒100% browser-based & open-source (download and use it locally or run it from wenxen.com). Your data always stays on your device, no 3rd-party storage, no nonsense!</p>
     
       <div class="onboarding-steps">
-      <h4 style="margin: 16px 0 12px 0; color: var(--text-color);">Get Started in 2 Steps:</h4>
+      <h4 style="margin: 16px 0 12px 0;">Get Started in 2 Steps:</h4>
       
       <div class="onboarding-step">
         <div class="step-icon">📝</div>
