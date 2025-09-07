@@ -20,11 +20,11 @@
   <link id="flatpickrDarkCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" disabled>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="css/base.css?v=20241206150000">
-  <link rel="stylesheet" href="css/theme-light.css?v=20241206150000">
-  <link rel="stylesheet" href="css/theme-dark.css?v=20241206150000">
-  <link rel="stylesheet" href="css/theme-retro.css?v=20241206150000">
-  <link rel="stylesheet" href="css/theme-matrix.css?v=20241206150000">
+  <link rel="stylesheet" href="css/base.css?v=20250907100252">
+  <link rel="stylesheet" href="css/theme-light.css?v=20250907100252">
+  <link rel="stylesheet" href="css/theme-dark.css?v=20250907100252">
+  <link rel="stylesheet" href="css/theme-retro.css?v=20250907100252">
+  <link rel="stylesheet" href="css/theme-matrix.css?v=20250907100252">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <!-- Retro theme font (C64-like monospace) -->
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -463,6 +463,8 @@
   <a href="https://github.com/JozefJarosciak/wenxen.com" id="githubLink" target="_blank" rel="noopener noreferrer">GitHub</a>
   <span class="inline-sep">|</span>
   <a href="https://xen.pub/donate.php" id="donateLink" target="_blank" rel="noopener noreferrer">Donate</a>
+  <span class="inline-sep">|</span>
+  <span id="deployVersion" title="Loading...">v...</span>
 </footer>
 <!-- Privacy Modal -->
 <div id="privacyModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="privacyTitle">
@@ -546,18 +548,62 @@
   </div>
 </div>
 
-<script src="./ABI/xen-ABI.js?v=20241206150000"></script>
-<script src="./ABI/xenft-ABI.js?v=20241206150000"></script>
-<script src="./ABI/xenft-stake-ABI.js?v=20241206150000"></script>
-<script src="./ABI/cointool-ABI.js?v=20241206150000"></script>
-<script src="./js/app.js?v=20241206150000"></script>
-<script src="./js/app-mint.js?v=20241206150000"></script>
-<script src="./js/xenft.js?v=20241206150000"></script>
-<script src="./js/xenft-stake.js?v=20241206150000"></script>
-<script src="./js/unify.js?v=20241206150000"></script>
-<script src="./js/xen-stake.js?v=20241206150000"></script>
+<script src="./ABI/xen-ABI.js?v=20250907100252"></script>
+<script src="./ABI/xenft-ABI.js?v=20250907100252"></script>
+<script src="./ABI/xenft-stake-ABI.js?v=20250907100252"></script>
+<script src="./ABI/cointool-ABI.js?v=20250907100252"></script>
+<script src="./js/app.js?v=20250907100252"></script>
+<script src="./js/app-mint.js?v=20250907100252"></script>
+<script src="./js/xenft.js?v=20250907100252"></script>
+<script src="./js/xenft-stake.js?v=20250907100252"></script>
+<script src="./js/unify.js?v=20250907100252"></script>
+<script src="./js/xen-stake.js?v=20250907100252"></script>
 <!-- Markdown parser for About tab -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<!-- Auto-update deployment version in footer -->
+<script>
+(function() {
+  // Extract version from first CSS file link
+  const cssLink = document.querySelector('link[href*="css/"][href*="?v="]');
+  if (cssLink) {
+    const match = cssLink.href.match(/\?v=(\d{14})/);
+    if (match) {
+      const timestamp = match[1];
+      
+      // Parse timestamp: YYYYMMDDHHMISS
+      const year = timestamp.substring(0, 4);
+      const month = timestamp.substring(4, 6);
+      const day = timestamp.substring(6, 8);
+      const hour = timestamp.substring(8, 10);
+      const min = timestamp.substring(10, 12);
+      const sec = timestamp.substring(12, 14);
+      
+      try {
+        const date = new Date(year, month - 1, day, hour, min, sec);
+        const options = { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric', 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        };
+        const humanDate = date.toLocaleDateString('en-US', options);
+        
+        // Update footer display
+        const versionEl = document.getElementById('deployVersion');
+        if (versionEl) {
+          versionEl.textContent = 'v' + timestamp;
+          versionEl.title = 'Last Deployed: ' + humanDate;
+        }
+      } catch (e) {
+        console.warn('Could not parse deployment timestamp:', timestamp);
+      }
+    }
+  }
+})();
+</script>
 
 <div id="mobile-tooltip" style="display: none;"></div>
 </body>

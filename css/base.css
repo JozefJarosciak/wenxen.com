@@ -950,6 +950,14 @@ body.retro-mode #stakeAmount,
  margin: 0 6px; color: #9ca3af; 
 }
 
+#deployVersion {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8em;
+  color: #6b7280;
+  opacity: 0.7;
+  cursor: help;
+}
+
 
 /* Improve Tabulator header in dark mode: readable text, subtle separators, clear hover/sort */
 /* Hover and active states for sortable headers */
