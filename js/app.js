@@ -1072,7 +1072,7 @@ function chainIdToName(chainIdHexOrNum){
     ? parseInt(chainIdHexOrNum, 16)
     : Number(chainIdHexOrNum);
   switch (id) {
-    case 1:   return 'Ethereum Mainnet';
+    case 1:   return 'Ethereum';
     case 11155111: return 'Sepolia';
     case 8453: return 'Base';
     case 10:  return 'Optimism';
@@ -5420,6 +5420,15 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshBtn.disabled = false;
         refreshBtn.classList.remove('refreshing');
       }
+    });
+  }
+
+  // wire GitHub button
+  const githubBtn = document.getElementById('githubBtn');
+  if (githubBtn) {
+    githubBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open('https://github.com/JozefJarosciak/wenxen.com', '_blank', 'noopener,noreferrer');
     });
   }
 
