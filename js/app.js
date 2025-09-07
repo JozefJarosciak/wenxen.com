@@ -1823,13 +1823,42 @@ function updateVmuChart() {
     }
   } catch {}
   
-  // Create stacked series with type-specific colors
-  const typeColors = {
-    'Cointool': '#2563eb',     // blue
-    'XENFT': '#dc2626',        // red
-    'Stake XENFT': '#ea580c',  // orange
-    'Stake': '#16a34a'         // green
-  };
+  // Create stacked series with theme-dependent colors
+  const isDark = document.body.classList.contains('dark-mode');
+  const isRetro = document.body.classList.contains('retro-mode');
+  const isMatrix = document.body.classList.contains('matrix-mode');
+  
+  let typeColors;
+  if (isMatrix) {
+    typeColors = {
+      'Cointool': '#00ff00',    // bright green
+      'XENFT': '#ff0080',       // magenta
+      'Stake XENFT': '#ffff00', // yellow  
+      'Stake': '#00ffff'        // cyan
+    };
+  } else if (isRetro) {
+    typeColors = {
+      'Cointool': '#4e5bd4',    // retro blue
+      'XENFT': '#ff6b9d',       // retro pink
+      'Stake XENFT': '#ffd93d', // retro yellow
+      'Stake': '#6bcf7f'        // retro green
+    };
+  } else if (isDark) {
+    typeColors = {
+      'Cointool': '#60a5fa',    // soft blue
+      'XENFT': '#f472b6',       // pastel pink
+      'Stake XENFT': '#fbbf24', // warm yellow
+      'Stake': '#34d399'        // mint green
+    };
+  } else {
+    // Light theme
+    typeColors = {
+      'Cointool': '#2563eb',    // darker blue
+      'XENFT': '#dc2626',       // darker red
+      'Stake XENFT': '#ea580c', // darker orange
+      'Stake': '#16a34a'        // darker green
+    };
+  }
   
   const series = seriesData.map(typeData => ({
     name: typeData.name,
