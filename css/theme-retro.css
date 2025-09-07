@@ -219,6 +219,14 @@ body.retro-mode .button-like:hover {
   background: var(--btn-hover-bg, #2749dc);
   border-color: var(--btn-hover-border, #4e5bd4);
 }
+
+body.retro-mode .btn-mint:hover,
+body.retro-mode #startMintBtn:hover,
+body.retro-mode #startStakeBtn:hover {
+  background: var(--btn-hover-bg, #2749dc);
+  border-color: var(--btn-hover-border, #4e5bd4);
+  color: var(--btn-fg, #c7fff7);
+}
 body.retro-mode #resetDbSelect {
   background: var(--input-bg) !important;
   color: #c7fff7 !important;

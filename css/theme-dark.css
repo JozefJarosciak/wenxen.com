@@ -373,8 +373,9 @@ body.dark-mode .btn-mint {
   border: 1px solid var(--border, #e5e7eb)
 }
 body.dark-mode .btn-mint:hover {
-  background: #dbeafe;
-  border-color: #93c5fd
+  background: #374151; /* slate-700 */
+  border-color: #6b7280; /* slate-500 */
+  color: #f9fafb; /* slate-50 */
 }
 body.dark-mode .split-scan {
   border-color: var(--border, #374151);
