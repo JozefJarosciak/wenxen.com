@@ -5299,6 +5299,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // wire refresh button next to estXenUsd
+  const refreshBtn = document.getElementById('refreshXenBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      
+      refreshBtn.disabled = true;
+      refreshBtn.classList.add('refreshing');
+      
+      try {
+        // Refresh both XEN price and crank data, with minimum 1-second delay for visual feedback
+        await Promise.all([
+          Promise.all([
+            fetchXenUsdPrice(),
+            fetchXenGlobalRank()
+          ]),
+          new Promise(resolve => setTimeout(resolve, 1000))
+        ]);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('refreshing');
+      }
+    });
+  }
+
   // initial fetch + periodic refresh (optional)
   fetchXenUsdPrice();
   setInterval(fetchXenUsdPrice, 60_000);

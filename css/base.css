@@ -1581,3 +1581,48 @@ body {
   pointer-events: none; /* Prevents the tooltip itself from being interactive */
   white-space: pre-wrap; /* Respects newlines in the tooltip text */
 }
+
+/* Refresh button styling */
+.refresh-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: 8px;
+  padding: 0;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  outline: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.refresh-btn:hover:not(.refreshing) {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+
+.refresh-btn:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.refresh-btn:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.refresh-btn.refreshing {
+  animation: spin 0.5s linear infinite !important;
+  opacity: 1 !important;
+  background: rgba(0, 255, 0, 0.1) !important;
+  border: 1px solid rgba(0, 255, 0, 0.3) !important;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

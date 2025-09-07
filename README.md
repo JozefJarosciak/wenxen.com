@@ -6,7 +6,7 @@ Welcome to **WenXen.com** — a lightweight, open-source tracker for **XEN asset
 
 Tired of logging every XEN mint by hand? 🥱 Just add your Ethereum address and a free Etherscan API key, and WenXen automatically discovers all your mints (past & future). No more spreadsheets, no more forgotten entries.
 
-Everything runs **100% in your browser**, with no centralized servers, meaning your data always stays with you. You can run it directly from [WenXen.com](https://wenxen.com), or download the code and use it locally for maximum transparency and security.
+Everything runs **100% in your browser**, with no centralized servers, meaning your data always stays with you. You can run it directly from here, or download the code and use it locally for maximum transparency and security.
 
 ---
 
