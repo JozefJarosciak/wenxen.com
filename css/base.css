@@ -1618,8 +1618,6 @@ body {
 .refresh-btn.refreshing {
   animation: spin 0.5s linear infinite !important;
   opacity: 1 !important;
-  background: rgba(0, 255, 0, 0.1) !important;
-  border: 1px solid rgba(0, 255, 0, 0.3) !important;
 }
 
 @keyframes spin {

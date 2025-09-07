@@ -1696,6 +1696,44 @@ function _groupVMUsByDate(rows) {
   return { dates, values: dates.map(d => map[d]) };
 }
 
+function _groupVMUsByDateAndType(rows) {
+  const typeMap = {};
+  const types = ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
+  
+  for (const r of rows) {
+    const vmu = Number(r?.VMUs || 0);
+    if (!Number.isFinite(vmu) || vmu <= 0) continue;
+    
+    let dateStr = r?.maturityDateOnly;
+    if (!dateStr) {
+      const t = Number(r?.Maturity_Timestamp || 0);
+      if (Number.isFinite(t) && t > 0) {
+        dateStr = getLocalDateString(new Date(t * 1000));
+      } else {
+        continue;
+      }
+    }
+    
+    const sourceType = String(r?.SourceType || 'Cointool');
+    
+    if (!typeMap[dateStr]) {
+      typeMap[dateStr] = {};
+      types.forEach(type => typeMap[dateStr][type] = 0);
+    }
+    
+    typeMap[dateStr][sourceType] = (typeMap[dateStr][sourceType] || 0) + vmu;
+  }
+  
+  const dates = Object.keys(typeMap).sort();
+  const seriesData = types.map(type => ({
+    name: type,
+    data: dates.map(d => typeMap[d] ? (typeMap[d][type] || 0) : 0)
+  }));
+  
+  console.debug('[VMU-CHART] _groupVMUsByDateAndType days=', dates.length, 'types=', types.length);
+  return { dates, seriesData };
+}
+
 function initVmuChartSection() {
   if (_vmuChartReady) return;
   const wrap  = document.getElementById('vmu-chart-wrap');
@@ -1760,15 +1798,15 @@ function updateVmuChart() {
   console.debug('[VMU-CHART] updateVmuChart size:', {w,h});
   if (!(node && w > 0 && h > 0)) { console.debug('[VMU-CHART] skip update due to zero size'); return; }
   const rows = _collectActiveRows();
-  let dates, values;
+  let dates, seriesData;
   if (_vmuChartMetric === 'usd') {
-    const out = _groupXenUsdByDate(rows);
-    dates = out.dates; values = out.values;
+    const out = _groupXenUsdByDateAndType(rows);
+    dates = out.dates; seriesData = out.seriesData;
   } else {
-    const out = _groupVMUsByDate(rows);
-    dates = out.dates; values = out.values;
+    const out = _groupVMUsByDateAndType(rows);
+    dates = out.dates; seriesData = out.seriesData;
   }
-  console.debug('[VMU-CHART] metric=', _vmuChartMetric, 'points=', dates.length);
+  console.debug('[VMU-CHART] metric=', _vmuChartMetric, 'points=', dates.length, 'series=', seriesData.length);
   if ((dates.length === 0) && rows && rows.length) {
     try {
       console.debug('[VMU-CHART] rows present but no dates. Sample row keys:', Object.keys(rows[0] || {}));
@@ -1784,44 +1822,63 @@ function updateVmuChart() {
       currentSeriesType = cur.series[0].type;
     }
   } catch {}
+  
+  // Create stacked series with type-specific colors
+  const typeColors = {
+    'Cointool': '#2563eb',     // blue
+    'XENFT': '#dc2626',        // red
+    'Stake XENFT': '#ea580c',  // orange
+    'Stake': '#16a34a'         // green
+  };
+  
+  const series = seriesData.map(typeData => ({
+    name: typeData.name,
+    type: currentSeriesType,
+    stack: 'total',
+    data: typeData.data,
+    itemStyle: { color: typeColors[typeData.name] || '#6b7280' }
+  }));
+  
   const opts = {
-    title: { text: (_vmuChartMetric === 'usd' ? 'Value' : 'VMUs'), subtext: empty ? 'No data for current view' : '' },
+    title: { text: (_vmuChartMetric === 'usd' ? 'Value by Type' : 'VMUs by Type'), subtext: empty ? 'No data for current view' : '' },
     xAxis: { data: dates, axisLabel: { formatter: function(value){ return _fmtAxisDateLabel(value); } } },
-    series: [{ type: currentSeriesType, data: values }],
+    series: series,
     yAxis: { type: 'value', name: (_vmuChartMetric === 'usd' ? 'USD' : 'VMUs'), nameGap: 12 },
+    legend: {
+      data: ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'],
+      top: 30
+    },
     tooltip: {
       trigger: 'axis',
       formatter: function(params){
         try {
-          var p = Array.isArray(params) ? params[0] : params;
-          var dateKey = (p && (p.axisValue || p.name)) || '';
+          var dateKey = (params && params[0] && (params[0].axisValue || params[0].name)) || '';
           var d = new Date(dateKey + 'T00:00:00');
           var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
           var weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
           var fmtDate = isNaN(d.getTime())
             ? dateKey
             : (weekdays[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear());
-          var rows2 = _collectActiveRows();
-          var vmuTotal = 0, usdTotal = 0;
-          var price = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? xenUsdPrice : null;
-          for (var i=0;i<rows2.length;i++) {
-            var r = rows2[i];
-            var key = (typeof window.rowToLocalKey === 'function') ? window.rowToLocalKey(r) : (function(){
-              var t = Number((r && r.Maturity_Timestamp) || 0);
-              return isFinite(t) && t > 0 ? getLocalDateString(new Date(t * 1000)) : ((r && r.maturityDateOnly) || '');
-            })();
-            if (key !== dateKey) continue;
-            var vmus = Number((r && r.VMUs) || 0);
-            if (isFinite(vmus) && vmus > 0) vmuTotal += vmus;
-            var tokens = Number(estimateXENForRow(r)) || 0;
-            if (isFinite(tokens) && tokens > 0) usdTotal += (price ? tokens * price : tokens);
+          
+          var result = 'Date: ' + fmtDate + '<br/>';
+          var total = 0;
+          
+          // Show breakdown by type
+          for (var i = 0; i < params.length; i++) {
+            var param = params[i];
+            if (param.value > 0) {
+              var valueStr = _vmuChartMetric === 'usd' ? formatUSD(param.value) : Number(param.value).toLocaleString();
+              result += param.marker + param.seriesName + ': ' + valueStr + '<br/>';
+              total += param.value;
+            }
           }
-          var vmuStr = Number(vmuTotal).toLocaleString();
-          var usdStr = formatUSD(Number(usdTotal));
-          return 'Date: ' + fmtDate + '<br/>VMUs: ' + vmuStr + '<br/>Value: ' + usdStr;
+          
+          var totalStr = _vmuChartMetric === 'usd' ? formatUSD(total) : Number(total).toLocaleString();
+          result += '<strong>Total: ' + totalStr + '</strong>';
+          
+          return result;
         } catch (e) {
-          var v = Array.isArray(params) ? (params[0] && params[0].value) : (params && params.value);
-          return (params && params.axisValue) + '<br/>' + Number(v).toLocaleString();
+          return 'Date: ' + (params && params[0] && params[0].axisValue) + '<br/>Error loading details';
         }
       }
     }
@@ -1855,6 +1912,12 @@ function updateVmuChart() {
     opts.title.textStyle = Object.assign({}, opts.title.textStyle || {}, {
       color: textColor,
       fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : (opts.title.textStyle && opts.title.textStyle.fontFamily) || undefined,
+    });
+    opts.legend = Object.assign({}, opts.legend || {}, {
+      textStyle: {
+        color: textColor,
+        fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : undefined
+      }
     });
     opts.xAxis = Object.assign({}, opts.xAxis, {
       axisLabel: Object.assign({}, opts.xAxis.axisLabel || {}, { color: axisColor, fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : undefined }),
@@ -2057,6 +2120,42 @@ function _groupXenUsdByDate(rows) {
   const dates = Object.keys(map).sort();
   console.debug('[VMU-CHART] _groupXenUsdByDate days=', dates.length, 'price=', price, 'sample=', dates.slice(0,3).map(d=>({d, v: map[d]})));
   return { dates, values: dates.map(d => map[d]) };
+}
+
+function _groupXenUsdByDateAndType(rows) {
+  const price = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? xenUsdPrice : null;
+  const typeMap = {};
+  const types = ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
+  
+  for (const r of rows) {
+    const key = (typeof window.rowToLocalKey === 'function') ? window.rowToLocalKey(r) : (function(){
+      const t = Number(r?.Maturity_Timestamp || 0);
+      return Number.isFinite(t) && t > 0 ? getLocalDateString(new Date(t * 1000)) : (r?.maturityDateOnly || '');
+    })();
+    if (!key) continue;
+    
+    const tokens = Number(estimateXENForRow(r)) || 0;
+    if (!Number.isFinite(tokens) || tokens <= 0) continue;
+    
+    const sourceType = String(r?.SourceType || 'Cointool');
+    const usdValue = price ? tokens * price : tokens;
+    
+    if (!typeMap[key]) {
+      typeMap[key] = {};
+      types.forEach(type => typeMap[key][type] = 0);
+    }
+    
+    typeMap[key][sourceType] = (typeMap[key][sourceType] || 0) + usdValue;
+  }
+  
+  const dates = Object.keys(typeMap).sort();
+  const seriesData = types.map(type => ({
+    name: type,
+    data: dates.map(d => typeMap[d] ? (typeMap[d][type] || 0) : 0)
+  }));
+  
+  console.debug('[VMU-CHART] _groupXenUsdByDateAndType days=', dates.length, 'price=', price, 'types=', types.length);
+  return { dates, seriesData };
 }
 
 /* NEW: single source of truth for chunk size */
