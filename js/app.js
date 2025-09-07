@@ -2975,13 +2975,22 @@ function chooseActionDialog(defaultChoice = 'claim', rowData = null){
 // --- live status recompute (no rescan required) ---
 function computeLiveStatus(row) {
   const data = row.getData ? row.getData() : row;
+  const nowSec = Date.now() / 1000;
 
-  // ✅ Priority 1: Stakes have an authoritative, pre-computed status. Use it directly.
+  // ✅ Stakes: Check redeemed status, then calculate based on maturity timestamp
   if (data.SourceType === 'Stake' || data.SourceType === 'Stake XENFT') {
-    return data.Status || 'Unknown'; // Return the status stored in the row
+    // Check if already claimed/redeemed
+    if (Number(data.redeemed) === 1 || String(data.Status).toLowerCase() === 'claimed') {
+      return 'Claimed';
+    }
+    // Calculate status based on maturity timestamp
+    const maturityTs = Number(data.maturityTs || data.Maturity_Timestamp || 0);
+    if (maturityTs > 0 && maturityTs <= nowSec) {
+      return 'Claimable';
+    }
+    return 'Maturing';
   }
 
-  const nowSec = Date.now() / 1000;
   const matured = Number(data.Maturity_Timestamp || 0) <= nowSec;
 
   // Treat XENFTs differently: we can have an explicit 'redeemed' flag or precomputed Status
