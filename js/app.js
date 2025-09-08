@@ -1739,7 +1739,7 @@ function _groupVMUsByDate(rows) {
 
 function _groupVMUsByDateAndType(rows) {
   const typeMap = {};
-  const types = ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
+  const types = (window.innerWidth <= 768) ? ['CT', 'XNFT', 'S.XNFT', 'Stk'] : ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
   
   for (const r of rows) {
     const vmu = Number(r?.VMUs || 0);
@@ -1755,7 +1755,14 @@ function _groupVMUsByDateAndType(rows) {
       }
     }
     
-    const sourceType = String(r?.SourceType || 'Cointool');
+    let sourceType = String(r?.SourceType || 'Cointool');
+    // Map to mobile abbreviations
+    if (window.innerWidth <= 768) {
+      if (sourceType === 'Cointool') sourceType = 'CT';
+      else if (sourceType === 'XENFT') sourceType = 'XNFT';
+      else if (sourceType === 'Stake XENFT') sourceType = 'S.XNFT';
+      else if (sourceType === 'Stake') sourceType = 'Stk';
+    }
     
     if (!typeMap[dateStr]) {
       typeMap[dateStr] = {};
@@ -1875,21 +1882,36 @@ function updateVmuChart() {
       'Cointool': '#00ff00',    // bright green
       'XENFT': '#ff0080',       // magenta
       'Stake XENFT': '#ffff00', // yellow  
-      'Stake': '#00ffff'        // cyan
+      'Stake': '#00ffff',       // cyan
+      // Mobile abbreviations
+      'CT': '#00ff00',          // bright green (same as Cointool)
+      'XNFT': '#ff0080',        // magenta (same as XENFT)
+      'S.XNFT': '#ffff00',      // yellow (same as Stake XENFT)
+      'Stk': '#00ffff'          // cyan (same as Stake)
     };
   } else if (isRetro) {
     typeColors = {
       'Cointool': '#4e5bd4',    // retro blue
       'XENFT': '#ff6b9d',       // retro pink
       'Stake XENFT': '#ffd93d', // retro yellow
-      'Stake': '#6bcf7f'        // retro green
+      'Stake': '#6bcf7f',       // retro green
+      // Mobile abbreviations
+      'CT': '#4e5bd4',          // retro blue (same as Cointool)
+      'XNFT': '#ff6b9d',        // retro pink (same as XENFT)
+      'S.XNFT': '#ffd93d',      // retro yellow (same as Stake XENFT)
+      'Stk': '#6bcf7f'          // retro green (same as Stake)
     };
   } else if (isDark) {
     typeColors = {
       'Cointool': '#60a5fa',    // soft blue
       'XENFT': '#f472b6',       // pastel pink
       'Stake XENFT': '#fbbf24', // warm yellow
-      'Stake': '#34d399'        // mint green
+      'Stake': '#34d399',       // mint green
+      // Mobile abbreviations
+      'CT': '#60a5fa',          // soft blue (same as Cointool)
+      'XNFT': '#f472b6',        // pastel pink (same as XENFT)
+      'S.XNFT': '#fbbf24',      // warm yellow (same as Stake XENFT)
+      'Stk': '#34d399'          // mint green (same as Stake)
     };
   } else {
     // Light theme
@@ -1897,7 +1919,12 @@ function updateVmuChart() {
       'Cointool': '#2563eb',    // darker blue
       'XENFT': '#dc2626',       // darker red
       'Stake XENFT': '#ea580c', // darker orange
-      'Stake': '#16a34a'        // darker green
+      'Stake': '#16a34a',       // darker green
+      // Mobile abbreviations
+      'CT': '#2563eb',          // darker blue (same as Cointool)
+      'XNFT': '#dc2626',        // darker red (same as XENFT)
+      'S.XNFT': '#ea580c',      // darker orange (same as Stake XENFT)
+      'Stk': '#16a34a'          // darker green (same as Stake)
     };
   }
   
@@ -1910,13 +1937,16 @@ function updateVmuChart() {
   }));
   
   const opts = {
-    title: { text: (_vmuChartMetric === 'usd' ? 'Value by Type' : 'VMUs by Type'), subtext: empty ? 'No data for current view' : '' },
+    title: { text: (_vmuChartMetric === 'usd' ? 'Value by Type' : 'VMUs by Type'), subtext: empty ? 'No data for current view' : '', top: -5 },
     xAxis: { data: dates, axisLabel: { formatter: function(value){ return _fmtAxisDateLabel(value); } } },
     series: series,
     yAxis: { type: 'value', name: (_vmuChartMetric === 'usd' ? 'USD' : 'VMUs'), nameGap: 12 },
     legend: {
-      data: ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'],
-      top: 30
+      data: (window.innerWidth <= 768) ? ['CT', 'XNFT', 'S.XNFT', 'Stk'] : ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'],
+      top: 10,
+      textStyle: {
+        fontSize: (window.innerWidth <= 768) ? 12 : 14
+      }
     },
     tooltip: {
       trigger: 'axis',
@@ -2195,7 +2225,7 @@ function _groupXenUsdByDate(rows) {
 function _groupXenUsdByDateAndType(rows) {
   const price = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? xenUsdPrice : null;
   const typeMap = {};
-  const types = ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
+  const types = (window.innerWidth <= 768) ? ['CT', 'XNFT', 'S.XNFT', 'Stk'] : ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
   
   for (const r of rows) {
     const key = (typeof window.rowToLocalKey === 'function') ? window.rowToLocalKey(r) : (function(){
@@ -2207,7 +2237,14 @@ function _groupXenUsdByDateAndType(rows) {
     const tokens = Number(estimateXENForRow(r)) || 0;
     if (!Number.isFinite(tokens) || tokens <= 0) continue;
     
-    const sourceType = String(r?.SourceType || 'Cointool');
+    let sourceType = String(r?.SourceType || 'Cointool');
+    // Map to mobile abbreviations
+    if (window.innerWidth <= 768) {
+      if (sourceType === 'Cointool') sourceType = 'CT';
+      else if (sourceType === 'XENFT') sourceType = 'XNFT';
+      else if (sourceType === 'Stake XENFT') sourceType = 'S.XNFT';
+      else if (sourceType === 'Stake') sourceType = 'Stk';
+    }
     const usdValue = price ? tokens * price : tokens;
     
     if (!typeMap[key]) {
