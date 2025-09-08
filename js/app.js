@@ -2027,7 +2027,7 @@ function updateVmuChart() {
             ? dateKey
             : (weekdays[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear());
           
-          var result = 'Date: ' + fmtDate + '<br/>';
+          var result = '<strong>Date: ' + fmtDate + '</strong><br/>';
           
           // Get detailed data for this date
           var activeRows = _collectActiveRows();
@@ -2036,6 +2036,9 @@ function updateVmuChart() {
           var totalUsd = 0;
           var totalVmus = 0;
           var totalXen = 0;
+          
+          // Start table
+          result += '<table style="border-collapse: collapse; width: 100%; margin-top: 8px;">';
           
           // Show breakdown by type with VMUs and XEN
           for (var i = 0; i < params.length; i++) {
@@ -2050,27 +2053,45 @@ function updateVmuChart() {
               totalVmus += vmus;
               totalXen += xen;
               
+              result += '<tr>';
+              result += '<td style="padding: 2px 8px 2px 0; vertical-align: top;">' + param.marker + '<strong>' + param.seriesName + ':</strong></td>';
+              
               if (_vmuChartMetric === 'usd') {
                 // $value mode: $3,778.92, Xen: x, VMUs: y
-                result += param.marker + '<strong>' + param.seriesName + ':</strong> ' + formatUSD(param.value) + ', Xen: ' + xenShort + ', VMUs: ' + Number(vmus).toLocaleString() + '<br/>';
+                result += '<td style="padding: 2px 8px 2px 0; text-align: right;">' + formatUSD(param.value) + '</td>';
+                result += '<td style="padding: 2px 8px 2px 0; text-align: right;">Xen: ' + xenShort + '</td>';
+                result += '<td style="padding: 2px 0 2px 0; text-align: right;">VMUs: ' + Number(vmus).toLocaleString() + '</td>';
               } else {
                 // VMU mode: VMUs: y, Xen: x, $3,778.92
                 var usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? xen * xenUsdPrice : 0;
-                result += param.marker + '<strong>' + param.seriesName + ':</strong> VMUs: ' + Number(vmus).toLocaleString() + ', Xen: ' + xenShort + ', ' + formatUSD(usdValue) + '<br/>';
+                result += '<td style="padding: 2px 8px 2px 0; text-align: right;">VMUs: ' + Number(vmus).toLocaleString() + '</td>';
+                result += '<td style="padding: 2px 8px 2px 0; text-align: right;">Xen: ' + xenShort + '</td>';
+                result += '<td style="padding: 2px 0 2px 0; text-align: right;">' + formatUSD(usdValue) + '</td>';
               }
+              result += '</tr>';
             }
           }
           
-          // Total line with same format
+          // Total row with separator
+          result += '<tr><td colspan="4" style="border-top: 1px solid rgba(255,255,255,0.2); padding: 4px 0 2px 0;"></td></tr>';
+          result += '<tr>';
+          result += '<td style="padding: 2px 8px 2px 0; vertical-align: top;"><strong>Total:</strong></td>';
+          
           var totalXenShort = formatXenShort(totalXen);
           if (_vmuChartMetric === 'usd') {
             // $value mode: Total: $6,690.57, Xen: x, VMUs: y
-            result += '<strong>Total: ' + formatUSD(totalUsd) + ', Xen: ' + totalXenShort + ', VMUs: ' + Number(totalVmus).toLocaleString() + '</strong>';
+            result += '<td style="padding: 2px 8px 2px 0; text-align: right;"><strong>' + formatUSD(totalUsd) + '</strong></td>';
+            result += '<td style="padding: 2px 8px 2px 0; text-align: right;"><strong>Xen: ' + totalXenShort + '</strong></td>';
+            result += '<td style="padding: 2px 0 2px 0; text-align: right;"><strong>VMUs: ' + Number(totalVmus).toLocaleString() + '</strong></td>';
           } else {
             // VMU mode: Total: VMUs: y, Xen: x, $6,690.57
             var totalUsdFromXen = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? totalXen * xenUsdPrice : 0;
-            result += '<strong>Total: VMUs: ' + Number(totalVmus).toLocaleString() + ', Xen: ' + totalXenShort + ', ' + formatUSD(totalUsdFromXen) + '</strong>';
+            result += '<td style="padding: 2px 8px 2px 0; text-align: right;"><strong>VMUs: ' + Number(totalVmus).toLocaleString() + '</strong></td>';
+            result += '<td style="padding: 2px 8px 2px 0; text-align: right;"><strong>Xen: ' + totalXenShort + '</strong></td>';
+            result += '<td style="padding: 2px 0 2px 0; text-align: right;"><strong>' + formatUSD(totalUsdFromXen) + '</strong></td>';
           }
+          result += '</tr>';
+          result += '</table>';
           
           return result;
         } catch (e) {
