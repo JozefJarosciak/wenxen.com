@@ -1089,7 +1089,7 @@ function chainIdToName(chainIdHexOrNum){
     ? parseInt(chainIdHexOrNum, 16)
     : Number(chainIdHexOrNum);
   switch (id) {
-    case 1:   return 'Ethereum';
+    case 1:   return '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true" style="vertical-align: middle;"><path d="M11.944 17.97L4.58 13.62 11.943 24l7.37-10.38-7.372 4.35h.003zM12.056 0L4.69 12.223l7.365 4.354 7.365-4.35L12.056 0z"/></svg>';
     case 11155111: return 'Sepolia';
     case 8453: return 'Base';
     case 10:  return 'Optimism';
@@ -1207,11 +1207,35 @@ function renderXenUsdEstimate(totalBigInt){
 async function updateNetworkBadge(){
   const el = document.getElementById('networkName');
   if (!el) return;
-  try {
-    const chainId = await window.ethereum?.request?.({ method: 'eth_chainId' });
-    el.textContent = chainId ? chainIdToName(chainId) : 'Not Connected';
-  } catch {
-    el.textContent = 'Not Connected';
+  
+  // Check if wallet is connected by looking at the connect button text
+  const connectBtn = document.getElementById('connectWalletText');
+  const isConnected = connectBtn && connectBtn.textContent !== 'Connect Wallet';
+  
+  if (isConnected) {
+    try {
+      const chainId = await window.ethereum?.request?.({ method: 'eth_chainId' });
+      if (chainId) {
+        const networkName = chainIdToName(chainId);
+        // Use innerHTML for Ethereum icon, textContent for others
+        if (networkName.includes('<svg')) {
+          el.innerHTML = networkName;
+          el.title = 'Ethereum Mainnet';
+        } else {
+          el.textContent = networkName;
+          el.title = networkName;
+        }
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
+    } catch {
+      el.style.display = 'none';
+    }
+  } else {
+    // Hide when not connected (connectWalletText shows "Connect Wallet")
+    el.style.display = 'none';
+    el.title = '';
   }
 }
 
@@ -4560,13 +4584,14 @@ async function connectWallet() {
       }
       if (cointoolTable) cointoolTable.redraw(true);
     });
-    window.ethereum.on?.('accountsChanged', (accs) => {
+    window.ethereum.on?.('accountsChanged', async (accs) => {
       connectedAccount = accs?.[0] || null;
       window.connectedAccount = connectedAccount;
       const bt = document.getElementById('connectWalletText');
       if (bt) bt.textContent = connectedAccount
         ? `${connectedAccount.slice(0, 6)}...${connectedAccount.slice(-4)}`
         : 'Connect Wallet';
+      await updateNetworkBadge();
       selectedRows.clear();
       refreshBulkUI();
       if (cointoolTable) cointoolTable.redraw(true);
