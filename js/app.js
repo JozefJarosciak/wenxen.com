@@ -5405,6 +5405,7 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
         break;
       case 'this-year':
         maturityValue = String(y);
+        statusValue = 'Maturing';
         break;
       case 'next-year':
         maturityValue = String(y + 1);
@@ -5424,6 +5425,12 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
 
     // Apply the status filter
     try { window.cointoolTable?.setHeaderFilterValue('Status', statusValue); } catch (_) {}
+    
+    // For 'this-year' filter, also reset Type to 'All'
+    if (action === 'this-year') {
+      try { window.cointoolTable?.setHeaderFilterValue('SourceType', ''); } catch (_) {}
+    }
+    
     try { window.cointoolTable?.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
   });
 })();
