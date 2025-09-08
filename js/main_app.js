@@ -2206,6 +2206,8 @@ function setVmuChartExpandedState(open) {
       tooltip: { trigger: 'axis' },
       toolbox: {
         right: 10,
+        itemSize: 18,  // Larger touch target for mobile
+        itemGap: 10,   // More spacing between buttons
         feature: (function(){
           const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
           // Helper: set series type without losing data
@@ -2224,22 +2226,46 @@ function setVmuChartExpandedState(open) {
             icon: 'path://M2,2 L10,2 L10,10 L2,10 Z M4,4 L8,4 L8,8 L4,8 Z',
             onclick: function() {
               const el = node;
-              if (!document.fullscreenElement) {
+              const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+              
+              if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 // Use current page background for fullscreen backdrop
                 try { el.style.backgroundColor = getComputedStyle(document.body).backgroundColor; } catch {}
-                el.requestFullscreen?.();
+                
+                // iOS Safari uses webkit prefix
+                if (isIOS && el.webkitRequestFullscreen) {
+                  el.webkitRequestFullscreen();
+                } else if (el.requestFullscreen) {
+                  el.requestFullscreen();
+                } else if (el.webkitRequestFullscreen) {
+                  el.webkitRequestFullscreen();
+                } else if (el.mozRequestFullScreen) {
+                  el.mozRequestFullScreen();
+                } else if (el.msRequestFullscreen) {
+                  el.msRequestFullscreen();
+                }
               } else {
-                document.exitFullscreen?.();
+                if (document.exitFullscreen) {
+                  document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                  document.webkitExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                  document.mozCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                  document.msExitFullscreen();
+                }
               }
               // Clean up background on exit
               const tidy = () => {
-                if (!document.fullscreenElement) {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                   try { el.style.backgroundColor = ''; } catch {}
                   try { vmuChart && vmuChart.resize(); } catch {}
                   document.removeEventListener('fullscreenchange', tidy);
+                  document.removeEventListener('webkitfullscreenchange', tidy);
                 }
               };
               document.addEventListener('fullscreenchange', tidy);
+              document.addEventListener('webkitfullscreenchange', tidy);
               setTimeout(() => { vmuChart && vmuChart.resize(); }, 100);
             }
           };
@@ -5432,6 +5458,10 @@ async function importBackupFromFile(file) {
     }
 
     alert("Backup imported. The app will now reload.");
+    // Switch to dashboard tab before reload
+    if (typeof window.setActiveTab === 'function') {
+      window.setActiveTab('tab-dashboard');
+    }
     setTimeout(() => window.location.reload(), 100);
     return;
   }
@@ -5450,6 +5480,10 @@ async function importBackupFromFile(file) {
   applySettingsSnapshot(data.settings || {});
 
   alert("Backup imported successfully. The app will now reload.");
+  // Switch to dashboard tab before reload
+  if (typeof window.setActiveTab === 'function') {
+    window.setActiveTab('tab-dashboard');
+  }
   setTimeout(() => window.location.reload(), 100);
 }
 
@@ -5478,27 +5512,34 @@ function deleteDatabaseByName(name) {
   }
 
   if (importLabel && importInput) {
-    // This function handles the import process after user confirmation.
-    const startImportProcess = async () => {
-      const ok = confirm(
-        "This will permanently DELETE your current data (DB_Cointool, DB_Xenft, DB-Xenft-Stake, and DB-Xen-Stake) before importing.\n\nContinue?"
-      );
-      if (!ok) return;
-
-      try {
-        await clearAllAppData();
-      } catch(e) {
-        console.error("Failed to clear app data before import:", e);
-      }
-
-      // Programmatically click the hidden file input to open the file picker.
-      importInput.click();
-    };
-
+    // For iOS compatibility, we need to trigger file input on the first user interaction
+    // iOS Safari blocks file input clicks that come after async operations like confirm()
+    
     // Handle clicks on the styled label.
     importLabel.addEventListener("click", (e) => {
       e.preventDefault(); // Prevent the label's default action.
-      startImportProcess();
+      
+      // On iOS, we need to trigger the file input immediately
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      
+      if (isIOS) {
+        // Show warning first, then let user select file
+        alert("WARNING: After selecting a file, your current data (DB_Cointool, DB_Xenft, DB-Xenft-Stake, and DB-Xen-Stake) will be permanently DELETED before importing.\n\nMake sure you have a backup!");
+        importInput.click();
+      } else {
+        // Non-iOS: use confirm dialog as before
+        const ok = confirm(
+          "This will permanently DELETE your current data (DB_Cointool, DB_Xenft, DB-Xenft-Stake, and DB-Xen-Stake) before importing.\n\nContinue?"
+        );
+        if (!ok) return;
+        
+        // Clear data first on non-iOS
+        clearAllAppData().catch(e => {
+          console.error("Failed to clear app data before import:", e);
+        }).finally(() => {
+          importInput.click();
+        });
+      }
     });
 
     // Handle keyboard accessibility (Enter/Space).
@@ -5510,9 +5551,18 @@ function deleteDatabaseByName(name) {
     });
 
     // The actual import happens when a file is selected via the input.
-    importInput.addEventListener("change", () => {
+    importInput.addEventListener("change", async () => {
       const file = importInput.files && importInput.files[0];
       if (file) {
+        // On iOS, we need to clear data here since we couldn't do it earlier
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+          try {
+            await clearAllAppData();
+          } catch(e) {
+            console.error("Failed to clear app data before import:", e);
+          }
+        }
         importBackupFromFile(file);
       }
       // Reset the input so the user can select the same file again if needed.
