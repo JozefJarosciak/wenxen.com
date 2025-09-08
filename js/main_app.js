@@ -700,13 +700,302 @@ function updateXENTotalBadge() {
 
   const activeData = cointoolTable.getData("active");
   let total = 0n;
+  const addressBreakdown = {};
+  
+  // Debug: Check what fields are available in the first row
+  if (activeData.length > 0) {
+    console.log('Debug - First row keys:', Object.keys(activeData[0]));
+    console.log('Debug - Sample row:', activeData[0]);
+  }
+  
   activeData.forEach(rowData => {
     const xenValue = estimateXENForRow(rowData);
     total += BigInt(xenValue);
+    
+    // Collect breakdown by address - try multiple possible field names
+    let address = rowData.Address || rowData.address || rowData.Owner || rowData.owner || rowData.User || rowData.user;
+    
+    // If still not found, check if there's an address in the ID or other fields
+    if (!address && rowData.ID && rowData.ID.includes('_')) {
+      // ID format might be "address_mintId"
+      const parts = rowData.ID.split('_');
+      if (parts[0] && parts[0].startsWith('0x')) {
+        address = parts[0];
+      }
+    }
+    
+    // Normalize address to lowercase to avoid duplicates due to case differences
+    address = address ? address.toLowerCase() : 'Unknown';
+    
+    if (!addressBreakdown[address]) {
+      addressBreakdown[address] = {
+        xen: 0n,
+        count: 0
+      };
+    }
+    addressBreakdown[address].xen += BigInt(xenValue);
+    addressBreakdown[address].count++;
   });
 
   badge.textContent = formatNumberForMobile(total);
   renderXenUsdEstimate(total);   // ← NEW: show "($226.45)" style USD next to the total
+  
+  // Store breakdown data for tooltip
+  badge.dataset.breakdown = JSON.stringify(
+    Object.entries(addressBreakdown).map(([address, data]) => ({
+      address,
+      xen: data.xen.toString(),
+      count: data.count
+    }))
+  );
+  
+  // If tooltip is visible (either modal or hover), update it
+  if (window._xenTooltipRefresh) {
+    window._xenTooltipRefresh();
+  }
+}
+
+// Initialize inline expandable breakdown for estXenTotal
+function initializeXenTotalTooltip() {
+  const toggleBtn = document.getElementById("toggleXenBreakdown");
+  const compactDiv = document.getElementById("xenTotalCompact");
+  const expandedDiv = document.getElementById("xenTotalExpanded");
+  
+  if (!toggleBtn || !compactDiv || !expandedDiv) return;
+  
+  let isExpanded = false;
+  
+  // Format address with ellipsis
+  function formatAddress(address) {
+    if (address === 'Unknown') return address;
+    if (address.length <= 10) return address;
+    // Show address in lowercase with ellipsis (addresses are normalized to lowercase)
+    return address.substring(0, 6) + '...' + address.substring(address.length - 4);
+  }
+  
+  // Build breakdown table
+  function buildBreakdownTable() {
+    const badge = document.getElementById("estXenTotal");
+    if (!badge) return '';
+    
+    const breakdownData = badge.dataset.breakdown;
+    
+    if (!breakdownData) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    
+    try {
+      const breakdown = JSON.parse(breakdownData);
+      if (!breakdown || breakdown.length === 0) {
+        tooltip.style.display = 'none';
+        return;
+      }
+      
+      // Sort by XEN amount descending
+      breakdown.sort((a, b) => {
+        const xenA = BigInt(a.xen);
+        const xenB = BigInt(b.xen);
+        return xenB > xenA ? 1 : xenB < xenA ? -1 : 0;
+      });
+      
+      // Build tooltip content as table
+      let html = '<table style="border-collapse: collapse; width: 100%;">';
+      html += '<thead><tr>';
+      html += '<th style="text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2);">Address</th>';
+      html += '<th style="text-align: right; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2);">XEN</th>';
+      html += '<th style="text-align: right; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2);">Value</th>';
+      html += '</tr></thead><tbody>';
+      
+      let totalXen = 0n;
+      let totalUsd = 0;
+      
+      breakdown.forEach(item => {
+        const xenAmount = BigInt(item.xen);
+        totalXen += xenAmount;
+        
+        // Format XEN with max 2 decimals for cleaner display
+        const xenTokens = Number(xenAmount);
+        let xenFormatted;
+        if (xenTokens >= 1000000) {
+          xenFormatted = (xenTokens / 1000000).toFixed(2) + 'M';
+        } else if (xenTokens >= 1000) {
+          xenFormatted = (xenTokens / 1000).toFixed(2) + 'K';
+        } else {
+          xenFormatted = xenTokens.toFixed(2);
+        }
+        
+        // Calculate USD value the same way as renderXenUsdEstimate does
+        const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) 
+          ? xenTokens * xenUsdPrice 
+          : 0;
+        totalUsd += usdValue;
+        
+        // Format USD with exactly 2 decimals
+        const usdFormatted = usdValue > 0 
+          ? usdValue.toLocaleString(undefined, {
+              style: 'currency',
+              currency: 'USD',
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })
+          : '-';
+        
+        html += '<tr>';
+        html += `<td style="padding: 2px 8px; color: #9ca3af;">${formatAddress(item.address)}</td>`;
+        html += `<td style="padding: 2px 8px; text-align: right; color: #e5e7eb;">${xenFormatted}</td>`;
+        html += `<td style="padding: 2px 8px; text-align: right; color: #86efac;">${usdFormatted}</td>`;
+        html += '</tr>';
+      });
+      
+      // Add total row
+      html += '<tr style="border-top: 1px solid rgba(255,255,255,0.2);">';
+      html += '<td style="padding: 4px 8px; font-weight: bold;">Total</td>';
+      
+      // Format total XEN with max 2 decimals
+      const totalXenNum = Number(totalXen);
+      let totalXenFormatted;
+      if (totalXenNum >= 1000000) {
+        totalXenFormatted = (totalXenNum / 1000000).toFixed(2) + 'M';
+      } else if (totalXenNum >= 1000) {
+        totalXenFormatted = (totalXenNum / 1000).toFixed(2) + 'K';
+      } else {
+        totalXenFormatted = totalXenNum.toFixed(2);
+      }
+      
+      // Format total USD with exactly 2 decimals
+      const totalUsdFormatted = totalUsd > 0 
+        ? totalUsd.toLocaleString(undefined, {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })
+        : '-';
+      
+      html += `<td style="padding: 4px 8px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`;
+      html += `<td style="padding: 4px 8px; text-align: right; font-weight: bold; color: #86efac;">${totalUsdFormatted}</td>`;
+      html += '</tr>';
+      
+      html += '</tbody></table>';
+      
+      tooltip.innerHTML = html;
+      
+      // Position tooltip
+      const rect = isModalMode ? toggleBtn.getBoundingClientRect() : badge.getBoundingClientRect();
+      const tooltipWidth = 400;
+      let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+      let top = rect.bottom + 5;
+      
+      // Adjust if would go off screen
+      if (left < 10) left = 10;
+      if (left + tooltipWidth > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipWidth - 10;
+      }
+      
+      // If modal mode, ensure it's more visible
+      if (isModalMode) {
+        top = rect.bottom + 10;
+      }
+      
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+      tooltip.style.display = 'block';
+      
+      // Apply theme-specific styling
+      const isDark = document.body.classList.contains('dark-mode');
+      const isRetro = document.body.classList.contains('retro-mode');
+      const isMatrix = document.body.classList.contains('matrix-mode');
+      
+      if (isMatrix) {
+        tooltip.style.background = 'rgba(0, 20, 0, 0.98)';
+        tooltip.style.border = '1px solid #00ff00';
+        tooltip.style.color = '#00ff00';
+        tooltip.querySelectorAll('td').forEach(td => {
+          if (td.style.color === '#9ca3af') td.style.color = '#00aa00';
+          if (td.style.color === '#e5e7eb') td.style.color = '#00ff00';
+          if (td.style.color === '#86efac') td.style.color = '#00ffff';
+        });
+      } else if (isRetro) {
+        tooltip.style.background = 'rgba(4, 20, 138, 0.98)';
+        tooltip.style.border = '1px solid #00ffff';
+        tooltip.style.color = '#c7fff7';
+        tooltip.style.fontFamily = '"VT323", monospace';
+        tooltip.style.fontSize = '14px';
+      } else if (!isDark) {
+        tooltip.style.background = 'rgba(255, 255, 255, 0.98)';
+        tooltip.style.border = '1px solid #e5e7eb';
+        tooltip.style.color = '#111827';
+        tooltip.querySelectorAll('td').forEach(td => {
+          if (td.style.color === '#9ca3af') td.style.color = '#6b7280';
+          if (td.style.color === '#e5e7eb') td.style.color = '#111827';
+          if (td.style.color === '#86efac') td.style.color = '#085903';
+        });
+      }
+      
+    } catch (e) {
+      console.error('Error showing XEN total tooltip:', e);
+      tooltip.style.display = 'none';
+    }
+  }
+  
+  // Hide tooltip
+  function hideTooltip() {
+    if (!isModalMode && tooltipDiv) {
+      tooltipDiv.style.display = 'none';
+    }
+  }
+  
+  // Refresh tooltip if visible
+  function refreshTooltip() {
+    if (tooltipDiv && tooltipDiv.style.display === 'block') {
+      showTooltip({ target: badge });
+    }
+  }
+  
+  // Toggle modal mode
+  function toggleModal() {
+    isModalMode = !isModalMode;
+    
+    if (isModalMode) {
+      // Show as modal
+      toggleBtn.textContent = '−';
+      toggleBtn.classList.add('active');
+      showTooltip({ target: badge });
+      tooltipDiv.style.pointerEvents = 'auto';
+    } else {
+      // Hide modal
+      toggleBtn.textContent = '+';
+      toggleBtn.classList.remove('active');
+      if (tooltipDiv) {
+        tooltipDiv.style.display = 'none';
+        tooltipDiv.style.pointerEvents = 'none';
+      }
+    }
+  }
+  
+  // Register global refresh function
+  window._xenTooltipRefresh = refreshTooltip;
+  
+  // Add hover listeners (only work when not in modal mode)
+  badge.style.cursor = 'help';
+  badge.addEventListener('mouseenter', (e) => {
+    if (!isModalMode) showTooltip(e);
+  });
+  badge.addEventListener('mouseleave', () => {
+    if (!isModalMode) hideTooltip();
+  });
+  
+  // Toggle button listener
+  toggleBtn.addEventListener('click', toggleModal);
+  
+  // Hide on scroll or window resize only if not in modal mode
+  window.addEventListener('scroll', () => {
+    if (!isModalMode) hideTooltip();
+  });
+  window.addEventListener('resize', () => {
+    if (!isModalMode) hideTooltip();
+  });
 }
 
 
@@ -4843,7 +5132,8 @@ function collectSettingsSnapshot() {
     etherscanApiKeyVisible: (function(){ const v=localStorage.getItem("etherscanApiKeyVisible"); return v==null?'1':v; })(),
     ethAddressMasked: (localStorage.getItem("ethAddressMasked") || '0'),
     connectWalletMasked: (localStorage.getItem("connectWalletMasked") || '0'),
-    summaryCollapsed: (localStorage.getItem("summaryCollapsed") || 'false')
+    summaryCollapsed: (localStorage.getItem("summaryCollapsed") || 'false'),
+    xenBreakdownExpanded: (localStorage.getItem("xenBreakdownExpanded") || 'false')
   };
   const throttle = localStorage.getItem("etherscanThrottleMs");
   if (throttle) settings.etherscanThrottleMs = throttle;
@@ -4870,6 +5160,7 @@ function applySettingsSnapshot(settings) {
   if (settings.etherscanApiKeyVisible != null) localStorage.setItem("etherscanApiKeyVisible", String(settings.etherscanApiKeyVisible));
   if (settings.ethAddressMasked != null) localStorage.setItem("ethAddressMasked", String(settings.ethAddressMasked));
   if (settings.connectWalletMasked != null) localStorage.setItem("connectWalletMasked", String(settings.connectWalletMasked));
+  if (settings.xenBreakdownExpanded != null) localStorage.setItem("xenBreakdownExpanded", String(settings.xenBreakdownExpanded));
 
   // Theme persistence and application (supports light/dark; legacy 'system' maps to OS)
   try {
@@ -5360,6 +5651,9 @@ document.addEventListener('DOMContentLoaded', () => {
       finally { cBtn.disabled = false; }
     });
   }
+  
+  // Initialize estXenTotal tooltip - replaced by xen-breakdown.js
+  // initializeXenTotalTooltip();
 
   // initial one-time fetch at load
   fetchXenGlobalRank();

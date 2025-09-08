@@ -1767,6 +1767,38 @@ body {
   100% { transform: rotate(360deg); }
 }
 
+/* Toggle button for breakdown */
+.toggle-btn {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 4px;
+  padding: 0;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  outline: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.toggle-btn:hover {
+  opacity: 1;
+  background: rgba(134, 239, 172, 0.1);
+}
+
+.toggle-btn.active {
+  opacity: 1;
+  background: rgba(134, 239, 172, 0.2);
+}
+
 /* GitHub button styling */
 .github-btn {
   background: none;
