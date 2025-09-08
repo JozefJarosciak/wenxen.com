@@ -1,8 +1,8 @@
-# XEN Tracker for Ethereum — [WenXEN.com](https://wenxen.com)
+# XEN Tracker for Ethereum ([WenXEN.com](https://wenxen.com))
 
 ## What is WenXen?
 
-Welcome to **WenXen.com** — a lightweight, open-source tracker for **XEN assets on Ethereum Mainnet**.
+Welcome to **WenXen.com** — a lightweight, open-source tracker for **[XEN](https://xen.pub)** tokens on Ethereum Mainnet blockchain.
 
 Tired of logging every XEN mint by hand? 🥱 Just add your Ethereum address and a free Etherscan API key, and WenXen automatically discovers all your mints (past & future). No more spreadsheets, no more forgotten entries.
 
