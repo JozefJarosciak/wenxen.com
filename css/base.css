@@ -1172,6 +1172,32 @@ body.dark-mode .tabulator .tabulator-header .tabulator-header-filter input,
   filter: blur(6px);
 }
 
+/* Custom RPC textarea - scrollable with one URL per line */
+#customRPC {
+  overflow-y: auto;
+  overflow-x: auto;
+  white-space: pre;
+  word-wrap: normal;
+  resize: vertical;
+  min-height: 100px;
+  max-height: 200px;
+  font-family: monospace;
+  line-height: 1.4;
+}
+
+/* Ethereum Address textarea - scrollable with one address per line */
+#ethAddress {
+  overflow-y: auto;
+  overflow-x: auto;
+  white-space: pre;
+  word-wrap: normal;
+  resize: vertical;
+  min-height: 100px;
+  max-height: 200px;
+  font-family: monospace;
+  line-height: 1.4;
+}
+
 .settings-card.danger {
   border-color: #ef4444;
   background: var(--panel, #fff);
