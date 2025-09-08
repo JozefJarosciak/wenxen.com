@@ -3,7 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <base href="/">
+  <!-- Dynamic base href set by script below -->
+  <script>
+    // Set base href dynamically based on environment
+    (function() {
+      var base = document.createElement('base');
+      // Check if running on localhost development server
+      if (window.location.hostname === 'localhost' && window.location.port === '63342') {
+        // IDE server - use the full path
+        var pathParts = window.location.pathname.split('/');
+        var projectPath = pathParts.slice(0, pathParts.lastIndexOf('index.html') || pathParts.length).join('/');
+        base.href = projectPath + (projectPath.endsWith('/') ? '' : '/');
+      } else if (window.location.protocol === 'file:') {
+        // File protocol - no base href needed
+        return;
+      } else {
+        // Production or other servers - use root
+        base.href = '/';
+      }
+      document.head.appendChild(base);
+    })();
+  </script>
   <title>WenXen.com - Xen Tracker for Ethereum</title>
   <script
     src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -20,11 +40,11 @@
   <link id="flatpickrDarkCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" disabled>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="css/base.css?v=20250908033116">
-  <link rel="stylesheet" href="css/theme-light.css?v=20250908033116">
-  <link rel="stylesheet" href="css/theme-dark.css?v=20250908033116">
-  <link rel="stylesheet" href="css/theme-retro.css?v=20250908033116">
-  <link rel="stylesheet" href="css/theme-matrix.css?v=20250908033116">
+  <link rel="stylesheet" href="./css/base.css?v=20250908092658">
+  <link rel="stylesheet" href="./css/theme-light.css?v=20250908092658">
+  <link rel="stylesheet" href="./css/theme-dark.css?v=20250908092658">
+  <link rel="stylesheet" href="./css/theme-retro.css?v=20250908092658">
+  <link rel="stylesheet" href="./css/theme-matrix.css?v=20250908092658">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <!-- Retro theme font (C64-like monospace) -->
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -561,22 +581,93 @@
   </div>
 </div>
 
-<!-- Toast notification system -->
-<script src="./js/toast.js?v=20250908033116"></script>
+<!-- Global Configuration (load first) -->
+<script type="module" src="./js/config/configuration.js?v=20250908092658"></script>
+
+<!-- New Utility Modules (load first for compatibility) -->
+<script type="module" src="./js/utils/dateUtils.js?v=20250908092658"></script>
+<script type="module" src="./js/utils/stringUtils.js?v=20250908092658"></script>
+<script type="module" src="./js/utils/mathUtils.js?v=20250908092658"></script>
+<script type="module" src="./js/utils/domUtils.js?v=20250908092658"></script>
+<script type="module" src="./js/utils/storageUtils.js?v=20250908092658"></script>
+
+<!-- New UI Modules -->
+<script type="module" src="./js/ui/themeManager.js?v=20250908092658"></script>
+<script type="module" src="./js/ui/modalManager.js?v=20250908092658"></script>
+<script type="module" src="./js/ui/tabManager.js?v=20250908092658"></script>
+<script type="module" src="./js/ui/tooltipManager.js?v=20250908092658"></script>
+<script type="module" src="./js/ui/toastManager.js?v=20250908092658"></script>
+
+<!-- New Data and Blockchain Modules -->
+<script type="module" src="./js/blockchain/web3Utils.js?v=20250908092658"></script>
+<script type="module" src="./js/data/indexedDbUtils.js?v=20250908092658"></script>
+<script type="module" src="./js/data/apiUtils.js?v=20250908092658"></script>
+
+<!-- Toast notification system now provided by js/ui/toastManager.js module -->
+
+<!-- Module loading helper and fallback -->
+<script>
+  // Wait for modules to load with fallback
+  (function() {
+    var moduleCheckCount = 0;
+    var maxChecks = 20; // 2 seconds max wait
+    
+    function checkModulesLoaded() {
+      moduleCheckCount++;
+      
+      // Check if critical functions are available
+      if (typeof window.acceptPrivacy !== 'undefined') {
+        console.log('Modules loaded successfully');
+        return;
+      }
+      
+      if (moduleCheckCount < maxChecks) {
+        setTimeout(checkModulesLoaded, 100);
+      } else {
+        console.warn('Modules failed to load, using fallback functions');
+        
+        // Provide fallback implementations
+        window.acceptPrivacy = function() {
+          localStorage.setItem('privacyAccepted', 'true');
+          var modal = document.getElementById('privacyModal');
+          if (modal) modal.style.display = 'none';
+          console.log('Privacy accepted (fallback)');
+          // Reload page to try loading modules again
+          setTimeout(function() { window.location.reload(); }, 1000);
+        };
+        
+        window.declinePrivacy = function() {
+          alert('You must accept the privacy policy to use this application.');
+        };
+      }
+    }
+    
+    // Start checking after DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', checkModulesLoaded);
+    } else {
+      setTimeout(checkModulesLoaded, 100);
+    }
+  })();
+</script>
 
 <!-- Google Analytics -->
-<script src="./js/GA-support.js?v=20250908033116"></script>
+<script src="./js/analytics.js?v=20250908092658"></script>
 
-<script src="./ABI/xen-ABI.js?v=20250908033116"></script>
-<script src="./ABI/xenft-ABI.js?v=20250908033116"></script>
-<script src="./ABI/xenft-stake-ABI.js?v=20250908033116"></script>
-<script src="./ABI/cointool-ABI.js?v=20250908033116"></script>
-<script src="./js/app.js?v=20250908033116"></script>
-<script src="./js/app-mint.js?v=20250908033116"></script>
-<script src="./js/xenft.js?v=20250908033116"></script>
-<script src="./js/xenft-stake.js?v=20250908033116"></script>
-<script src="./js/unify.js?v=20250908033116"></script>
-<script src="./js/xen-stake.js?v=20250908033116"></script>
+<!-- ABI files (order matters) -->
+<script src="./ABI/xen-ABI.js?v=20250908092658"></script>
+<script src="./ABI/xenft-ABI.js?v=20250908092658"></script>
+<script src="./ABI/xenft-stake-ABI.js?v=20250908092658"></script>
+<script src="./ABI/cointool-ABI.js?v=20250908092658"></script>
+
+<!-- Existing JavaScript files (order matters) -->
+<script src="./js/mint_flows.js?v=20250908092658"></script>
+<script src="./js/scanners/cointool_scanner.js?v=20250908092658"></script>
+<script src="./js/scanners/xenft_scanner.js?v=20250908092658"></script>
+<script src="./js/scanners/xenft_stake_scanner.js?v=20250908092658"></script>
+<script src="./js/scanners/xen_scanner.js?v=20250908092658"></script>
+<script src="./js/unified_view.js?v=20250908092658"></script>
+<script src="./js/main_app.js?v=20250908092658"></script>
 <!-- Markdown parser for About tab -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 

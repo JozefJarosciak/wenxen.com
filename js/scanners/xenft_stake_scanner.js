@@ -21,7 +21,7 @@
   // ABI moved to ./ABI/xenft-stake-ABI.js as window.xenftStakeAbi
 
   // --- small utils ---
-  function cleanHexAddr(a){ return String(a||'').trim().toLowerCase(); }
+  // cleanHexAddr function now provided by js/utils/stringUtils.js module
 
   function getAddressesFromSettings(){
     const text = (document.getElementById("ethAddress")?.value || localStorage.getItem("ethAddress") || "").trim();

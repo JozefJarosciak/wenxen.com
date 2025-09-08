@@ -2,8 +2,8 @@
 // Fix: decode log `data` with w3.eth.abi (window.Web3.eth.abi can be undefined in some builds)
 // Result: amount/term are now populated; maturity/status render correctly in table + calendar.
 (function () {
-  const CONTRACT_ADDRESS = "0x06450dee7fd2fb8e39061434babcfc05599a6fb8".toLowerCase();
-  const DEFAULT_RPC = "https://ethereum-rpc.publicnode.com";
+  const CONTRACT_ADDRESS = (window.appConfig?.contracts?.XEN_ETH || "0x06450dee7fd2fb8e39061434babcfc05599a6fb8").toLowerCase();
+  const DEFAULT_RPC = window.appConfig?.rpc?.DEFAULT_RPC || "https://ethereum-rpc.publicnode.com";
   const MIN_CONTRACT_BLOCK = 15700000;
   const SCAN_BACKTRACK_BLOCKS = 1000;
 
@@ -19,24 +19,10 @@
   }
 
   // Utils
-  function cleanHexAddr(a){return String(a||"").trim().toLowerCase();}
-  function padTopicAddress(addr){return "0x"+"0".repeat(24)+addr.replace(/^0x/,"").toLowerCase();}
-  function fmtLocalDateTime(ts){
-    if(!Number.isFinite(ts)||ts<=0) return "";
-    if (typeof window.luxon!=="undefined" && window.luxon.DateTime){
-      try{ return window.luxon.DateTime.fromSeconds(ts).setZone(Intl.DateTimeFormat().resolvedOptions().timeZone).toFormat("yyyy LLL dd, hh:mm a"); }catch{}
-    }
-    const d=new Date(ts*1000),mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-    const dd=String(d.getDate()).padStart(2,"0"); let h=d.getHours(); const ampm=h>=12?"PM":"AM"; h=h%12||12;
-    return `${d.getFullYear()} ${mo} ${dd}, ${String(h).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} ${ampm}`;
-  }
-  function dayKeyLocal(ts){
-    if(!Number.isFinite(ts)||ts<=0) return "";
-    if (typeof window.luxon!=="undefined" && window.luxon.DateTime){
-      try{ return window.luxon.DateTime.fromSeconds(ts).setZone(Intl.DateTimeFormat().resolvedOptions().timeZone).toFormat("yyyy-LL-dd"); }catch{}
-    }
-    const d=new Date(ts*1000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  }
+  // cleanHexAddr function now provided by js/utils/stringUtils.js module
+  // padTopicAddress, fmtLocalDateTime, and dayKeyLocal functions now provided by modules
+  // padTopicAddress -> js/utils/stringUtils.js
+  // fmtLocalDateTime, dayKeyLocal -> js/utils/dateUtils.js
 
   // IDB
   const DB_NAME="DB-Xen-Stake", DB_VER=1, STORE="stakes", STORE_ST="scanState";

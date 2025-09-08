@@ -656,8 +656,9 @@ body.dark-mode .gas-note {
 
 .toast.show {
   visibility: visible;
-  -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-  animation: fadein 0.5s, fadeout 0.5s 2.5s
+  -webkit-animation: fadein 0.5s;
+  animation: fadein 0.5s;
+  /* Fadeout is now handled by JavaScript after 8 seconds */
 }
 
 .toast.error {

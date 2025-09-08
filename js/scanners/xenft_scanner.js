@@ -33,8 +33,8 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
 
 (function(){
-  const CONTRACT_ADDRESS = "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
-  const DEFAULT_RPC = `https://ethereum-rpc.publicnode.com`;
+  const CONTRACT_ADDRESS = window.appConfig?.contracts?.XENFT_TORRENT || "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
+  const DEFAULT_RPC = window.appConfig?.rpc?.DEFAULT_RPC || "https://ethereum-rpc.publicnode.com";
 
 
 
@@ -149,7 +149,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     return actions;
   }
 
-  // xenft.js — persistent RPC warning popup
+  // xenft_scanner.js — persistent RPC warning popup
   function ensureToastEl() {
     let el = document.getElementById("globalToast");
     if (el) return el;
@@ -202,7 +202,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   }
 
   // --- RPC helper ---
-  // xenft.js — getWorkingContract
+  // xenft_scanner.js — getWorkingContract
   async function getWorkingContract(rpcList) {
     for (let i = 0; i < rpcList.length; i++) {
       const rpc = rpcList[i].trim();
@@ -247,7 +247,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       const addr = addresses[i];
       if (window.progressUI) window.progressUI.setAddress(i+1, addresses.length, addr);
       let tokenIds = [];
-      // xenft.js — inside scan(), where tokenIds are fetched per address
+      // xenft_scanner.js — inside scan(), where tokenIds are fetched per address
       try {
         if (typeof contract.methods.ownedTokens === "function") {
           tokenIds = await contract.methods.ownedTokens().call({ from: addr });

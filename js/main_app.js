@@ -1,116 +1,14 @@
 
 // --- Mobile Tooltip Helpers ---
-
-// A single, shared timer for the long-press detection
-let longPressTimer;
+// Mobile tooltip functions now provided by js/ui/tooltipManager.js module
+// Legacy functions like addLongPressTooltip(), showMobileTooltip() are available globally
 
 // About tab loading state
 let _aboutLoaded = false;
 
-/**
- * Attaches a long-press listener to an element to show a mobile-friendly tooltip.
- * @param {HTMLElement} element The cell element to attach the listener to.
- * @param {string} text The text content for the tooltip.
- */
-function addLongPressTooltip(element, text) {
-  if (!text) return; // Don't attach listeners if there's no tooltip text
-
-  element.addEventListener('touchstart', (e) => {
-    longPressTimer = setTimeout(() => {
-      showMobileTooltip(e.target, text);
-    }, 500); // 500ms for a long press
-  }, { passive: true });
-
-  element.addEventListener('touchend', () => {
-    clearTimeout(longPressTimer);
-  });
-
-  element.addEventListener('touchmove', () => {
-    clearTimeout(longPressTimer);
-  });
-}
-
-/**
- * Displays and positions the custom mobile tooltip.
- * @param {HTMLElement} targetEl The element that was long-pressed.
- * @param {string} text The text to display.
- */
-function showMobileTooltip(targetEl, text) {
-  const tooltip = document.getElementById('mobile-tooltip');
-  if (!tooltip) return;
-
-  tooltip.textContent = text;
-  tooltip.style.display = 'block';
-
-  const rect = targetEl.getBoundingClientRect();
-
-  // Position tooltip above the element
-  tooltip.style.left = `${rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
-  tooltip.style.top = `${rect.top - tooltip.offsetHeight - 5}px`;
-
-  // Hide the tooltip after a few seconds or on the next touch
-  setTimeout(() => {
-    tooltip.style.display = 'none';
-  }, 3000); // Hide after 3 seconds
-
-  const hideOnNextTouch = () => {
-    tooltip.style.display = 'none';
-    document.removeEventListener('touchstart', hideOnNextTouch);
-  };
-  document.addEventListener('touchstart', hideOnNextTouch);
-}
-
 // --- THEME MANAGEMENT ---
-function getStoredTheme(){
-  try {
-    const t = localStorage.getItem('theme');
-    // Back-compat: treat legacy 'system' as dark by default
-    if (t === 'system' || !t) return 'dark';
-    return (t === 'light' || t === 'dark' || t === 'retro' || t === 'matrix') ? t : 'dark';
-  } catch { return 'dark'; }
-}
-
-function storeTheme(v){
-  try { localStorage.setItem('theme', (v === 'light' || v === 'retro' || v === 'matrix') ? v : 'dark'); } catch {}
-}
-
-function isSystemDark(){
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
-function effectiveTheme(mode){
-  // No more 'system' in UI; keep fallback just in case imports contain it
-  if (mode === 'system') return isSystemDark() ? 'dark' : 'light';
-  if (mode === 'retro') return 'retro';
-  if (mode === 'matrix') return 'matrix';
-  return (mode === 'dark') ? 'dark' : 'light';
-}
-
-function applyTheme(mode){
-  const eff = effectiveTheme(mode);
-  document.body.classList.remove('light-mode', 'dark-mode', 'retro-mode', 'matrix-mode');
-  document.body.classList.add(eff + '-mode');
-  // Toggle Tabulator dark CSS
-  try {
-    const link = document.getElementById('tabulatorMidnightCss');
-    if (link) link.disabled = !(eff === 'dark' || eff === 'retro' || eff === 'matrix');
-  } catch {}
-  // Toggle Flatpickr dark CSS
-  try {
-    const link = document.getElementById('flatpickrDarkCss');
-    if (link) link.disabled = !(eff === 'dark' || eff === 'retro' || eff === 'matrix');
-  } catch {}
-  // Re-style ECharts chart
-  try { if (typeof updateVmuChart === 'function') updateVmuChart(); } catch {}
-  // Update header menu UI (current theme indicator, radio state)
-  try { if (typeof updateThemeMenuUI === 'function') updateThemeMenuUI(); } catch {}
-}
-
-// Initialize theme on load (respect stored or system)
-(function(){
-  const mode = getStoredTheme();
-  applyTheme(mode);
-})();
+// Theme management functions now provided by js/ui/themeManager.js module
+// Legacy functions like getStoredTheme(), storeTheme(), applyTheme() are available globally
 
 // Keep header theme menu UI in sync with current setting
 function updateThemeMenuUI(){
@@ -125,237 +23,16 @@ function updateThemeMenuUI(){
   });
 }
 
-function buildEstXenTooltip(row, estNumber){
-  const hasPrice = Number.isFinite(xenUsdPrice);
-  const usdStr = (n) => hasPrice ? ` (${formatUSD(n * xenUsdPrice)})` : "";
-
-  // Stake / Stake XENFT breakdown with $ values
-  if (row?.SourceType === "Stake" || row?.SourceType === "Stake XENFT") {
-    const b = stakeEstBreakdown(row);
-    if (b) {
-      const toTok = (x) => Number(x / b.ONE_ETHER);
-      const fmtTok = (n) => n.toLocaleString();
-      const fmtUsd = (n) =>
-        (typeof xenUsdPrice === 'number' && xenUsdPrice > 0)
-          ? ` (${formatUSD(n * xenUsdPrice)})`
-          : '';
-
-      const principalTok = toTok(b.amount);
-      const rewardTok    = toTok(b.reward);
-      const totalTok     = toTok(b.total);
-
-      return `${row.SourceType}
-Principal: ${fmtTok(principalTok)}${fmtUsd(principalTok)}
-APY: ${b.apy}%, Term: ${b.termDays}d
-Reward: ${fmtTok(rewardTok)}${fmtUsd(rewardTok)}
-Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
-    }
-    // No breakdown → just type
-    return row.SourceType || "";
-  }
-
-  // Cointool / XENFT simple reward tooltip with $ values
-  const est = Number(estNumber || 0);
-  const label = (row?.SourceType === "XENFT") ? "XENFT" : "Cointool";
-  return `${label}
-Mint Reward: ${est.toLocaleString()}${usdStr(est)}`;
-}
+// buildEstXenTooltip function now provided by js/ui/tooltipManager.js module
 
 
-/* --- NEW: simple tab switcher (Dashboard / Settings) --- */
-(function initTabs(){
-  const buttons = document.querySelectorAll('.tab-button');
-  const panels  = document.querySelectorAll('.tab-panel');
-  if (!buttons.length || !panels.length) return;
-
-  function setAriaForButtons(activeId){
-    try {
-      buttons.forEach(btn => {
-        const on = (btn.dataset.target === activeId);
-        btn.setAttribute('aria-selected', on ? 'true' : 'false');
-        btn.classList.toggle('active', on);
-      });
-    } catch {}
-  }
-
-  function setAriaForPanels(activeId){
-    try {
-      panels.forEach(p => {
-        const on = (p.id === activeId);
-        p.classList.toggle('active', on);
-        // Optional: hide inactive panels from ATs without removing from tab order
-        p.setAttribute('aria-hidden', on ? 'false' : 'true');
-      });
-    } catch {}
-  }
-
-  function persistActiveTab(id){
-    try { localStorage.setItem('activeTabId', id); } catch {}
-  }
-
-  function getStoredActiveTab(){
-    try { return localStorage.getItem('activeTabId') || 'tab-dashboard'; } catch { return 'tab-dashboard'; }
-  }
-
-  function show(id){
-    setAriaForPanels(id);
-    setAriaForButtons(id);
-    persistActiveTab(id);
-    try { ensurePrivacyConsentOnSettings(id); } catch {}
-    try { if (id === 'tab-about') ensureAboutLoaded(); } catch {}
-    // If user navigated to Dashboard, ensure chart is initialized and sized
-    if (id === 'tab-dashboard') {
-      try {
-        const wantOpen = (localStorage.getItem('vmuChartExpanded') || '0') === '1';
-        // If we deferred chart init earlier, attempt it now
-        if (_vmuChartInitPending && wantOpen) {
-          setTimeout(() => { try { setVmuChartExpandedState(true); _vmuChartInitPending = false; } catch {} }, 0);
-        }
-        // Resize/update even if already initialized (fixes 0px canvas after hidden layout)
-        requestAnimationFrame(() => {
-          try { if (vmuChart) { vmuChart.resize(); updateVmuChart(); } } catch {}
-        });
-      } catch {}
-    }
-  }
-
-  // Expose a programmatic API for restoring via imports/settings
-  window.setActiveTab = function(id){
-    const panelExists = !!document.getElementById(id);
-    show(panelExists ? id : 'tab-dashboard');
-  };
-
-  buttons.forEach(b => b.addEventListener('click', () => show(b.dataset.target)));
-
-  // On first load, restore previously active tab if present
-  const initial = getStoredActiveTab();
-  window.setActiveTab(initial);
-})();
+/* --- Tab management now provided by js/ui/tabManager.js module --- */
+// Legacy functions like setActiveTab() are available globally
 
 // --- Privacy modal + Settings guard ---
-function isPrivacyAccepted(){
-  try { return localStorage.getItem('privacyAccepted') === '1'; } catch { return false; }
-}
-
-function setSettingsTextInputsEnabled(enabled){
-  const root = document.getElementById('tab-settings');
-  if (!root) return;
-  const sel = '#tab-settings input[type="text"], #tab-settings input[type="number"], #tab-settings textarea, #tab-settings select';
-  document.querySelectorAll(sel).forEach(el => {
-    try { el.disabled = !enabled; } catch {}
-  });
-}
-
-function openPrivacyModal(){
-  const m = document.getElementById('privacyModal');
-  if (!m) return;
-  // Set aria-hidden first to prevent accessibility issues
-  m.setAttribute('aria-hidden', 'false');
-  m.classList.remove('hidden');
-}
-
-function closePrivacyModal(){
-  const m = document.getElementById('privacyModal');
-  if (!m) return;
-  // Blur any focused elements within the modal to prevent accessibility issues
-  const focusedElement = m.querySelector(':focus');
-  if (focusedElement) {
-    focusedElement.blur();
-  }
-  m.classList.add('hidden');
-  m.setAttribute('aria-hidden', 'true');
-}
-
-function acceptPrivacy(){
-  try { localStorage.setItem('privacyAccepted', '1'); } catch {}
-  setSettingsTextInputsEnabled(true);
-  closePrivacyModal();
-  
-  // If setup is not complete, go to Settings tab (user came from Welcome modal)
-  if (!isSetupComplete()) {
-    setTimeout(() => {
-      if (window.setActiveTab) {
-        window.setActiveTab('tab-settings');
-      }
-    }, 300); // Small delay to let privacy modal close first
-  }
-}
-
-function declinePrivacy(){
-  // Clear consent and re-disable interactive settings
-  try { localStorage.setItem('privacyAccepted', '0'); } catch {}
-  setSettingsTextInputsEnabled(false);
-  closePrivacyModal();
-}
-
-function ensurePrivacyConsentOnSettings(currentTabId){
-  if (currentTabId !== 'tab-settings') return;
-  if (!isPrivacyAccepted()) {
-    setSettingsTextInputsEnabled(false);
-    openPrivacyModal();
-  } else {
-    setSettingsTextInputsEnabled(true);
-  }
-}
-
-// Onboarding Modal Functions
-function isSetupComplete() {
-  try {
-    const ethAddress = localStorage.getItem('ethAddress');
-    const etherscanApiKey = localStorage.getItem('etherscanApiKey');
-    
-    // Check if both fields have values (not empty or just whitespace)
-    return !!(ethAddress && ethAddress.trim() && etherscanApiKey && etherscanApiKey.trim());
-  } catch {
-    return false;
-  }
-}
-
-function shouldShowOnboarding() {
-  // Show onboarding if setup is not complete (regardless of privacy status)
-  return !isSetupComplete();
-}
-
-function showOnboardingModal() {
-  const modal = document.getElementById('onboardingModal');
-  if (modal) {
-    // Set aria-hidden first to prevent accessibility issues
-    modal.setAttribute('aria-hidden', 'false');
-    // Then show the modal
-    modal.classList.remove('hidden');
-  }
-}
-
-function hideOnboardingModal() {
-  const modal = document.getElementById('onboardingModal');
-  if (modal) {
-    // Blur any focused elements within the modal to prevent accessibility issues
-    const focusedElement = modal.querySelector(':focus');
-    if (focusedElement) {
-      focusedElement.blur();
-    }
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-}
-
-function completeOnboarding() {
-  // Check if privacy needs to be accepted first
-  if (!isPrivacyAccepted()) {
-    hideOnboardingModal();
-    // Show privacy modal, and after acceptance we'll go to settings
-    setTimeout(() => {
-      openPrivacyModal();
-    }, 300); // Small delay to let onboarding modal close first
-    return;
-  }
-  
-  hideOnboardingModal();
-  // Switch to Settings tab
-  if (window.setActiveTab) {
-    window.setActiveTab('tab-settings');
-  }
-}
+// Modal and privacy functions now provided by js/ui/modalManager.js module
+// Legacy functions like isPrivacyAccepted(), openPrivacyModal(), acceptPrivacy(), 
+// isSetupComplete(), showOnboardingModal(), etc. are available globally
 
 document.addEventListener('DOMContentLoaded', () => {
   // Footer year
@@ -419,46 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isAboutActive) ensureAboutLoaded();
   } catch {}
 
-  // Header menu wiring (Theme Light/Dark)
-  try {
-    const toggle = document.getElementById('headerMenuToggle');
-    const panel  = document.getElementById('headerMenu');
-    function closeMenu(){
-      if (!panel) return;
-      panel.hidden = true;
-      if (toggle) toggle.setAttribute('aria-expanded', 'false');
-    }
-    function openMenu(){
-      if (!panel) return;
-      panel.hidden = false;
-      if (toggle) toggle.setAttribute('aria-expanded', 'true');
-      try { updateThemeMenuUI(); } catch {}
-    }
-    function toggleMenu(){ panel && (panel.hidden ? openMenu() : closeMenu()); }
-    if (toggle && panel) {
-      toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(); });
-      document.addEventListener('click', (e) => {
-        if (!panel || panel.hidden) return;
-        const root = document.getElementById('headerMenuRoot');
-        if (root && root.contains(e.target)) return; // inside click
-        closeMenu();
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeMenu();
-      });
-      panel.addEventListener('click', (e) => {
-        const btn = e.target.closest && e.target.closest('.menu-item');
-        if (!btn) return;
-        const t = btn.getAttribute('data-theme');
-        if (!t) return;
-        storeTheme(t);
-        applyTheme(t);
-        closeMenu();
-      });
-      // Initial sync
-      updateThemeMenuUI();
-    }
-  } catch {}
+  // Header menu wiring (Theme Light/Dark) is now handled by themeManager.js
 
   // Check if onboarding should be shown on page load
   setTimeout(() => {
@@ -1200,7 +838,14 @@ function renderXenUsdEstimate(totalBigInt){
   // Totals are in the billions ⇒ safe to cast for multiplication
   const totalNum = Number(totalBigInt);
   const usd = totalNum * xenUsdPrice;
-  el.textContent = `(${formatUSD(usd)})`;
+  // Always format with exactly 2 decimal places for estXenUsd display
+  const formattedUsd = usd.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  el.textContent = `(${formattedUsd})`;
 }
 
 
@@ -1911,7 +1556,19 @@ function updateVmuChart() {
   const w = node ? node.offsetWidth : 0;
   const h = node ? node.offsetHeight : 0;
   console.debug('[VMU-CHART] updateVmuChart size:', {w,h});
-  if (!(node && w > 0 && h > 0)) { console.debug('[VMU-CHART] skip update due to zero size'); return; }
+  if (!(node && w > 0 && h > 0)) { 
+    console.debug('[VMU-CHART] skip update due to zero size, will retry in 100ms'); 
+    // If container has no size yet, retry after a short delay
+    setTimeout(() => {
+      const retryW = node ? node.offsetWidth : 0;
+      const retryH = node ? node.offsetHeight : 0;
+      if (retryW > 0 && retryH > 0) {
+        console.debug('[VMU-CHART] retry successful, size:', {w: retryW, h: retryH});
+        updateVmuChart();
+      }
+    }, 100);
+    return; 
+  }
   const rows = _collectActiveRows();
   let dates, seriesData;
   if (_vmuChartMetric === 'usd') {
@@ -2205,6 +1862,17 @@ function updateVmuChart() {
   try {
     // Merge update to preserve series.type and axes configuration
     vmuChart.setOption(opts);
+    // Ensure chart properly sizes after option update
+    setTimeout(() => {
+      try {
+        if (vmuChart) {
+          vmuChart.resize();
+          console.debug('[VMU-CHART] post-update resize completed');
+        }
+      } catch(e) {
+        console.warn('[VMU-CHART] post-update resize failed', e);
+      }
+    }, 50);
   } catch(e) {
     console.warn('[VMU-CHART] setOption(data) failed', e);
   }
@@ -2686,7 +2354,7 @@ window._calendar = flatpickr("#calendar", {
 
 // Helper to always grab the *current* calendar instance
 function getActiveCalendar() {
-  // Prefer the instance created by unify.js
+  // Prefer the instance created by unified_view.js
   if (window.calendarPicker && typeof window.calendarPicker.setDate === "function") {
     return window.calendarPicker;
   }
@@ -3262,7 +2930,7 @@ function chooseActionDialog(defaultChoice = 'claim', rowData = null){
     const cancel = document.getElementById('actionCancelBtn');
 
     // If this is an XENFT row, disable/hide remint and force claim
-    // app.js — chooseActionDialog (snippet)
+    // main_app.js — chooseActionDialog (snippet)
     const remintOpt = select.querySelector('option[value="remint"]');
     const st = rowData && String(rowData.SourceType);
     if (st === 'XENFT' || st === 'Stake XENFT') {
@@ -4191,9 +3859,10 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   }
 
   // Addresses, Custom RPCs, Etherscan API Key (unchanged)
-  attachSave(document.getElementById("ethAddress"), "ethAddress", { toastLabel: "Addresses" });
-  attachSave(document.getElementById("customRPC"), "customRPC", { toastLabel: "Custom RPCs" });
-  attachSave(document.getElementById("etherscanApiKey"), "etherscanApiKey", { toastLabel: "Etherscan API key", sanitize: v => v.trim() });
+  // Commented out to avoid duplicate saves - using the blur event listeners below instead
+  // attachSave(document.getElementById("ethAddress"), "ethAddress", { toastLabel: "Addresses" });
+  // attachSave(document.getElementById("customRPC"), "customRPC", { toastLabel: "Custom RPCs" });
+  // attachSave(document.getElementById("etherscanApiKey"), "etherscanApiKey", { toastLabel: "Etherscan API key", sanitize: v => v.trim() });
 
 
   const gasRefreshInput = document.getElementById("gasRefreshSeconds");
@@ -4784,7 +4453,7 @@ async function connectWallet() {
   if (String(row.SourceType) === 'Stake') {
     // ✅ FIX: Minimal ABI for the correct 'withdraw()' function (no parameters)
     try {
-      // XEN_ETH address is already defined in app.js
+      // XEN_ETH address is already defined in main_app.js
       const xenContract = new w3.eth.Contract(window.xenAbi, XEN_ETH);
       // ✅ FIX: Call withdraw() with no arguments
       const tx = await xenContract.methods.withdraw().send({ from: connectedAccount });
@@ -4810,7 +4479,7 @@ async function connectWallet() {
     const tokenId = Number(row.Mint_id_Start || row.tokenId);
     if (!Number.isFinite(tokenId)) { alert("Bad Stake XENFT tokenId."); return; }
 
-    // Use the address exported by xenft-stake.js, fallback to canonical mainnet address
+    // Use the address exported by xenft_stake_scanner.js, fallback to canonical mainnet address
     const STAKE_ADDR =
       (window.xenftStake && window.xenftStake.CONTRACT_ADDRESS) ||
       '0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC';
@@ -4892,10 +4561,7 @@ async function connectWallet() {
 }
 
 
-function cleanHexAddr(addr) {
-  if (!addr) return addr;
-  return '0x' + String(addr).trim().replace(/^0x/i, '').toLowerCase();
-}
+// cleanHexAddr function now provided by js/utils/stringUtils.js module
 
 
 
@@ -4927,33 +4593,91 @@ document.getElementById("ethAddress").addEventListener("input", validateInputs);
 
 document.getElementById("scanBtn").addEventListener("click", scanMints);
 document.getElementById("connectWalletBtn").addEventListener("click", handleWalletConnectClick);
-document.getElementById("customRPC").addEventListener("blur", function(){
-  saveUserPreferences(
-    document.getElementById("ethAddress").value,
-    document.getElementById("customRPC").value,
-    document.getElementById("etherscanApiKey").value
-  );
-});
-document.getElementById("ethAddress").addEventListener("blur", function(){
-  saveUserPreferences(
-    document.getElementById("ethAddress").value,
-    document.getElementById("customRPC").value,
-    document.getElementById("etherscanApiKey").value
-  );
-});
-document.getElementById("etherscanApiKey").addEventListener("blur", function(){
-  saveUserPreferences(
-    document.getElementById("ethAddress").value,
-    document.getElementById("customRPC").value,
-    document.getElementById("etherscanApiKey").value
-  );
-});
+// Individual field save handlers with proper duplicate prevention
+(function() {
+  // Track last saved values and blur timestamps to prevent duplicates
+  const fieldState = {
+    customRPC: {
+      lastValue: localStorage.getItem("customRPC") || "",
+      lastBlurTime: 0,
+      saveTimer: null
+    },
+    ethAddress: {
+      lastValue: localStorage.getItem("ethAddress") || "",
+      lastBlurTime: 0,
+      saveTimer: null
+    },
+    etherscanApiKey: {
+      lastValue: localStorage.getItem("etherscanApiKey") || "",
+      lastBlurTime: 0,
+      saveTimer: null
+    }
+  };
+  
+  // Helper function to save field with duplicate prevention
+  function saveField(fieldName, value, displayName) {
+    const now = Date.now();
+    const state = fieldState[fieldName];
+    
+    // Prevent duplicate blur events within 500ms
+    if (now - state.lastBlurTime < 500) {
+      return; // Skip this blur event as it's a duplicate
+    }
+    state.lastBlurTime = now;
+    
+    // Clear any pending save
+    if (state.saveTimer) {
+      clearTimeout(state.saveTimer);
+      state.saveTimer = null;
+    }
+    
+    // Check if value actually changed
+    if (value === state.lastValue) {
+      return; // No change, no need to save
+    }
+    
+    // Save immediately (no additional delay needed since we're preventing duplicates)
+    localStorage.setItem(fieldName, value);
+    state.lastValue = value;
+    
+    if (typeof showToast === "function") {
+      showToast(displayName + " saved", "success");
+    }
+    
+    // Check if setup is complete
+    if (isSetupComplete()) {
+      hideOnboardingModal();
+    }
+  }
+  
+  // Add blur event listeners
+  const customRPCField = document.getElementById("customRPC");
+  if (customRPCField) {
+    customRPCField.addEventListener("blur", function() {
+      saveField("customRPC", this.value, "Custom RPCs");
+    });
+  }
+  
+  const ethAddressField = document.getElementById("ethAddress");
+  if (ethAddressField) {
+    ethAddressField.addEventListener("blur", function() {
+      saveField("ethAddress", this.value, "Addresses");
+    });
+  }
+  
+  const etherscanApiKeyField = document.getElementById("etherscanApiKey");
+  if (etherscanApiKeyField) {
+    etherscanApiKeyField.addEventListener("blur", function() {
+      saveField("etherscanApiKey", this.value.trim(), "Etherscan API key");
+    });
+  }
+})();
 document.getElementById("downloadBtn").addEventListener("click", function(){
   if(cointoolTable){ cointoolTable.download("csv", "cointool-mints-detailed.csv"); }
 });
 
 // --- STATUS CHIP FILTERING ---
-// app.js
+// main_app.js
 
 // --- STATUS CHIP FILTERING ---
 function setStatusHeaderFilter(statusText) {

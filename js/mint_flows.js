@@ -1,11 +1,11 @@
 // Minimal minting for Cointool: VMUs, Term, live gas, single tx per click.
-// Depends on globals from app.js & cointool-ABI.js: web3, web3Wallet, connectedAccount,
+// Depends on globals from main_app.js & cointool-ABI.js: web3, web3Wallet, connectedAccount,
 // COINTOOL_MAIN, cointoolAbi.
 
 const XEN_MAIN = '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
 const DEFAULT_RPC_READ = 'https://ethereum-rpc.publicnode.com';
 
-function fmtTs(){ return new Date().toLocaleString(); }
+// fmtTs function now provided by js/utils/dateUtils.js module
 
 // Require connected wallet on Ethereum Mainnet
 async function requireWalletMainnet(){
@@ -20,14 +20,7 @@ async function requireWalletMainnet(){
   }
 }
 
-// Preview the maturity date: now + termDays
-function formatTermDate(termDays) {
-  const now = new Date();
-  const ms  = Number(termDays) * 24 * 60 * 60 * 1000;
-  const target = new Date(now.getTime() + ms);
-  // e.g., "Fri, Aug 29, 2025"
-  return target.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-}
+// formatTermDate function now provided by js/utils/dateUtils.js module
 function updateTermPreview() {
   const termDays = Math.min(999, Math.max(1, parseInt(document.getElementById('mintTermDays').value || '1', 10)));
   const el = document.getElementById('termDatePreview');
@@ -41,18 +34,7 @@ function updateStakeTermPreview() {
   if (el) el.textContent = formatTermDate(termDays);
 }
 
-// Human-readable short number (max 2 decimals)
-function formatShortNumber(n) {
-  if (n === null || n === undefined || n === '') return '';
-  const v = Number(String(n).replace(/[^0-9.]/g, ''));
-  if (!isFinite(v)) return '';
-  const abs = Math.abs(v);
-  if (abs >= 1e12) return (v/1e12).toFixed(2).replace(/\.00$/,'') + 'T';
-  if (abs >= 1e9 ) return (v/1e9 ).toFixed(2).replace(/\.00$/,'') + 'B';
-  if (abs >= 1e6 ) return (v/1e6 ).toFixed(2).replace(/\.00$/,'') + 'M';
-  if (abs >= 1e3 ) return (v/1e3 ).toFixed(2).replace(/\.00$/,'') + 'K';
-  return v.toString();
-}
+// formatShortNumber function now provided by js/utils/stringUtils.js module
 
 // Fetch current max term (days) from XEN and update preview (no wallet required)
 async function setMaxTermFromXEN(){

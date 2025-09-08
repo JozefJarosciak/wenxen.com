@@ -31,23 +31,8 @@ function updateStakeSummaryLine(){
   line.innerHTML = `<strong>Stakes:</strong> ${count.toLocaleString()} | <strong>Maturing:</strong> ${maturingCount.toLocaleString()} | <strong>Claimable:</strong> ${claimableCount.toLocaleString()}`;
 }
 
-function debounce(fn, wait = 200) {
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); };
-}
-
-function setHeaderFilterText(field, text) {
-  const input = document.querySelector(`.tabulator-col[tabulator-field="${field}"] .tabulator-header-filter input`);
-  if (!input) return;
-  input.value = text || "";
-  input.dispatchEvent(new Event("input",  { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-  // If your table needs Enter to commit, uncomment:
-  // input.dispatchEvent(new KeyboardEvent('keydown', { bubbles:true, cancelable:true, key:'Enter', code:'Enter', keyCode:13 }));
-}
-
-// Debounced variant we’ll use everywhere
-const setHeaderFilterTextDebounced = debounce(setHeaderFilterText, 200);
+// DOM utility functions now provided by js/utils/domUtils.js module
+// Legacy functions like debounce(), setHeaderFilterText(), setHeaderFilterTextDebounced() are available globally
 
 // === Unified Scan: All / Cointool / XENFTs ===
 (function initUnifiedScan(){
@@ -345,17 +330,7 @@ const setHeaderFilterTextDebounced = debounce(setHeaderFilterText, 200);
 
 
 // --- parse "YYYY Mon" / "YYYY Mon DD" into a Date (day optional) ---
-function parseYearMonDay(str) {
-  const m = String(str || "").trim().match(/^(\d{4})\s+([A-Za-z]{3})(?:\s+(\d{1,2}))?$/);
-  if (!m) return null;
-  const year = parseInt(m[1], 10);
-  const monAbbr = m[2].toLowerCase();
-  const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-  const mi = months.indexOf(monAbbr);
-  if (mi < 0) return null;
-  const day = m[3] ? Math.max(1, Math.min(31, parseInt(m[3], 10))) : 1;
-  return new Date(year, mi, day);
-}
+// parseYearMonDay function now provided by js/utils/dateUtils.js module
 
 // --- wire header input → calendar (call this after table + calendar are ready) ---
 function attachMaturityHeaderSync() {
@@ -391,22 +366,7 @@ function attachMaturityHeaderSync() {
 
 
 // Build "YYYY-MM-DD" from a JS Date in LOCAL time
-function buildDayKeyFromDate(dt){
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, "0");
-  const d = String(dt.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-// Parse a table cell like "2026 Dec 04, 07:09 PM" -> "2026-12-04"
-function parseMaturityFmtToKey(fmt){
-  if (!fmt) return "";
-  const m = String(fmt).match(/^(\d{4})\s+([A-Za-z]{3})\s+(\d{1,2})/);
-  if (!m) return "";
-  const map = {Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
-  const y = m[1], mo = map[m[2]] || "01", d = String(m[3]).padStart(2,"0");
-  return `${y}-${mo}-${d}`;
-}
+// buildDayKeyFromDate and parseMaturityFmtToKey functions now provided by js/utils/dateUtils.js module
 
 // Return local "YYYY-MM-DD" for a row from maturityDateOnly OR timestamp OR formatted text
 // Make a single authoritative "YYYY-MM-DD" date key per row
@@ -561,7 +521,7 @@ function setMaturityHeaderFilterFromDate(dt) {
       Term: s.term,
       VMUs: "1",
       Actions: s.actions || [],
-      Est_XEN: 0,                          // computed in app.js
+      Est_XEN: 0,                          // computed in main_app.js
       Rank_Range: "N/A",
       Salt: "N/A",
       stakedAmount: s.amount,              // tokens
@@ -734,7 +694,7 @@ function setMaturityHeaderFilterFromDate(dt) {
     else if (mTs * 1000 <= Date.now()) status = "Claimable";
     else status = "Maturing";
 
-    // Prefer preformatted field from xenft.js; otherwise fall back
+    // Prefer preformatted field from xenft_scanner.js; otherwise fall back
     var mFmt = x["Maturity_Date_Fmt"] || x["Maturity DateTime"] || "";
 
     return {
@@ -788,7 +748,7 @@ function setMaturityHeaderFilterFromDate(dt) {
       Term: s.term,
       VMUs: '1', // Each stake NFT represents a single position
       Actions: s.actions || [],
-      Est_XEN: 0, // This will be calculated by app.js's estimateXENForRow
+      Est_XEN: 0, // This will be calculated by main_app.js's estimateXENForRow
       Rank_Range: 'N/A',
       Salt: 'N/A',
       stakedAmount: s.amount, // For Est. XEN calculation
