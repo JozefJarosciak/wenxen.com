@@ -168,7 +168,7 @@ async function startCointoolMint(vmu, termDays){
       if (typeof window.scanMints === 'function') await window.scanMints();
       if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
     } catch {}
-  }, 15000);
+  }, 6000);
 }
 
 async function startXenftMint(vmu, termDays, kind, burnRaw){
@@ -195,7 +195,7 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
         if (window.xenft && typeof window.xenft.scan === 'function') await window.xenft.scan();
         if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
       } catch {}
-    }, 15000);
+    }, 6000);
     return;
   }
   // Regular XENFT
@@ -213,7 +213,7 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
       if (window.xenft && typeof window.xenft.scan === 'function') await window.xenft.scan();
       if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
     } catch {}
-  }, 15000);
+  }, 6000);
 }
 
 // --- Staking ---
@@ -252,7 +252,7 @@ async function startStakeFlow(){
         if (window.xenStake && typeof window.xenStake.scan === 'function') await window.xenStake.scan();
         if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
       } catch {}
-    }, 15000);
+    }, 6000);
   } catch (err) {
     console.error('[STAKE] failed', err);
     alert(err?.message || 'Stake failed.');
