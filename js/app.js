@@ -1737,6 +1737,73 @@ function _groupVMUsByDate(rows) {
   return { dates, values: dates.map(d => map[d]) };
 }
 
+// Format XEN numbers with K, M, B, T suffixes
+function formatXenShort(num) {
+  if (!Number.isFinite(num) || num === 0) return '0';
+  if (num < 1000) return num.toFixed(2);
+  
+  const suffixes = ['', 'K', 'M', 'B', 'T'];
+  let index = 0;
+  let value = num;
+  
+  while (value >= 1000 && index < suffixes.length - 1) {
+    value /= 1000;
+    index++;
+  }
+  
+  return value.toFixed(2) + suffixes[index];
+}
+
+// Get aggregated data with both VMUs and XEN for tooltip
+function _getTooltipDataByDateAndType(rows, dateKey) {
+  const types = (window.innerWidth <= 768) ? ['CT', 'XNFT', 'S.XNFT', 'Stk'] : ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
+  const typeData = {};
+  
+  // Initialize type data
+  types.forEach(type => {
+    typeData[type] = { vmus: 0, xen: 0 };
+  });
+  
+  for (const r of rows) {
+    // Match the date logic from the chart functions
+    let rowDateKey = r?.maturityDateOnly;
+    if (!rowDateKey) {
+      const t = Number(r?.Maturity_Timestamp || 0);
+      if (Number.isFinite(t) && t > 0) {
+        rowDateKey = getLocalDateString(new Date(t * 1000));
+      } else if (typeof window.rowToLocalKey === 'function') {
+        rowDateKey = window.rowToLocalKey(r);
+      } else {
+        continue;
+      }
+    }
+    
+    if (rowDateKey !== dateKey) continue;
+    
+    // Get VMUs and XEN
+    const vmu = Number(r?.VMUs || 0);
+    const xen = Number(estimateXENForRow(r)) || 0;
+    
+    if (!Number.isFinite(vmu) || vmu <= 0) continue;
+    
+    let sourceType = String(r?.SourceType || 'Cointool');
+    // Map to mobile abbreviations
+    if (window.innerWidth <= 768) {
+      if (sourceType === 'Cointool') sourceType = 'CT';
+      else if (sourceType === 'XENFT') sourceType = 'XNFT';
+      else if (sourceType === 'Stake XENFT') sourceType = 'S.XNFT';
+      else if (sourceType === 'Stake') sourceType = 'Stk';
+    }
+    
+    if (typeData[sourceType]) {
+      typeData[sourceType].vmus += vmu;
+      typeData[sourceType].xen += xen;
+    }
+  }
+  
+  return typeData;
+}
+
 function _groupVMUsByDateAndType(rows) {
   const typeMap = {};
   const types = (window.innerWidth <= 768) ? ['CT', 'XNFT', 'S.XNFT', 'Stk'] : ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
@@ -1958,23 +2025,52 @@ function updateVmuChart() {
           var weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
           var fmtDate = isNaN(d.getTime())
             ? dateKey
-            : (weekdays[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear());
+            : (weekdays[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear());
           
           var result = 'Date: ' + fmtDate + '<br/>';
-          var total = 0;
           
-          // Show breakdown by type
+          // Get detailed data for this date
+          var activeRows = _collectActiveRows();
+          var typeData = _getTooltipDataByDateAndType(activeRows, dateKey);
+          
+          var totalUsd = 0;
+          var totalVmus = 0;
+          var totalXen = 0;
+          
+          // Show breakdown by type with VMUs and XEN
           for (var i = 0; i < params.length; i++) {
             var param = params[i];
             if (param.value > 0) {
-              var valueStr = _vmuChartMetric === 'usd' ? formatUSD(param.value) : Number(param.value).toLocaleString();
-              result += param.marker + param.seriesName + ': ' + valueStr + '<br/>';
-              total += param.value;
+              var seriesTypeData = typeData[param.seriesName];
+              var vmus = seriesTypeData ? seriesTypeData.vmus : 0;
+              var xen = seriesTypeData ? seriesTypeData.xen : 0;
+              var xenShort = formatXenShort(xen);
+              
+              totalUsd += param.value;
+              totalVmus += vmus;
+              totalXen += xen;
+              
+              if (_vmuChartMetric === 'usd') {
+                // $value mode: $3,778.92, Xen: x, VMUs: y
+                result += param.marker + '<strong>' + param.seriesName + ':</strong> ' + formatUSD(param.value) + ', Xen: ' + xenShort + ', VMUs: ' + Number(vmus).toLocaleString() + '<br/>';
+              } else {
+                // VMU mode: VMUs: y, Xen: x, $3,778.92
+                var usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? xen * xenUsdPrice : 0;
+                result += param.marker + '<strong>' + param.seriesName + ':</strong> VMUs: ' + Number(vmus).toLocaleString() + ', Xen: ' + xenShort + ', ' + formatUSD(usdValue) + '<br/>';
+              }
             }
           }
           
-          var totalStr = _vmuChartMetric === 'usd' ? formatUSD(total) : Number(total).toLocaleString();
-          result += '<strong>Total: ' + totalStr + '</strong>';
+          // Total line with same format
+          var totalXenShort = formatXenShort(totalXen);
+          if (_vmuChartMetric === 'usd') {
+            // $value mode: Total: $6,690.57, Xen: x, VMUs: y
+            result += '<strong>Total: ' + formatUSD(totalUsd) + ', Xen: ' + totalXenShort + ', VMUs: ' + Number(totalVmus).toLocaleString() + '</strong>';
+          } else {
+            // VMU mode: Total: VMUs: y, Xen: x, $6,690.57
+            var totalUsdFromXen = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? totalXen * xenUsdPrice : 0;
+            result += '<strong>Total: VMUs: ' + Number(totalVmus).toLocaleString() + ', Xen: ' + totalXenShort + ', ' + formatUSD(totalUsdFromXen) + '</strong>';
+          }
           
           return result;
         } catch (e) {
