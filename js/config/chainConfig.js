@@ -45,6 +45,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
       XEN_GENESIS_TIMESTAMP: 1665187200,
       XEN_GENESIS_DATE_MS: Date.UTC(2022, 9, 8, 0, 0, 0, 0),
+      XEN_DEPLOYMENT_BLOCK: 15704871, // XEN deployed at this block on Ethereum
       BASE_AMP: 3000
     },
     databases: {
@@ -107,8 +108,9 @@ export const SUPPORTED_CHAINS = {
     constants: {
       SALT_BYTES_TO_QUERY: '0x01',
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
-      XEN_GENESIS_TIMESTAMP: 1691020800, // Base XEN launch timestamp (needs verification)
-      XEN_GENESIS_DATE_MS: Date.UTC(2023, 7, 3, 0, 0, 0, 0), // Base XEN launch date (needs verification)
+      XEN_GENESIS_TIMESTAMP: 1693031633, // Base XEN launch timestamp (Aug-25-2023 04:13:53 PM UTC)
+      XEN_GENESIS_DATE_MS: Date.UTC(2023, 7, 25, 16, 13, 53, 0), // Base XEN launch date (month is 0-indexed)
+      XEN_DEPLOYMENT_BLOCK: 3095343, // XEN deployed at this block on Base
       BASE_AMP: 3000
     },
     databases: {
@@ -290,6 +292,12 @@ class ChainManager {
       default:
         return `${explorer.baseUrl}`;
     }
+  }
+  
+  // Get XEN deployment block for current chain
+  getXenDeploymentBlock() {
+    const config = this.getCurrentConfig();
+    return config.constants.XEN_DEPLOYMENT_BLOCK || 0;
   }
 
   // Calculate chain-specific XEN values

@@ -4246,19 +4246,23 @@ async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKe
 }
 
 async function findEarliestTxBlock(address, etherscanApiKey) {
+  // Get XEN deployment block as minimum
+  const xenDeploymentBlock = window.chainManager?.getXenDeploymentBlock() || 0;
+  
   const url = es2url(
     `module=account&action=txlist` +
-    `&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${etherscanApiKey}`
+    `&address=${address}&startblock=${xenDeploymentBlock}&endblock=99999999&page=1&offset=1&sort=asc&apikey=${etherscanApiKey}`
   );
   try {
     const res = await fetch(url);
     const data = await res.json();
     if (data?.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
       const b = Number(data.result[0].blockNumber);
-      return Number.isFinite(b) ? b : 0;
+      // Ensure we never return a block before XEN deployment
+      return Number.isFinite(b) ? Math.max(b, xenDeploymentBlock) : xenDeploymentBlock;
     }
   } catch (_) {}
-  return 0;
+  return xenDeploymentBlock;
 }
 
 async function fetchPostMintActions(address, etherscanApiKey) {
@@ -4291,7 +4295,8 @@ async function fetchPostMintActions(address, etherscanApiKey) {
 
   // -------- Resume logic (and "first tx" pre-skip) --------
   const forceRescan = document.getElementById("forceRescan")?.checked;
-  let resumeFrom = 0;
+  const xenDeploymentBlock = window.chainManager?.getXenDeploymentBlock() || 0;
+  let resumeFrom = xenDeploymentBlock; // Start from XEN deployment block as minimum
 
   try {
     if (forceRescan && dbInstance) {
@@ -4299,18 +4304,18 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     } else if (dbInstance) {
       const st = await getScanState(dbInstance, address);
       if (st && Number.isFinite(st.lastScannedBlock)) {
-        resumeFrom = Math.min(latestBlock, Number(st.lastScannedBlock) + 1);
+        resumeFrom = Math.max(xenDeploymentBlock, Math.min(latestBlock, Number(st.lastScannedBlock) + 1));
       }
     }
   } catch (e) {
     console.warn("resume cursor read/clear failed:", e);
   }
 
-  // Pre-skip early empty ranges by finding the address’ first tx once
+  // Pre-skip early empty ranges by finding the address' first tx once
   try {
     const earliest = await findEarliestTxBlock(address, etherscanApiKey);
-    if (earliest && (resumeFrom === 0 || resumeFrom < earliest)) {
-      console.log(`Earliest tx for ${address} at block ${earliest} — skipping earlier empty ranges.`);
+    if (earliest && (resumeFrom === xenDeploymentBlock || resumeFrom < earliest)) {
+      console.log(`Earliest tx for ${address} at block ${earliest} — skipping earlier empty ranges (XEN deployed at ${xenDeploymentBlock}).`);
       resumeFrom = earliest;
     }
   } catch (e) {
