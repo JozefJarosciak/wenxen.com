@@ -755,8 +755,51 @@ if (window.chainManager) {
   try {
     updateChainConfig();
     // Listen for chain changes
-    window.chainManager.onChainChange(() => {
+    window.chainManager.onChainChange((newChain, config) => {
       updateChainConfig();
+      
+      // Update API key UI for the new chain
+      const apiKeyLabel = document.querySelector('label[for="etherscanApiKey"]');
+      if (apiKeyLabel) {
+        apiKeyLabel.textContent = config.explorer.name + ' API Key';
+      }
+      
+      const apiKeyInput = document.getElementById('etherscanApiKey');
+      if (apiKeyInput) {
+        apiKeyInput.placeholder = `Your ${config.explorer.name} API Key`;
+        
+        // Load chain-specific API key
+        const chainApiKey = localStorage.getItem(`${newChain}_explorerApiKey`) || '';
+        apiKeyInput.value = chainApiKey;
+        
+        // Save API key when it changes
+        const saveApiKey = () => {
+          const value = apiKeyInput.value.trim();
+          if (value) {
+            localStorage.setItem(`${newChain}_explorerApiKey`, value);
+          }
+        };
+        
+        // Remove old listeners and add new one
+        apiKeyInput.removeEventListener('change', apiKeyInput._saveHandler);
+        apiKeyInput._saveHandler = saveApiKey;
+        apiKeyInput.addEventListener('change', saveApiKey);
+      }
+      
+      // Update API help link
+      const apiHelp = document.getElementById('etherscanApiHelp');
+      if (apiHelp) {
+        const helpLink = apiHelp.querySelector('a');
+        if (helpLink) {
+          if (newChain === 'BASE') {
+            helpLink.href = 'https://basescan.org/myapikey';
+            helpLink.textContent = 'Get a free BaseScan API key';
+          } else {
+            helpLink.href = 'https://etherscan.io/apidashboard';
+            helpLink.textContent = 'Get a free Etherscan API key';
+          }
+        }
+      }
     });
   } catch (e) {
     console.debug('Will update config when chain manager is ready');
@@ -3759,7 +3802,10 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
     localStorage.setItem("customRPC", customRPC);
   }
   
-  // API key is global across all chains
+  // Save chain-specific API key
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  localStorage.setItem(`${currentChain}_explorerApiKey`, apiKey);
+  // Also save to old format for backward compatibility
   localStorage.setItem("etherscanApiKey", apiKey);
   
   // Check if setup is now complete and hide onboarding modal if it's showing
@@ -3826,7 +3872,15 @@ function loadUserPreferences() {
   document.getElementById("customRPC").value = rpcValue;
   
   // API key is global
-  document.getElementById("etherscanApiKey").value = localStorage.getItem("etherscanApiKey") || "";
+  // Load chain-specific API key
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainApiKey = localStorage.getItem(`${currentChain}_explorerApiKey`);
+  if (chainApiKey) {
+    document.getElementById("etherscanApiKey").value = chainApiKey;
+  } else {
+    // Fallback to old format for backward compatibility
+    document.getElementById("etherscanApiKey").value = localStorage.getItem("etherscanApiKey") || "";
+  }
 }
 
 // --- Show/Hide Toggles for sensitive fields ---
@@ -4753,12 +4807,24 @@ async function scanMints() {
   const addresses = addressInput.split("\n").map(s => s.trim()).filter(Boolean);
   const rpcInput = document.getElementById("customRPC").value.trim();
   rpcEndpoints = rpcInput.split("\n").map(s => s.trim()).filter(Boolean);
-  const etherscanApiKey = document.getElementById("etherscanApiKey").value.trim();
-  if (!etherscanApiKey) {
-    alert("Please enter an Etherscan API Key.");
+  
+  // Get chain-specific API key
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  let etherscanApiKey = document.getElementById("etherscanApiKey").value.trim();
+  
+  // Try to get chain-specific API key from localStorage
+  const chainApiKey = localStorage.getItem(`${currentChain}_explorerApiKey`);
+  if (chainApiKey) {
+    etherscanApiKey = chainApiKey;
+  } else if (!etherscanApiKey) {
+    const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
+    alert(`Please enter a ${explorerName} API Key.`);
     // DELETED: restoreScanBtn();
     return;
   }
+  
+  // Save the API key for the current chain
+  localStorage.setItem(`${currentChain}_explorerApiKey`, etherscanApiKey);
   saveUserPreferences(addressInput, rpcInput, etherscanApiKey);
 
   web3 = new Web3(rpcEndpoints[0]);

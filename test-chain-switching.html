@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chain Switching Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    button {
+      padding: 8px 16px;
+      margin: 5px;
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .chain-indicator {
+      display: inline-block;
+      padding: 5px 10px;
+      background: #2196F3;
+      color: white;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin: 10px 0;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; }
+    .info { color: blue; }
+  </style>
+</head>
+<body>
+  <h1>Chain Switching Behavior Test</h1>
+  
+  <div class="test-section">
+    <h3>Current Chain: <span class="chain-indicator" id="currentChain">Loading...</span></h3>
+    <button onclick="switchToEthereum()">Switch to Ethereum</button>
+    <button onclick="switchToBase()">Switch to Base</button>
+    <button onclick="clearBaseFlag()">Clear Base First-Load Flag</button>
+  </div>
+
+  <div class="test-section">
+    <h3>Addresses (ethAddress field)</h3>
+    <textarea id="addresses" placeholder="Enter addresses, one per line"></textarea>
+    <button onclick="saveAddresses()">Save Addresses</button>
+    <button onclick="loadAddresses()">Load Addresses</button>
+    <div id="addressStatus"></div>
+  </div>
+
+  <div class="test-section">
+    <h3>RPC Endpoints (customRPC field)</h3>
+    <textarea id="rpcs" placeholder="Enter RPC URLs, one per line"></textarea>
+    <button onclick="saveRPCs()">Save RPCs</button>
+    <button onclick="loadRPCs()">Load RPCs</button>
+    <div id="rpcStatus"></div>
+  </div>
+
+  <div class="test-section">
+    <h3>API Key (Global)</h3>
+    <input type="text" id="apiKey" placeholder="Enter API Key" style="width: 300px; padding: 8px;">
+    <button onclick="saveApiKey()">Save API Key</button>
+    <button onclick="loadApiKey()">Load API Key</button>
+    <div id="apiStatus"></div>
+  </div>
+
+  <div class="test-section">
+    <h3>Storage Inspector</h3>
+    <button onclick="inspectStorage()">Inspect All Storage</button>
+    <pre id="storageInspector"></pre>
+  </div>
+
+  <div class="test-section">
+    <h3>Test Scenario</h3>
+    <button onclick="runTestScenario()">Run Full Test Scenario</button>
+    <pre id="testResults"></pre>
+  </div>
+
+  <script type="module">
+    import { chainManager } from './js/config/chainConfig.js';
+    import { chainStorage } from './js/utils/chainStorageUtils.js';
+    
+    window.chainManager = chainManager;
+    window.chainStorage = chainStorage;
+    
+    // Update chain display
+    function updateChainDisplay() {
+      const chain = chainManager.getCurrentChain();
+      document.getElementById('currentChain').textContent = chain;
+    }
+    
+    // Switch to Ethereum
+    window.switchToEthereum = function() {
+      chainManager.setChain('ETHEREUM');
+      updateChainDisplay();
+      loadAddresses();
+      loadRPCs();
+    };
+    
+    // Switch to Base
+    window.switchToBase = function() {
+      chainManager.setChain('BASE');
+      updateChainDisplay();
+      loadAddresses();
+      loadRPCs();
+    };
+    
+    // Clear Base first-load flag
+    window.clearBaseFlag = function() {
+      localStorage.removeItem('BASE_addresses_loaded');
+      alert('Base first-load flag cleared. Next switch to Base will load Ethereum addresses.');
+    };
+    
+    // Save addresses
+    window.saveAddresses = function() {
+      const addresses = document.getElementById('addresses').value;
+      chainStorage.setItem('ethAddress', addresses);
+      document.getElementById('addressStatus').innerHTML = 
+        `<span class="success">✅ Saved for ${chainManager.getCurrentChain()}</span>`;
+    };
+    
+    // Load addresses
+    window.loadAddresses = function() {
+      const currentChain = chainManager.getCurrentChain();
+      let addresses = chainStorage.getItem('ethAddress') || '';
+      
+      // Simulate the Base fallback logic
+      if (!addresses && currentChain === 'BASE') {
+        const baseLoadedKey = 'BASE_addresses_loaded';
+        if (!localStorage.getItem(baseLoadedKey)) {
+          addresses = localStorage.getItem('ETHEREUM_ethAddress') || '';
+          document.getElementById('addressStatus').innerHTML = 
+            `<span class="info">ℹ️ Loaded Ethereum addresses as Base default (first time)</span>`;
+          localStorage.setItem(baseLoadedKey, '1');
+          if (addresses) {
+            chainStorage.setItem('ethAddress', addresses);
+          }
+        } else {
+          document.getElementById('addressStatus').innerHTML = 
+            `<span class="info">ℹ️ No Base addresses saved</span>`;
+        }
+      } else {
+        document.getElementById('addressStatus').innerHTML = 
+          `<span class="success">✅ Loaded ${currentChain} addresses</span>`;
+      }
+      
+      document.getElementById('addresses').value = addresses;
+    };
+    
+    // Save RPCs
+    window.saveRPCs = function() {
+      const rpcs = document.getElementById('rpcs').value.split('\\n').filter(Boolean);
+      chainManager.saveRPCEndpoints(rpcs);
+      document.getElementById('rpcStatus').innerHTML = 
+        `<span class="success">✅ Saved for ${chainManager.getCurrentChain()}</span>`;
+    };
+    
+    // Load RPCs
+    window.loadRPCs = function() {
+      const rpcs = chainManager.getRPCEndpoints();
+      document.getElementById('rpcs').value = rpcs.join('\\n');
+      
+      const currentChain = chainManager.getCurrentChain();
+      if (rpcs.length === 0 && currentChain === 'BASE') {
+        document.getElementById('rpcStatus').innerHTML = 
+          `<span class="info">ℹ️ No RPCs for Base (expected - user must add)</span>`;
+      } else if (rpcs.length > 0 && currentChain === 'ETHEREUM') {
+        document.getElementById('rpcStatus').innerHTML = 
+          `<span class="success">✅ Loaded Ethereum RPCs (includes defaults)</span>`;
+      } else {
+        document.getElementById('rpcStatus').innerHTML = 
+          `<span class="success">✅ Loaded ${currentChain} RPCs</span>`;
+      }
+    };
+    
+    // Save API Key
+    window.saveApiKey = function() {
+      const apiKey = document.getElementById('apiKey').value;
+      localStorage.setItem('etherscanApiKey', apiKey);
+      document.getElementById('apiStatus').innerHTML = 
+        `<span class="success">✅ Saved globally (all chains)</span>`;
+    };
+    
+    // Load API Key
+    window.loadApiKey = function() {
+      const apiKey = localStorage.getItem('etherscanApiKey') || '';
+      document.getElementById('apiKey').value = apiKey;
+      document.getElementById('apiStatus').innerHTML = 
+        `<span class="success">✅ Loaded (same for all chains)</span>`;
+    };
+    
+    // Inspect storage
+    window.inspectStorage = function() {
+      const data = {
+        currentChain: chainManager.getCurrentChain(),
+        localStorage: {},
+        relevantKeys: []
+      };
+      
+      // Get all localStorage keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.includes('ethAddress') || key.includes('customRPC') || 
+            key.includes('etherscanApiKey') || key.includes('BASE_addresses_loaded')) {
+          data.localStorage[key] = localStorage.getItem(key);
+          data.relevantKeys.push(key);
+        }
+      }
+      
+      document.getElementById('storageInspector').textContent = 
+        JSON.stringify(data, null, 2);
+    };
+    
+    // Run test scenario
+    window.runTestScenario = async function() {
+      const results = [];
+      
+      results.push('Starting Test Scenario...');
+      
+      // 1. Clear everything
+      localStorage.clear();
+      results.push('1. Cleared all localStorage');
+      
+      // 2. Set up Ethereum data
+      chainManager.setChain('ETHEREUM');
+      chainStorage.setItem('ethAddress', '0x1111...ethereum\\n0x2222...ethereum');
+      chainManager.saveRPCEndpoints(['https://eth.rpc1.com', 'https://eth.rpc2.com']);
+      localStorage.setItem('etherscanApiKey', 'TEST_API_KEY_123');
+      results.push('2. Set up Ethereum: addresses, RPCs, and API key');
+      
+      // 3. Switch to Base (first time)
+      chainManager.setChain('BASE');
+      const baseAddresses = chainStorage.getItem('ethAddress');
+      const baseRPCs = chainManager.getRPCEndpoints();
+      results.push(`3. Switched to Base (first time):`);
+      results.push(`   - Addresses: ${baseAddresses ? 'Loaded from Ethereum ✅' : 'Empty ❌'}`);
+      results.push(`   - RPCs: ${baseRPCs.length === 0 ? 'Empty (correct) ✅' : 'Has values (wrong) ❌'}`);
+      
+      // 4. Save Base-specific data
+      chainStorage.setItem('ethAddress', '0x3333...base\\n0x4444...base');
+      chainManager.saveRPCEndpoints(['https://base.rpc1.com']);
+      results.push('4. Saved Base-specific addresses and RPCs');
+      
+      // 5. Switch back to Ethereum
+      chainManager.setChain('ETHEREUM');
+      const ethAddresses2 = chainStorage.getItem('ethAddress');
+      const ethRPCs2 = chainManager.getRPCEndpoints();
+      results.push(`5. Switched back to Ethereum:`);
+      results.push(`   - Addresses: ${ethAddresses2.includes('ethereum') ? 'Correct ✅' : 'Wrong ❌'}`);
+      results.push(`   - RPCs: ${ethRPCs2.length > 0 ? 'Has defaults ✅' : 'Empty ❌'}`);
+      
+      // 6. Check API key (should be same everywhere)
+      const apiKey1 = localStorage.getItem('etherscanApiKey');
+      chainManager.setChain('BASE');
+      const apiKey2 = localStorage.getItem('etherscanApiKey');
+      results.push(`6. API Key check:`);
+      results.push(`   - Same on both chains: ${apiKey1 === apiKey2 ? 'Yes ✅' : 'No ❌'}`);
+      
+      document.getElementById('testResults').textContent = results.join('\\n');
+    };
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      updateChainDisplay();
+      loadAddresses();
+      loadRPCs();
+      loadApiKey();
+    });
+    
+    // Listen for chain changes
+    chainManager.onChainChange(() => {
+      updateChainDisplay();
+      loadAddresses();
+      loadRPCs();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Chain Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .test-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .test-result {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 3px;
+      margin: 5px 0;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    button {
+      padding: 8px 16px;
+      margin: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Multi-Chain Configuration Test</h1>
+  
+  <div class="test-section">
+    <div class="test-title">Chain Manager Status</div>
+    <div id="chainStatus" class="test-result">Loading...</div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-title">Current Chain Configuration</div>
+    <div id="currentConfig" class="test-result">Loading...</div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-title">Chain Switching Test</div>
+    <button onclick="switchToEthereum()">Switch to Ethereum</button>
+    <button onclick="switchToBase()">Switch to Base</button>
+    <div id="switchResult" class="test-result">Ready to test chain switching</div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-title">Database Test</div>
+    <button onclick="testDatabase()">Test Database Names</button>
+    <div id="dbResult" class="test-result">Click to test database names</div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-title">Storage Test</div>
+    <button onclick="testStorage()">Test Chain Storage</button>
+    <div id="storageResult" class="test-result">Click to test storage</div>
+  </div>
+
+  <div class="test-section">
+    <div class="test-title">RPC Configuration</div>
+    <button onclick="testRPC()">Test RPC Endpoints</button>
+    <div id="rpcResult" class="test-result">Click to test RPC configuration</div>
+  </div>
+
+  <script type="module">
+    import { chainManager, SUPPORTED_CHAINS } from './js/config/chainConfig.js';
+    import { chainStorage } from './js/utils/chainStorageUtils.js';
+    
+    window.chainManager = chainManager;
+    window.chainStorage = chainStorage;
+    window.SUPPORTED_CHAINS = SUPPORTED_CHAINS;
+    
+    // Display chain status
+    function updateChainStatus() {
+      const statusEl = document.getElementById('chainStatus');
+      const currentChain = chainManager.getCurrentChain();
+      const chains = chainManager.getChainList();
+      
+      statusEl.className = 'test-result success';
+      statusEl.textContent = `Current Chain: ${currentChain}\nAvailable Chains: ${chains.map(c => c.name).join(', ')}`;
+    }
+    
+    // Display current configuration
+    function updateCurrentConfig() {
+      const configEl = document.getElementById('currentConfig');
+      const config = chainManager.getCurrentConfig();
+      
+      configEl.className = 'test-result';
+      configEl.textContent = JSON.stringify({
+        name: config.name,
+        id: config.id,
+        contracts: config.contracts,
+        explorer: config.explorer.name,
+        databases: config.databases
+      }, null, 2);
+    }
+    
+    // Test chain switching
+    window.switchToEthereum = function() {
+      const resultEl = document.getElementById('switchResult');
+      try {
+        chainManager.setChain('ETHEREUM');
+        resultEl.className = 'test-result success';
+        resultEl.textContent = 'Successfully switched to Ethereum';
+        updateChainStatus();
+        updateCurrentConfig();
+      } catch (error) {
+        resultEl.className = 'test-result error';
+        resultEl.textContent = `Error: ${error.message}`;
+      }
+    };
+    
+    window.switchToBase = function() {
+      const resultEl = document.getElementById('switchResult');
+      try {
+        chainManager.setChain('BASE');
+        resultEl.className = 'test-result success';
+        resultEl.textContent = 'Successfully switched to Base';
+        updateChainStatus();
+        updateCurrentConfig();
+      } catch (error) {
+        resultEl.className = 'test-result error';
+        resultEl.textContent = `Error: ${error.message}`;
+      }
+    };
+    
+    // Test database names
+    window.testDatabase = function() {
+      const resultEl = document.getElementById('dbResult');
+      const currentChain = chainManager.getCurrentChain();
+      
+      const dbNames = {
+        cointool: chainManager.getDatabaseName('cointool'),
+        xenft: chainManager.getDatabaseName('xenft'),
+        xen_stake: chainManager.getDatabaseName('xen_stake'),
+        xenft_stake: chainManager.getDatabaseName('xenft_stake')
+      };
+      
+      resultEl.className = 'test-result success';
+      resultEl.textContent = `Database names for ${currentChain}:\n${JSON.stringify(dbNames, null, 2)}`;
+    };
+    
+    // Test storage
+    window.testStorage = function() {
+      const resultEl = document.getElementById('storageResult');
+      const testKey = 'testValue';
+      const testValue = `Test data for ${chainManager.getCurrentChain()} at ${new Date().toISOString()}`;
+      
+      try {
+        // Save chain-specific data
+        chainStorage.setItem(testKey, testValue);
+        
+        // Read it back
+        const retrieved = chainStorage.getItem(testKey);
+        
+        // Get all chain keys
+        const allKeys = chainStorage.getChainKeys();
+        
+        resultEl.className = 'test-result success';
+        resultEl.textContent = `Storage test successful!\nSaved: ${testValue}\nRetrieved: ${retrieved}\nAll chain keys: ${allKeys.join(', ')}`;
+      } catch (error) {
+        resultEl.className = 'test-result error';
+        resultEl.textContent = `Error: ${error.message}`;
+      }
+    };
+    
+    // Test RPC configuration
+    window.testRPC = function() {
+      const resultEl = document.getElementById('rpcResult');
+      const currentChain = chainManager.getCurrentChain();
+      const rpcEndpoints = chainManager.getRPCEndpoints();
+      
+      resultEl.className = 'test-result success';
+      resultEl.textContent = `RPC endpoints for ${currentChain}:\n${rpcEndpoints.join('\n')}`;
+    };
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateChainStatus();
+      updateCurrentConfig();
+      
+      // Listen for chain changes
+      chainManager.onChainChange((newChain, config, oldChain) => {
+        console.log(`Chain changed from ${oldChain} to ${newChain}`);
+        updateChainStatus();
+        updateCurrentConfig();
+      });
+    });
+  </script>
+</body>
+</html>

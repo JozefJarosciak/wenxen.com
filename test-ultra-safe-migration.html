@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Safe Database Migration Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #495057;
+            font-size: 18px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        button.danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        button.success {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        button.warning {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            background: #e8f4f8;
+            border-left: 4px solid #0066cc;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status.error {
+            background: #fee;
+            border-left-color: #f44;
+        }
+        .status.success {
+            background: #efe;
+            border-left-color: #4a4;
+        }
+        .status.warning {
+            background: #ffeaa7;
+            border-left-color: #fdcb6e;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 3px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .info-card {
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        .info-card h3 {
+            margin: 0 0 10px 0;
+            color: #667eea;
+            font-size: 14px;
+        }
+        .info-card p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #666;
+        }
+        .backup-list {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .backup-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .backup-item button {
+            padding: 4px 8px;
+            font-size: 11px;
+            margin: 0;
+        }
+        #progressBar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 15px;
+            display: none;
+        }
+        #progressBar .progress {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #43e97b;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Ultra-Safe Database Migration Tool</h1>
+        <p class="subtitle">Version 6.0 - Complete data protection with backup, validation, and rollback</p>
+        
+        <div class="section">
+            <h2>🎯 Safety Features</h2>
+            <ul class="feature-list">
+                <li>Complete backup of all databases before migration</li>
+                <li>Data validation at every step</li>
+                <li>Automatic rollback on failure</li>
+                <li>No deletion until verification complete</li>
+                <li>Progress tracking and detailed logging</li>
+                <li>Support for interrupted migrations</li>
+                <li>Maintains last 3 backups automatically</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>📊 Current Status</h2>
+            <div class="info-grid" id="statusGrid">
+                <!-- Status cards will be populated here -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Migration Controls</h2>
+            
+            <button onclick="checkDatabases()" class="success">
+                🔍 Check All Databases
+            </button>
+            
+            <button onclick="performMigration()" id="migrateBtn">
+                🚀 Start Safe Migration
+            </button>
+            
+            <button onclick="getMigrationStatus()" class="warning">
+                📊 Get Migration Status
+            </button>
+            
+            <button onclick="createTestData()" class="warning">
+                🧪 Create Test Data
+            </button>
+            
+            <button onclick="validateAllDatabases()" class="success">
+                ✅ Validate All Databases
+            </button>
+            
+            <div id="progressBar">
+                <div class="progress"></div>
+            </div>
+            
+            <div id="status" class="status"></div>
+        </div>
+
+        <div class="section">
+            <h2>💾 Backup Management</h2>
+            <button onclick="listBackups()" class="success">
+                📋 List Backups
+            </button>
+            
+            <button onclick="createManualBackup()" class="warning">
+                💾 Create Manual Backup
+            </button>
+            
+            <div id="backupList" class="backup-list"></div>
+        </div>
+
+        <div class="section">
+            <h2>⚠️ Danger Zone</h2>
+            <button onclick="resetMigration()" class="danger">
+                🔄 Reset Migration Flag
+            </button>
+            
+            <button onclick="clearAllDatabases()" class="danger">
+                🗑️ Clear All Databases
+            </button>
+            
+            <button onclick="restoreFromLatestBackup()" class="warning">
+                🔙 Restore From Latest Backup
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import ultraSafeMigrator from './js/utils/databaseMigrationUltraSafe.js';
+        
+        // Make functions globally available
+        window.ultraSafeMigrator = ultraSafeMigrator;
+        
+        function log(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            statusDiv.appendChild(entry);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+            
+            // Update status class
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function updateProgress(percent) {
+            const progressBar = document.getElementById('progressBar');
+            const progress = progressBar.querySelector('.progress');
+            progressBar.style.display = 'block';
+            progress.style.width = percent + '%';
+        }
+        
+        async function updateStatusGrid() {
+            const grid = document.getElementById('statusGrid');
+            const status = ultraSafeMigrator.getMigrationStatus();
+            
+            grid.innerHTML = `
+                <div class="info-card">
+                    <h3>Migration Status</h3>
+                    <p><strong>Completed:</strong> ${status.completed ? '✅ Yes' : '❌ No'}</p>
+                    <p><strong>Version:</strong> ${status.version}</p>
+                </div>
+                <div class="info-card">
+                    <h3>Last Migration</h3>
+                    <p>${status.lastMigration !== 'never' ? new Date(status.lastMigration).toLocaleString() : 'Never'}</p>
+                </div>
+                <div class="info-card">
+                    <h3>Backups Available</h3>
+                    <p><strong>Count:</strong> ${status.backups.length}</p>
+                    <p><strong>Latest:</strong> ${status.backups[0] ? new Date(status.backups[0].timestamp).toLocaleString() : 'None'}</p>
+                </div>
+                <div class="info-card">
+                    <h3>System Ready</h3>
+                    <p>${!ultraSafeMigrator.migrating ? '✅ Ready' : '⏳ Migration in progress'}</p>
+                </div>
+            `;
+        }
+        
+        window.checkDatabases = async function() {
+            log('Checking all databases...');
+            try {
+                const databases = await ultraSafeMigrator.getAllExistingDatabases();
+                log(`Found ${databases.length} databases:`, 'success');
+                
+                for (const dbName of databases) {
+                    const db = await ultraSafeMigrator.openDatabase(dbName);
+                    if (db) {
+                        const stores = Array.from(db.objectStoreNames);
+                        log(`  📁 ${dbName} (v${db.version}): ${stores.join(', ')}`);
+                        
+                        // Count records in each store
+                        for (const storeName of stores) {
+                            const count = await ultraSafeMigrator.getStoreCount(db, storeName);
+                            if (count > 0) {
+                                log(`      └─ ${storeName}: ${count} records`);
+                            }
+                        }
+                        
+                        db.close();
+                    }
+                }
+                
+                updateStatusGrid();
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+        };
+        
+        window.performMigration = async function() {
+            const btn = document.getElementById('migrateBtn');
+            btn.disabled = true;
+            
+            log('Starting ultra-safe migration...', 'info');
+            updateProgress(10);
+            
+            try {
+                // Simulate progress updates
+                const progressInterval = setInterval(() => {
+                    const currentWidth = parseFloat(document.querySelector('#progressBar .progress').style.width);
+                    if (currentWidth < 90) {
+                        updateProgress(currentWidth + 5);
+                    }
+                }, 500);
+                
+                const result = await ultraSafeMigrator.migrate();
+                
+                clearInterval(progressInterval);
+                updateProgress(100);
+                
+                if (result.success) {
+                    log('Migration completed successfully!', 'success');
+                    
+                    if (result.results) {
+                        for (const message of result.results) {
+                            log(message, message.includes('✅') ? 'success' : message.includes('❌') ? 'error' : 'info');
+                        }
+                    }
+                    
+                    if (result.backupKey) {
+                        log(`Backup saved: ${result.backupKey}`, 'success');
+                    }
+                } else {
+                    log('Migration failed!', 'error');
+                    
+                    if (result.error) {
+                        log(`Error: ${result.error}`, 'error');
+                    }
+                    
+                    if (result.results) {
+                        for (const message of result.results) {
+                            log(message, message.includes('✅') ? 'success' : message.includes('❌') ? 'error' : 'warning');
+                        }
+                    }
+                }
+                
+                updateStatusGrid();
+                
+            } catch (error) {
+                log(`Fatal error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => {
+                    document.getElementById('progressBar').style.display = 'none';
+                }, 2000);
+            }
+        };
+        
+        window.getMigrationStatus = function() {
+            const status = ultraSafeMigrator.getMigrationStatus();
+            log('Migration Status:', 'info');
+            log(`  Completed: ${status.completed}`, status.completed ? 'success' : 'warning');
+            log(`  Version: ${status.version}`);
+            log(`  Last Migration: ${status.lastMigration}`);
+            log(`  Backups: ${status.backups.length} available`);
+            
+            updateStatusGrid();
+        };
+        
+        window.validateAllDatabases = async function() {
+            log('Validating all databases...');
+            try {
+                const result = await ultraSafeMigrator.validateAllDatabases();
+                
+                if (result.valid) {
+                    log('All databases valid!', 'success');
+                } else {
+                    log('Validation issues found:', 'warning');
+                    for (const warning of result.warnings) {
+                        log(`  ⚠️ ${warning}`, 'warning');
+                    }
+                }
+            } catch (error) {
+                log(`Validation error: ${error.message}`, 'error');
+            }
+        };
+        
+        window.createTestData = async function() {
+            log('Creating test data in legacy database...');
+            try {
+                // Create a legacy database with test data
+                const request = indexedDB.open('DB_Cointool', 3);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    
+                    if (!db.objectStoreNames.contains('mints')) {
+                        const store = db.createObjectStore('mints', { keyPath: 'ID' });
+                        store.createIndex('by_address', 'Address', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains('scanState')) {
+                        db.createObjectStore('scanState', { keyPath: 'address' });
+                    }
+                    if (!db.objectStoreNames.contains('actionsCache')) {
+                        db.createObjectStore('actionsCache', { keyPath: 'address' });
+                    }
+                };
+                
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    
+                    // Add test data
+                    const transaction = db.transaction(['mints'], 'readwrite');
+                    const store = transaction.objectStore('mints');
+                    
+                    for (let i = 1; i <= 5; i++) {
+                        store.put({
+                            ID: `test_${i}`,
+                            Address: `0x${i.toString().padStart(40, '0')}`,
+                            Maturity: Date.now() + (i * 86400000),
+                            TestData: `Test mint ${i}`
+                        });
+                    }
+                    
+                    transaction.oncomplete = () => {
+                        log('Test data created in DB_Cointool', 'success');
+                        db.close();
+                    };
+                };
+                
+            } catch (error) {
+                log(`Error creating test data: ${error.message}`, 'error');
+            }
+        };
+        
+        window.listBackups = function() {
+            const status = ultraSafeMigrator.getMigrationStatus();
+            const backupList = document.getElementById('backupList');
+            
+            if (status.backups.length === 0) {
+                backupList.innerHTML = '<p>No backups available</p>';
+                return;
+            }
+            
+            backupList.innerHTML = '<h4>Available Backups:</h4>';
+            
+            for (const backup of status.backups) {
+                const item = document.createElement('div');
+                item.className = 'backup-item';
+                item.innerHTML = `
+                    <span>${new Date(backup.timestamp).toLocaleString()}</span>
+                    <button onclick="restoreBackup('${backup.key}')" class="warning">Restore</button>
+                `;
+                backupList.appendChild(item);
+            }
+        };
+        
+        window.restoreBackup = async function(backupKey) {
+            if (!confirm(`Are you sure you want to restore from backup ${backupKey}? This will overwrite current data.`)) {
+                return;
+            }
+            
+            log(`Restoring from backup: ${backupKey}...`);
+            try {
+                const success = await ultraSafeMigrator.restoreFromBackup(backupKey);
+                if (success) {
+                    log('Backup restored successfully!', 'success');
+                } else {
+                    log('Backup restoration failed!', 'error');
+                }
+                updateStatusGrid();
+            } catch (error) {
+                log(`Restore error: ${error.message}`, 'error');
+            }
+        };
+        
+        window.createManualBackup = async function() {
+            log('Creating manual backup...');
+            try {
+                const backupKey = await ultraSafeMigrator.exportAllDatabasesToJSON();
+                log(`Manual backup created: ${backupKey}`, 'success');
+                listBackups();
+            } catch (error) {
+                log(`Backup error: ${error.message}`, 'error');
+            }
+        };
+        
+        window.restoreFromLatestBackup = async function() {
+            const status = ultraSafeMigrator.getMigrationStatus();
+            if (status.backups.length === 0) {
+                log('No backups available', 'error');
+                return;
+            }
+            
+            const latestBackup = status.backups[0];
+            await restoreBackup(latestBackup.key);
+        };
+        
+        window.resetMigration = function() {
+            if (confirm('Reset migration flag? This will allow migration to run again.')) {
+                localStorage.removeItem('dbMigrationCompleted');
+                localStorage.removeItem('lastSuccessfulMigration');
+                log('Migration flag reset', 'warning');
+                updateStatusGrid();
+            }
+        };
+        
+        window.clearAllDatabases = async function() {
+            if (!confirm('WARNING: This will delete ALL databases! Are you sure?')) {
+                return;
+            }
+            
+            if (!confirm('This action cannot be undone! Please confirm again.')) {
+                return;
+            }
+            
+            log('Clearing all databases...', 'warning');
+            try {
+                const databases = await ultraSafeMigrator.getAllExistingDatabases();
+                
+                for (const dbName of databases) {
+                    await ultraSafeMigrator.deleteDatabase(dbName);
+                    log(`Deleted: ${dbName}`);
+                }
+                
+                log('All databases cleared', 'success');
+                updateStatusGrid();
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+        };
+        
+        // Initialize on load
+        updateStatusGrid();
+        log('Ultra-Safe Migration Tool ready', 'success');
+    </script>
+</body>
+</html>
