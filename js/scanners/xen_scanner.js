@@ -12,8 +12,8 @@
   const MIN_CONTRACT_BLOCK = 15700000;
   const SCAN_BACKTRACK_BLOCKS = 1000;
 
-  // Throttle (5 req/sec - Etherscan limit)
-  const RATE_PER_SEC = 5;
+  // Throttle (more conservative - 3 req/sec to avoid rate limits)
+  const RATE_PER_SEC = 3;
   const MIN_INTERVAL_MS = Math.ceil(1000 / RATE_PER_SEC);
   let __lastCallAt = 0;
   async function throttle() {
@@ -80,9 +80,9 @@
       if (data.status==="1" && Array.isArray(data.result)) { sink.push(...data.result); return; }
       const msg=`${data.message||""} ${data.result||""}`;
       if (/Max calls per sec rate limit reached/i.test(msg)) {
-        // Progressive backoff for rate limits
-        const backoff=Math.min(5000, 1000 * (attempt + 1));
-        console.warn(`Rate limit hit. Waiting ${backoff}ms before retry...`);
+        // Progressive backoff for rate limits - start with longer wait
+        const backoff=Math.min(10000, 2000 + (1500 * attempt));
+        console.warn(`Rate limit hit. Waiting ${backoff}ms before retry (attempt ${attempt})...`);
         await new Promise(r=>setTimeout(r, backoff));
         return fetchLogsSplit(apiKey, params, sink, depth, attempt+1);
       }
@@ -160,7 +160,13 @@
             const topic1=padTopicAddress(addr);
             const sinkStake=[], sinkWd=[];
 
+            // Fetch stake events first
             await fetchLogsSplit(apiKey, {fromBlock:String(startBlock), toBlock:String(endBlock), address:CONTRACT_ADDRESS, topic0:topicStake, topic1:topic1}, sinkStake);
+            
+            // Small delay between different event types to avoid rate limits
+            await new Promise(r => setTimeout(r, 100));
+            
+            // Then fetch withdraw events
             await fetchLogsSplit(apiKey, {fromBlock:String(startBlock), toBlock:String(endBlock), address:CONTRACT_ADDRESS, topic0:topicWithdraw, topic1:topic1}, sinkWd);
 
             const items=[]; for(const ev of sinkStake) items.push({kind:"stake", ev}); for(const ev of sinkWd) items.push({kind:"withdraw", ev});
