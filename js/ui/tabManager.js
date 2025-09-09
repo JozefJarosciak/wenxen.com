@@ -62,6 +62,19 @@ export const tabManager = {
       console.warn('Failed to check privacy consent:', error);
     }
 
+    // Check onboarding for Settings tab  
+    if (tabId === 'tab-settings') {
+      try {
+        if (typeof window.shouldShowOnboarding === 'function' && 
+            typeof window.showOnboardingModal === 'function' &&
+            window.shouldShowOnboarding()) {
+          window.showOnboardingModal();
+        }
+      } catch (error) {
+        console.warn('Failed to check onboarding:', error);
+      }
+    }
+
     // About tab loading
     if (tabId === 'tab-about') {
       try {

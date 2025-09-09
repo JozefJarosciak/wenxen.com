@@ -1,4 +1,6 @@
 // IndexedDB utilities - shared database operations
+import { chainManager } from '../config/chainConfig.js';
+
 export const indexedDbUtils = {
   // Open database with upgrade handling
   async openDatabase(dbName, version, upgradeHandler) {
@@ -269,14 +271,52 @@ export const indexedDbUtils = {
 
 // Specialized database classes
 export class DatabaseManager {
-  constructor(dbName, version, stores) {
-    this.dbName = dbName;
+  constructor(dbName, version, stores, useChainPrefix = true) {
+    // If useChainPrefix is true, prepend chain name to database
+    this.baseDbName = dbName;
+    this.useChainPrefix = useChainPrefix;
+    this.dbName = useChainPrefix ? this.getChainSpecificDbName(dbName) : dbName;
     this.version = version;
     this.stores = stores;
     this.db = null;
+    
+    // Listen for chain changes
+    if (useChainPrefix) {
+      chainManager.onChainChange(() => {
+        this.handleChainChange();
+      });
+    }
+  }
+  
+  getChainSpecificDbName(baseName) {
+    const chain = chainManager.getCurrentChain();
+    return `${chain}_${baseName}`;
+  }
+  
+  handleChainChange() {
+    // Close current database
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+    
+    // Update database name for new chain
+    this.dbName = this.getChainSpecificDbName(this.baseDbName);
   }
 
   async open() {
+    // If chain changed, ensure we're using the correct database name
+    if (this.useChainPrefix) {
+      const expectedDbName = this.getChainSpecificDbName(this.baseDbName);
+      if (this.dbName !== expectedDbName) {
+        if (this.db) {
+          this.db.close();
+          this.db = null;
+        }
+        this.dbName = expectedDbName;
+      }
+    }
+    
     if (this.db) return this.db;
     
     this.db = await indexedDbUtils.openDatabase(

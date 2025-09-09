@@ -137,21 +137,29 @@ function updateStakeSummaryLine(){
     try {
       const force = !!document.getElementById('forceRescan')?.checked;
       if (force) {
+        // Get chain-specific database names
+        const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+        const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+        
         const dbIds = (
-          mode === 'all' ? ['DB_Cointool','DB_Xenft','DB-Xenft-Stake','DB-Xen-Stake'] :
-          mode === 'cointool' ? ['DB_Cointool'] :
-          mode === 'xenft' ? ['DB_Xenft'] :
-          mode === 'stake-xenft' ? ['DB-Xenft-Stake'] :
-          mode === 'stake' ? ['DB-Xen-Stake'] :
-          ['DB_Cointool']
+          mode === 'all' ? [`${chainPrefix}_DB_Cointool`,`${chainPrefix}_DB_Xenft`,`${chainPrefix}_DB-Xenft-Stake`,`${chainPrefix}_DB-Xen-Stake`] :
+          mode === 'cointool' ? [`${chainPrefix}_DB_Cointool`] :
+          mode === 'xenft' ? [`${chainPrefix}_DB_Xenft`] :
+          mode === 'stake-xenft' ? [`${chainPrefix}_DB-Xenft-Stake`] :
+          mode === 'stake' ? [`${chainPrefix}_DB-Xen-Stake`] :
+          [`${chainPrefix}_DB_Cointool`]
         );
 
-        const friendly = (id) => (
-          id === 'DB_Cointool' ? 'Cointool (mints)' :
-          id === 'DB_Xenft' ? 'XENFT (NFT scans)' :
-          id === 'DB-Xenft-Stake' ? 'XENFT Stake (stakes)' :
-          id === 'DB-Xen-Stake' ? 'XEN Stake (regular)' : id
-        );
+        const friendly = (id) => {
+          // Remove chain prefix for display
+          const baseId = id.replace(/^(ETH_|BASE_)/, '');
+          return (
+            baseId === 'DB_Cointool' ? 'Cointool (mints)' :
+            baseId === 'DB_Xenft' ? 'XENFT (NFT scans)' :
+            baseId === 'DB-Xenft-Stake' ? 'XENFT Stake (stakes)' :
+            baseId === 'DB-Xen-Stake' ? 'XEN Stake (regular)' : baseId
+          );
+        };
 
         const title = dbIds.length > 1
           ? `Force rescan will delete ALL saved data for: ${dbIds.map(friendly).join(', ')}.\n\nContinue?`
@@ -167,7 +175,10 @@ function updateStakeSummaryLine(){
 
         // Run clears in parallel for speed (no DB deletion to avoid blocking)
         const tasks = dbIds.map((id) => {
-          if (id === 'DB_Cointool') {
+          // Extract base database type from chain-specific ID
+          const baseId = id.replace(/^(ETH_|BASE_)/, '');
+          
+          if (baseId === 'DB_Cointool') {
             return (typeof openDB === 'function' ? openDB() : Promise.resolve(null)).then(async (db) => {
               if (!db) return; await Promise.all([
                 clearStore(db, 'mints').catch(()=>{}),
@@ -176,12 +187,12 @@ function updateStakeSummaryLine(){
               ]);
             });
           }
-          if (id === 'DB_Xenft') {
+          if (baseId === 'DB_Xenft') {
             return (window.xenft?.openDB ? window.xenft.openDB() : Promise.resolve(null)).then(async (db) => {
               if (!db) return; await clearStore(db, 'xenfts').catch(()=>{});
             });
           }
-          if (id === 'DB-Xenft-Stake') {
+          if (baseId === 'DB-Xenft-Stake') {
             return (window.xenftStake?.openDB ? window.xenftStake.openDB() : Promise.resolve(null)).then(async (db) => {
               if (!db) return; await Promise.all([
                 clearStore(db, 'stakes').catch(()=>{}),
@@ -189,7 +200,7 @@ function updateStakeSummaryLine(){
               ]);
             });
           }
-          if (id === 'DB-Xen-Stake') {
+          if (baseId === 'DB-Xen-Stake') {
             return (window.xenStake?.openDB ? window.xenStake.openDB() : Promise.resolve(null)).then(async (db) => {
               if (!db) return; await Promise.all([
                 clearStore(db, 'stakes').catch(()=>{}),

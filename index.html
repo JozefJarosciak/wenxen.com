@@ -60,7 +60,31 @@
         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
       </svg>
     </button>
-    <span id="networkName"></span>
+    <!-- Network Selector -->
+    <div class="network-selector" id="networkSelector">
+      <button id="networkSelectorBtn" class="network-selector-btn" aria-haspopup="true" aria-expanded="false">
+        <span class="network-icon" id="networkIcon">⟠</span>
+        <span class="network-name" id="networkDisplayName">Ethereum</span>
+        <svg class="network-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div id="networkDropdown" class="network-dropdown" hidden>
+        <div class="network-dropdown-header">Select Network</div>
+        <button class="network-option" data-chain="ETHEREUM">
+          <span class="network-option-icon">⟠</span>
+          <span class="network-option-name">Ethereum</span>
+          <span class="network-option-check" data-chain="ETHEREUM">✓</span>
+        </button>
+        <button class="network-option" data-chain="BASE">
+          <span class="network-option-icon">🔵</span>
+          <span class="network-option-name">Base</span>
+          <span class="network-option-check" data-chain="BASE" style="display: none;">✓</span>
+        </button>
+      </div>
+    </div>
+    <!-- Network badge shows wallet's actual network -->
+    <span id="networkName" style="display: none;"></span>
     <button id="connectWalletBtn"><span id="connectWalletText">Connect Wallet</span></button>
     <button id="toggleConnectMask" class="wallet-reveal-btn" aria-label="Mask wallet text" title="Mask">
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2.1 3.51L3.51 2.1l18.39 18.39-1.41 1.41-3.06-3.06A11.33 11.33 0 0112 20c-6 0-10-5.33-10-8 0-1.13 1.02-3.08 3.06-4.89L2.1 3.51zM7.5 8.91A7.6 7.6 0 004 12c0 1.2 3 6 8 6 1.63 0 3.09-.42 4.35-1.13l-1.8-1.8A4 4 0 018 12c0-.43.07-.85.2-1.24l-.7-.7zM12 6c6 0 10 5.33 10 8 0 .84-.48 2-1.42 3.22l-1.43-1.43c.51-.77.85-1.48.85-1.79 0-1.2-3-6-8-6-1.03 0-2 .2-2.89.56l-1.5-1.5C9.11 6.39 10.51 6 12 6zm0 4a2 2 0 011.73 3l-2.73-2.73c.29-.17.62-.27 1-.27z"/></svg>
@@ -100,7 +124,7 @@
 <h1 class="site-title">
   <span class="brand">WenXen.com</span>
   <sup class="brand-suffix">
-    <span class="brand-suffix-text">for Ethereum</span>
+    <span class="brand-suffix-text">Ethereum</span>
     <span id="headerGasNow" class="gas-sup" title="Current gas (gwei)"></span>
   </sup>
 </h1>
@@ -390,14 +414,14 @@
           <small class="error-message">Etherscan API key is required.</small>
           <div id="etherscanApiHelp" class="settings-status" style="display:none;">No key? <a href="https://etherscan.io/apidashboard" target="_blank" rel="noopener noreferrer">Get a free Etherscan API key</a> (5 req/s, up to 100,000 calls/day).</div>
         </div>
-        <div class="field required" id="field-customRPC">
-          <label for="customRPC">Custom ETH RPCs (one per line)</label>
-          <textarea id="customRPC" rows="4" required></textarea>
+        <div class="field" id="field-customRPC">
+          <label for="customRPC">Custom ETH RPCs (one per line, optional)</label>
+          <textarea id="customRPC" rows="4" placeholder="Leave empty to use default RPCs"></textarea>
           <div class="button-row" style="margin-top:6px;">
             <button id="importRpcBtn" type="button">Find Active RPCs (by latency)</button>
           </div>
           <div id="importRpcStatus" class="settings-status" aria-live="polite"></div>
-          <small class="error-message">Enter at least one RPC endpoint.</small>
+          <small class="error-message">Invalid RPC format. URLs must start with http or https.</small>
         </div>
       </div>
 
@@ -470,15 +494,12 @@
       <!-- Danger Zone -->
       <div class="settings-card danger">
         <h3>Danger Zone</h3>
-        <p class="settings-note">Deletes local app data (except settings).</p><br>
+        <p class="settings-note">Deletes local app data or local settings.</p><br>
         <div style="margin-top:4px; margin-bottom:8px;">
           <label for="resetDbSelect" class="settings-note" style="display:block; margin-bottom:6px;">Delete target</label>
           <select id="resetDbSelect" aria-label="Select which database(s) to delete" style="width:100%;">
-            <option value="all">All data</option>
-            <option value="DB_Cointool">Cointool (mints)</option>
-            <option value="DB_Xenft">XENFT (NFT scans)</option>
-            <option value="DB-Xenft-Stake">XENFT Stake (stakes)</option>
-            <option value="DB-Xen-Stake">XEN Stake (regular)</option>
+            <!-- Options will be dynamically populated based on current chain -->
+            <option value="all-with-storage">Loading...</option>
           </select>
           <small class="settings-note" style="display:block; margin-top:6px;">This action is permanent for the selected item.</small>
         </div>
@@ -549,11 +570,12 @@
 <!-- Onboarding Modal -->
 <div id="onboardingModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="onboardingTitle">
   <div class="modal-content onboarding-content">
+    <button id="onboardingCloseBtn" class="modal-close-btn" aria-label="Close" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 5px; line-height: 1;">×</button>
     <h3 id="onboardingTitle" style="margin:0 0 8px 0;">Welcome to WenXen.com!</h3>
     <div class="modal-body">
       <p>Tired of logging every XEN mint by hand? 🥱</p>
 
-      <p>💡Just add your Ethereum address and a free Etherscan API key & we auto-discover all your mints (past & future). No more guesswork or forgotten entries.</p>
+      <p>💡Just add your address and a free Etherscan API key & we auto-discover all your mints (past & future). No more guesswork or forgotten entries.</p>
       <p>🔒100% browser-based & open-source (download and use it locally or run it from wenxen.com). Your data always stays on your device, no 3rd-party storage, no nonsense!</p>
     
       <div class="onboarding-steps">
@@ -662,14 +684,88 @@
 <!-- Google Analytics -->
 <script src="./js/analytics.js?v=20250908173121"></script>
 
+<!-- Chain configuration and network selector -->
+<script type="module">
+  import { chainManager } from './js/config/chainConfig.js';
+  import { networkSelector } from './js/ui/networkSelectorWorking.js';
+  import { chainStorage, migrateExistingData } from './js/utils/chainStorageUtils.js';
+  import { migrateOldLocalStorage } from './js/utils/migrationUtils.js';
+  import { superSafeMigrator as dbMigrator } from './js/utils/databaseMigrationSuperSafe.js';
+  import { chainMismatchHandler } from './js/utils/chainMismatchHandler.js';
+  import { dangerZoneHandler } from './js/utils/dangerZoneHandler.js';
+  import { dangerZoneDropdown } from './js/utils/dangerZoneDropdown.js';
+  
+  // Run migrations in order
+  async function initializeApp() {
+    console.log('Starting app initialization');
+    
+    try {
+      // 1. Migrate localStorage from old format to chain-specific
+      migrateOldLocalStorage();
+      
+      // 2. Migrate databases from old names to chain-specific
+      await dbMigrator.migrate();
+      
+      // 3. Initialize chain system FIRST
+      chainManager.initialize();
+      
+      // 4. Make global
+      window.chainManager = chainManager;
+      window.networkSelector = networkSelector;
+      window.chainStorage = chainStorage;
+      window.dbMigrator = dbMigrator;
+      window.chainMismatchHandler = chainMismatchHandler;
+      window.dangerZoneHandler = dangerZoneHandler;
+      window.dangerZoneDropdown = dangerZoneDropdown;
+      
+      // 5. Migrate any remaining data
+      migrateExistingData();
+      
+      // 6. Wait for DOM to be ready before initializing UI
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', async () => {
+          await networkSelector.initialize();
+          // Force update after init
+          networkSelector.updateDisplay();
+          // Initialize chain mismatch handler after UI is ready
+          chainMismatchHandler.initialize();
+          // Initialize danger zone dropdown
+          dangerZoneDropdown.initialize();
+        });
+      } else {
+        // DOM already ready
+        await networkSelector.initialize();
+        // Force update after init
+        networkSelector.updateDisplay();
+        // Initialize chain mismatch handler after UI is ready
+        chainMismatchHandler.initialize();
+        // Initialize danger zone dropdown
+        dangerZoneDropdown.initialize();
+      }
+      
+      console.log('App initialization complete');
+    } catch (error) {
+      console.error('App initialization error:', error);
+    }
+  }
+  
+  // Start initialization
+  initializeApp();
+</script>
+
 <!-- ABI files (order matters) -->
 <script src="./ABI/xen-ABI.js?v=20250908173121"></script>
 <script src="./ABI/xenft-ABI.js?v=20250908173121"></script>
 <script src="./ABI/xenft-stake-ABI.js?v=20250908173121"></script>
 <script src="./ABI/cointool-ABI.js?v=20250908173121"></script>
 
+<!-- Configuration modules -->
+<script type="module" src="./js/config/chainConfig.js?v=20250908173121"></script>
+<script type="module" src="./js/config/configuration.js?v=20250908173121"></script>
+
 <!-- Existing JavaScript files (order matters) -->
 <script src="./js/mint_flows.js?v=20250908173121"></script>
+<script src="./js/utils/databaseInitializer.js?v=20250908173121"></script>
 <script src="./js/scanners/cointool_scanner.js?v=20250908173121"></script>
 <script src="./js/scanners/xenft_scanner.js?v=20250908173121"></script>
 <script src="./js/scanners/xenft_stake_scanner.js?v=20250908173121"></script>

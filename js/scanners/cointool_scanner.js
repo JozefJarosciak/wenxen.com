@@ -42,7 +42,12 @@
 // Database operations
 async function openCointoolDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("DB_Cointool", 3);
+    // Get chain-specific database name
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+    const dbName = `${chainPrefix}_DB_Cointool`;
+    
+    const request = indexedDB.open(dbName, 3);
     
     request.onupgradeneeded = event => {
       const db = event.target.result;

@@ -7,15 +7,18 @@ const DEFAULT_RPC_READ = 'https://ethereum-rpc.publicnode.com';
 
 // fmtTs function now provided by js/utils/dateUtils.js module
 
-// Require connected wallet on Ethereum Mainnet
+// Require connected wallet on correct chain
 async function requireWalletMainnet(){
   if (!window.ethereum || !web3Wallet || !connectedAccount) {
     console.warn("Connect your wallet first.");
     throw new Error('no-wallet');
   }
   const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-  if (parseInt(chainIdHex, 16) !== 1) {
-    console.warn("Switch your wallet to Ethereum Mainnet to mint.");
+  const expectedChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+  const currentChainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+  
+  if (parseInt(chainIdHex, 16) !== expectedChainId) {
+    console.warn(`Switch your wallet to ${currentChainName} (chain ID ${expectedChainId}) to mint.`);
     throw new Error('wrong-chain');
   }
 }
@@ -25,7 +28,12 @@ function updateTermPreview() {
   const termDays = Math.min(999, Math.max(1, parseInt(document.getElementById('mintTermDays').value || '1', 10)));
   const el = document.getElementById('termDatePreview');
   if (el) el.textContent = formatTermDate(termDays);
-  try { localStorage.setItem('mintTermDays', String(termDays)); } catch {}
+  try {
+    // Make mintTermDays chain-specific
+    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+    localStorage.setItem(chainPrefix + 'mintTermDays', String(termDays));
+  } catch {}
 }
 
 function updateStakeTermPreview() {
@@ -43,7 +51,16 @@ async function setMaxTermFromXEN(){
     // Prefer user RPC if present; fall back to default public mainnet RPC
     try {
       const rpcFromDom = (document.getElementById('customRPC')?.value || '').trim();
-      const rpcFromLs  = (localStorage.getItem('customRPC') || '').trim();
+      // Get chain-specific RPC
+      let rpcFromLs = '';
+      if (window.chainManager) {
+        const rpcs = window.chainManager.getRPCEndpoints();
+        rpcFromLs = rpcs.join('\n');
+      } else {
+        const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+        const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+        rpcFromLs = (localStorage.getItem(chainPrefix + 'customRPC') || '').trim();
+      }
       const rpcList = (rpcFromDom || rpcFromLs || DEFAULT_RPC_READ)
         .split(/\r?\n+/)
         .map(s => s.trim())
@@ -58,7 +75,12 @@ async function setMaxTermFromXEN(){
     const days = Math.max(1, Math.min(999, Math.floor(Number(secs)/86400)));
     document.getElementById('mintTermDays').value = String(days);
     updateTermPreview();
-    try { localStorage.setItem('mintTermDays', String(days)); } catch {}
+    try {
+      // Make mintTermDays chain-specific
+      const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+      localStorage.setItem(chainPrefix + 'mintTermDays', String(days));
+    } catch {}
     console.log(`[MINT] Max term from XEN: ${days} day(s).`);
   }catch(e){
     console.warn('Failed to fetch max term from XEN (network/RPC issue?)', e);
@@ -448,7 +470,10 @@ async function startMintingFlow(){
   (function(){
     const el = document.getElementById('mintTermDays');
     if (!el) return;
-    const saved = (localStorage.getItem('mintTermDays') || '').trim();
+    // Load chain-specific mintTermDays
+    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+    const saved = (localStorage.getItem(chainPrefix + 'mintTermDays') || '').trim();
     if (saved) {
       el.value = saved;
       updateTermPreview();

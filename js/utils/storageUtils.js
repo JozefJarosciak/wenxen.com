@@ -152,9 +152,35 @@ export const privacyStorage = {
 
   isSetupComplete() {
     try {
-      const ethAddress = localStorage.getItem('ethAddress');
+      // Get current chain for chain-specific onboarding check
+      const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+      
+      // First check if onboarding was explicitly dismissed for this chain
+      if (localStorage.getItem(chainPrefix + 'onboardingDismissed') === '1') {
+        return true;
+      }
+      
+      // Otherwise check if user has entered required data
+      // Check chain-specific address
+      const ethAddress = localStorage.getItem(chainPrefix + 'ethAddress');
+      
+      // API key is global (not chain-specific)
       const etherscanApiKey = localStorage.getItem('etherscanApiKey');
+      
       return !!(ethAddress && ethAddress.trim() && etherscanApiKey && etherscanApiKey.trim());
+    } catch {
+      return false;
+    }
+  },
+
+  setOnboardingDismissed(dismissed) {
+    try {
+      // Make onboardingDismissed chain-specific
+      const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+      localStorage.setItem(chainPrefix + 'onboardingDismissed', dismissed ? '1' : '0');
+      return true;
     } catch {
       return false;
     }
@@ -169,7 +195,14 @@ export const settingsStorage = {
   },
 
   getRPCList() {
-    const raw = storageUtils.getItem('customRPC', 'https://ethereum-rpc.publicnode.com');
+    // Get chain-specific RPC list
+    if (window.chainManager) {
+      return window.chainManager.getRPCEndpoints();
+    }
+    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+    const defaultRPC = currentChain === 'BASE' ? 'https://base-rpc.publicnode.com' : 'https://ethereum-rpc.publicnode.com';
+    const raw = storageUtils.getItem(chainPrefix + 'customRPC', defaultRPC);
     return String(raw).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
   },
 

@@ -6,6 +6,45 @@
 // About tab loading state
 let _aboutLoaded = false;
 
+// Update UI labels based on current chain
+function updateChainSpecificLabels() {
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainName = currentChain === 'BASE' ? 'Base' : 'Ethereum';
+  const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
+  
+  // Update Settings tab labels
+  const addressLabel = document.querySelector('#field-ethAddress label[for="ethAddress"]');
+  if (addressLabel) addressLabel.textContent = `${chainName} Addresses (one per line)`;
+  
+  const addressNote = document.querySelector('.settings-note');
+  if (addressNote && addressNote.textContent.includes('address')) {
+    addressNote.textContent = `Paste one ${chainName} address per line.`;
+  }
+  
+  const addressError = document.querySelector('#field-ethAddress .error-message');
+  if (addressError) addressError.textContent = `At least one ${chainName} address is required.`;
+  
+  const apiKeyLabel = document.querySelector('label[for="etherscanApiKey"]');
+  if (apiKeyLabel) apiKeyLabel.textContent = `${explorerName} API Key`;
+  
+  const apiKeyInput = document.getElementById('etherscanApiKey');
+  if (apiKeyInput) apiKeyInput.placeholder = `Your ${explorerName} API Key`;
+  
+  // Update RPC label to be chain-specific
+  const rpcLabel = document.querySelector('label[for="customRPC"]');
+  if (rpcLabel) rpcLabel.textContent = `Custom ${chainName} RPCs (one per line)`;
+  
+  // Note: Mint tab button stays as "Mint/Stake" - not chain-specific
+  
+  // Update Mint tab platform selector label if present
+  const platformLabel = document.querySelector('label[for="mintPlatform"]');
+  if (platformLabel) platformLabel.textContent = `Minting Platform`;
+  
+  // Update stake tab labels
+  const stakeTitle = document.querySelector('#stakeControls h3');
+  if (stakeTitle) stakeTitle.textContent = `Stake XEN`;
+}
+
 // --- THEME MANAGEMENT ---
 // Theme management functions now provided by js/ui/themeManager.js module
 // Legacy functions like getStoredTheme(), storeTheme(), applyTheme() are available globally
@@ -35,6 +74,39 @@ function updateThemeMenuUI(){
 // isSetupComplete(), showOnboardingModal(), etc. are available globally
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Update chain-specific labels on page load
+  updateChainSpecificLabels();
+  
+  // Listen for chain changes to update labels
+  if (window.chainManager) {
+    window.chainManager.onChainChange(() => {
+      updateChainSpecificLabels();
+    });
+  }
+  
+  // Check for dashboard hash and activate Dashboard tab
+  if (window.location.hash === '#dashboard') {
+    // Clear the hash from URL
+    history.replaceState(null, null, window.location.pathname + window.location.search);
+    
+    // Activate dashboard tab after a short delay to ensure everything is loaded
+    setTimeout(() => {
+      if (typeof window.setActiveTab === 'function') {
+        window.setActiveTab('tab-dashboard');
+      } else {
+        // Fallback if setActiveTab isn't available yet
+        const dashboardTab = document.getElementById('tab-dashboard');
+        const dashboardBtn = document.querySelector('[data-target="tab-dashboard"]');
+        if (dashboardTab && dashboardBtn) {
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+          document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+          dashboardTab.classList.add('active');
+          dashboardBtn.classList.add('active');
+        }
+      }
+    }, 500);
+  }
+  
   // Footer year
   try { const y = document.getElementById('copyrightYear'); if (y) y.textContent = String(new Date().getFullYear()); } catch {}
   // Footer privacy link
@@ -135,11 +207,11 @@ async function ensureAboutLoaded(){
 const CHAINLIST_JSON = "https://chainid.network/chains.json";
 
 // Extract https RPCs for chainId 1, drop placeholders/keys, prefer public endpoints
-function extractMainnetRPCs(json) {
+function extractChainRPCs(json, chainId) {
   try {
-    const mainnet = (json || []).find(c => c?.chainId === 1);
-    if (!mainnet || !Array.isArray(mainnet.rpc)) return [];
-    return mainnet.rpc
+    const chain = (json || []).find(c => c?.chainId === chainId);
+    if (!chain || !Array.isArray(chain.rpc)) return [];
+    return chain.rpc
       .filter(u => typeof u === "string")
       .map(u => u.trim())
       .filter(u => u.startsWith("http"))    // only http/https (no ws)
@@ -268,21 +340,42 @@ async function importAndRankRPCs() {
   btn.disabled = true;
   try { btn.setAttribute('aria-busy', 'true'); } catch {}
   showImportProgress();
-  showImportStatus("Fetching public RPC list…");
+  
+  // Get current chain configuration
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  console.log('Current chain from chainManager:', currentChain);
+  
+  // Call getChainConfig as a function
+  const chainConfig = typeof window.getChainConfig === 'function' ? window.getChainConfig() : { id: 1, name: 'Ethereum' };
+  const chainId = chainConfig.id || (currentChain === 'BASE' ? 8453 : 1);
+  const chainName = chainConfig.name || (currentChain === 'BASE' ? 'Base' : 'Ethereum');
+  
+  console.log(`Importing RPCs for chain: ${chainName} (ID: ${chainId}), currentChain: ${currentChain}`);
+  
+  showImportStatus(`Fetching public ${chainName} RPC list…`);
 
   // 1) Fetch public RPCs (Chainlist). Fallback to a small known set if needed.
   let candidates = [];
   try {
     const res = await fetch(CHAINLIST_JSON, { mode: "cors" });
     const json = await res.json();
-    candidates = extractMainnetRPCs(json);
+    candidates = extractChainRPCs(json, chainId);
   } catch {}
   if (!candidates.length) {
-    candidates = [
-      "https://cloudflare-eth.com",
-      "https://rpc.ankr.com/eth",
-      "https://ethereum.publicnode.com"
-    ];
+    // Chain-specific fallbacks
+    if (chainId === 8453) { // Base
+      candidates = [
+        "https://mainnet.base.org",
+        "https://base.publicnode.com",
+        "https://base.meowrpc.com"
+      ];
+    } else { // Ethereum
+      candidates = [
+        "https://cloudflare-eth.com",
+        "https://rpc.ankr.com/eth",
+        "https://ethereum.publicnode.com"
+      ];
+    }
   }
 
   // 2) Merge with user-provided list
@@ -290,7 +383,7 @@ async function importAndRankRPCs() {
   let merged = uniqueUrls([...userList, ...candidates]);
 
   // 3) Probe each RPC concurrently (cap concurrency) with live progress
-  showImportStatus(`Pinging ${merged.length} RPCs for latency (this uses your local network)…`);
+  showImportStatus(`Pinging ${merged.length} ${chainName} RPCs for latency (this uses your local network)…`);
   const results = [];
   const CONCURRENCY = 6;
   let index = 0;
@@ -328,8 +421,15 @@ async function importAndRankRPCs() {
   // 5) Write back to textarea (fastest -> slowest), persist, update UI
   const sorted = reachable.map(r => r.url);
   ta.value = sorted.join("\n");
-  try { localStorage.setItem("customRPC", ta.value); } catch {}
-  showImportStatus(`Imported ${sorted.length} RPCs. Fastest is ~${reachable[0].ms} ms.`, "success");
+  try { 
+    // Save to chain-specific key
+    if (window.chainManager) {
+      window.chainManager.saveRPCEndpoints(sorted);
+    } else {
+      localStorage.setItem("customRPC", ta.value);
+    }
+  } catch {}
+  showImportStatus(`Imported ${sorted.length} ${chainName} RPCs. Fastest is ~${reachable[0].ms} ms.`, "success");
 
   // Re-validate the required field & any feature depending on RPC list
   if (typeof markValidity === "function") {
@@ -354,10 +454,16 @@ function checkAutoImportRPCs() {
   // Get the current RPC list
   const rpcList = ta.value.split("\n").map(s => s.trim()).filter(Boolean);
   
-  // Only auto-run if there's exactly one RPC
-  if (rpcList.length === 1) {
+  // Get current chain
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  
+  // Auto-run if:
+  // 1. There's exactly one RPC (for Ethereum compatibility)
+  // 2. Base chain has no RPCs (first time switching to Base)
+  if (rpcList.length === 1 || (currentChain === 'BASE' && rpcList.length === 0)) {
     // Small delay to ensure page is fully loaded
     setTimeout(() => {
+      console.log(`Auto-importing RPCs for ${currentChain} (RPC count: ${rpcList.length})`);
       importAndRankRPCs();
     }, 500);
   }
@@ -371,9 +477,21 @@ window.addEventListener("DOMContentLoaded", () => {
 
 
 // --- CoinTool + XEN (ETH mainnet) constants used by the Python script ---
-let ETHERSCAN_CHAIN_ID = 1; // default to mainnet; we overwrite at scan start
-const COINTOOL_MAIN = '0x0de8bf93da2f7eecb3d9169422413a9bef4ef628'; // you already use this as CONTRACT_ADDRESS
-const XEN_ETH       = '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
+// Chain ID gets updated at scan start
+let ETHERSCAN_CHAIN_ID = 1;  // Will be updated dynamically
+let COINTOOL_MAIN = '0x0de8bf93da2f7eecb3d9169422413a9bef4ef628';  // Will be updated dynamically
+let XEN_ETH = '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';  // Will be updated dynamically
+
+// Update chain-specific values once chainManager is available
+if (window.chainManager) {
+  try {
+    ETHERSCAN_CHAIN_ID = window.chainManager.getCurrentConfig().id;
+    COINTOOL_MAIN = window.chainManager.getCurrentConfig().contracts.COINTOOL;
+    XEN_ETH = window.chainManager.getCurrentConfig().contracts.XEN_CRYPTO;
+  } catch (e) {
+    console.debug('Chain manager not ready yet, using defaults');
+  }
+}
 const selectedRows = new Set();
 // This address is hard-coded in the Python remint path
 const REMINT_HELPER = '0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98';
@@ -519,7 +637,8 @@ function getRpcList() {
   // Prefer Settings textarea; fall back to localStorage or DEFAULT_RPC
   const ta = document.getElementById("customRPC");
   const raw = (ta && ta.value.trim())
-    || (localStorage.getItem("customRPC") || DEFAULT_RPC);
+    || (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : 
+        (localStorage.getItem("customRPC") || DEFAULT_RPC));
   return String(raw).split("\n").map(s => s.trim()).filter(Boolean);
 }
 
@@ -579,12 +698,70 @@ const no0x = (s) => String(s).replace(/^0x/i, '');
 const isHex = (s) => /^0x[0-9a-fA-F]*$/.test(s);
 const ensureBytes = (s) => (isHex(s) ? s : ('0x' + Buffer.from(String(s), 'utf8').toString('hex')));
 
-const DEFAULT_RPC = `https://ethereum-rpc.publicnode.com`;
-const CONTRACT_ADDRESS = "0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628";
-const EVENT_TOPIC = "0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37";
-const SALT_BYTES_TO_QUERY = '0x01';
-const REMINT_SELECTOR = '0xc2580804';
-const XEN_CRYPTO_ADDRESS = '0x06450dee7fd2fb8e39061434babcfc05599a6fb8';
+// Get contract addresses from chain config
+window.getChainConfig = () => {
+  if (window.chainManager) {
+    try {
+      const config = window.chainManager.getCurrentConfig();
+      // Ensure we have the full config including id and name
+      if (config) return config;
+    } catch (e) {
+      console.debug('Chain manager not ready, using defaults');
+    }
+  }
+  // Default Ethereum config as fallback
+  return {
+    id: 1,
+    name: 'Ethereum',
+    rpcUrls: { default: 'https://ethereum-rpc.publicnode.com' },
+    contracts: {
+      COINTOOL: "0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628",
+      XEN_CRYPTO: '0x06450dee7fd2fb8e39061434babcfc05599a6fb8'
+    },
+    events: {
+      COINTOOL_MINT_TOPIC: "0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37",
+      REMINT_SELECTOR: '0xc2580804'
+    },
+    constants: {
+      SALT_BYTES_TO_QUERY: '0x01'
+    }
+  };
+};
+
+// Initialize with defaults, will be updated when chain manager is ready
+let DEFAULT_RPC = 'https://ethereum-rpc.publicnode.com';
+let CONTRACT_ADDRESS = "0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628";
+let EVENT_TOPIC = "0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37";
+let SALT_BYTES_TO_QUERY = '0x01';
+let REMINT_SELECTOR = '0xc2580804';
+let XEN_CRYPTO_ADDRESS = '0x06450dee7fd2fb8e39061434babcfc05599a6fb8';
+
+// Function to update config values when chain changes
+function updateChainConfig() {
+  const config = window.getChainConfig();
+  DEFAULT_RPC = config.rpcUrls.default;
+  CONTRACT_ADDRESS = config.contracts.COINTOOL;
+  EVENT_TOPIC = config.events.COINTOOL_MINT_TOPIC;
+  SALT_BYTES_TO_QUERY = config.constants.SALT_BYTES_TO_QUERY;
+  REMINT_SELECTOR = config.events.REMINT_SELECTOR;
+  XEN_CRYPTO_ADDRESS = config.contracts.XEN_CRYPTO;
+  COINTOOL_MAIN = config.contracts.COINTOOL;
+  XEN_ETH = config.contracts.XEN_CRYPTO;
+  ETHERSCAN_CHAIN_ID = config.id || 1;
+}
+
+// Update config when chain manager is ready
+if (window.chainManager) {
+  try {
+    updateChainConfig();
+    // Listen for chain changes
+    window.chainManager.onChainChange(() => {
+      updateChainConfig();
+    });
+  } catch (e) {
+    console.debug('Will update config when chain manager is ready');
+  }
+}
 
 
 
@@ -703,10 +880,6 @@ function updateXENTotalBadge() {
   const addressBreakdown = {};
   
   // Debug: Check what fields are available in the first row
-  if (activeData.length > 0) {
-    console.log('Debug - First row keys:', Object.keys(activeData[0]));
-    console.log('Debug - Sample row:', activeData[0]);
-  }
   
   activeData.forEach(rowData => {
     const xenValue = estimateXENForRow(rowData);
@@ -1146,28 +1319,36 @@ async function updateNetworkBadge(){
   const connectBtn = document.getElementById('connectWalletText');
   const isConnected = connectBtn && connectBtn.textContent !== 'Connect Wallet';
   
-  if (isConnected) {
+  if (isConnected && window.ethereum) {
     try {
-      const chainId = await window.ethereum?.request?.({ method: 'eth_chainId' });
-      if (chainId) {
-        const networkName = chainIdToName(chainId);
+      const walletChainId = await window.ethereum?.request?.({ method: 'eth_chainId' });
+      const appChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+      const walletChainIdDec = parseInt(walletChainId, 16);
+      
+      // Show badge if wallet is on a different chain than the app
+      if (walletChainIdDec !== appChainId) {
+        const networkName = chainIdToName(walletChainId);
         // Use innerHTML for Ethereum icon, textContent for others
         if (networkName.includes('<svg')) {
           el.innerHTML = networkName;
-          el.title = 'Ethereum Mainnet';
+          el.title = `Wallet is on different chain than app (${window.chainManager?.getCurrentConfig()?.name})`;
         } else {
           el.textContent = networkName;
-          el.title = networkName;
+          el.title = `Wallet: ${networkName}, App: ${window.chainManager?.getCurrentConfig()?.name}`;
         }
         el.style.display = '';
+        el.style.color = '#ff9800'; // Orange to indicate mismatch
       } else {
+        // Wallet and app are on same chain - hide badge
         el.style.display = 'none';
+        el.title = '';
       }
     } catch {
       el.style.display = 'none';
+      el.title = '';
     }
   } else {
-    // Hide when not connected (connectWalletText shows "Connect Wallet")
+    // Hide when not connected
     el.style.display = 'none';
     el.title = '';
   }
@@ -1175,7 +1356,12 @@ async function updateNetworkBadge(){
 
 function es2url(queryString) {
   // queryString should NOT start with "?" (just "module=...&action=...&...")
-  return `https://api.etherscan.io/v2/api?chainid=${ETHERSCAN_CHAIN_ID}&${queryString}`;
+  // Get explorer API URL for current chain
+  const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
+  // Use v2 API if available (Etherscan), otherwise v1
+  const apiPath = explorerUrl.includes('etherscan.io') ? '/v2/api' : '';
+  const baseUrl = explorerUrl.replace('/api', '') + apiPath;
+  return `${baseUrl}?chainid=${ETHERSCAN_CHAIN_ID}&${queryString}`;
 }
 
 function ensureBulkBar(){
@@ -1292,12 +1478,16 @@ async function handleBulkAction(mode){
   }
   try {
     const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-    if (parseInt(chainId, 16) !== 1) {
-      alert("Please switch your wallet to Ethereum Mainnet to claim/remint.");
+    const expectedChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    const currentChainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+    
+    if (parseInt(chainId, 16) !== expectedChainId) {
+      alert(`Please switch your wallet to ${currentChainName} (chain ID ${expectedChainId}) to claim/remint.`);
       return;
     }
   } catch {
-    alert("Could not read current network. Please switch to Ethereum Mainnet.");
+    const currentChainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+    alert(`Could not read current network. Please switch to ${currentChainName}.`);
     return;
   }
 
@@ -1446,8 +1636,13 @@ function buildRemintData(minter, manualDays /* integer 1..999 */) {
 
 function openDB() {
   return new Promise((resolve, reject) => {
+    // Get chain-specific database name
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+    const dbName = `${chainPrefix}_DB_Cointool`;
+    
     // bump to v3 to add actionsCache
-    const request = indexedDB.open("DB_Cointool", 3);
+    const request = indexedDB.open(dbName, 3);
 
     request.onupgradeneeded = event => {
       const db = event.target.result;
@@ -1583,10 +1778,14 @@ function getLocalDateString(date) {
 }
 
 // ===== VMU Chart (ECharts) =====
+// Declare at top level to avoid initialization issues
 let vmuChart = null;
 let _vmuChartReady = false;
 let _vmuChartMetric = 'vmus';
 let _vmuChartInitPending = false; // if true, (re)init when Dashboard becomes visible
+
+// Make globally accessible immediately
+window.vmuChart = vmuChart;
 
 function _fmtAxisDateLabel(key){
   // Input key is 'YYYY-MM-DD'; output 'YYYY-Mon-DD'
@@ -1836,11 +2035,16 @@ function initVmuChartSection() {
 
 function updateVmuChart() {
   if (!document.getElementById('vmuChart')) return;
-  if (!vmuChart && window.echarts) {
-    // lazy init if needed
-    initVmuChartSection();
+  // Check if vmuChart exists or needs initialization
+  if (typeof vmuChart === 'undefined' || (!vmuChart && !window.vmuChart)) {
+    if (window.echarts) {
+      // lazy init if needed
+      initVmuChartSection();
+    } else {
+      return;  // ECharts not loaded yet
+    }
   }
-  if (!vmuChart) return;
+  if (!vmuChart && !window.vmuChart) return;
   const node = document.getElementById('vmuChart');
   const w = node ? node.offsetWidth : 0;
   const h = node ? node.offsetHeight : 0;
@@ -2167,6 +2371,9 @@ function updateVmuChart() {
   }
 }
 
+// Make updateVmuChart globally available
+window.updateVmuChart = updateVmuChart;
+
 // Persist and apply expanded state; init chart on expand
 function setVmuChartExpandedState(open) {
   const body = document.getElementById('vmuChartBody');
@@ -2197,6 +2404,7 @@ function setVmuChartExpandedState(open) {
     }
     try {
       vmuChart = window.echarts.init(node, null, { useDirtyRect: true });
+      window.vmuChart = vmuChart;  // Store globally too
       console.debug('[VMU-CHART] echarts.init OK');
     } catch(e) {
       console.warn('[VMU-CHART] echarts.init failed', e);
@@ -2486,10 +2694,14 @@ function normalizeSalt(s) {
 
 document.getElementById("resetBtn").addEventListener("click", async function () {
   function friendlyDbName(id){
-    switch(id){
+    // Handle both legacy and chain-specific database names
+    const baseName = id.replace(/^(ETHEREUM_|BASE_)/, '');
+    switch(baseName){
       case 'DB_Cointool': return 'Cointool (mints)';
       case 'DB_Xenft': return 'XENFT (NFT scans)';
+      case 'DB_XenftStake': 
       case 'DB-Xenft-Stake': return 'XENFT Stake (stakes)';
+      case 'DB_XenStake':
       case 'DB-Xen-Stake': return 'XEN Stake (regular)';
       default: return id;
     }
@@ -2499,7 +2711,7 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
 
   if (choice === "all") {
     const confirmed = confirm(
-      "Are you sure you want to delete all saved data (DB_Cointool, DB_Xenft, DB-Xenft-Stake, and DB-Xen-Stake)? Your input fields will not be affected. This action cannot be undone."
+      "Are you sure you want to delete all saved data? Your input fields will not be affected. This action cannot be undone."
     );
     if (!confirmed) return;
 
@@ -2826,10 +3038,11 @@ function populateTable(mints) {
 
           // XENFT rows → link token inventory page
           if (row.SourceType === "XENFT") {
-            const ca = (window.xenft && window.xenft.CONTRACT_ADDRESS)
-              ? window.xenft.CONTRACT_ADDRESS
-              : "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
-            return `<a href="https://etherscan.io/token/${ca}?a=${value}" target="_blank">${value}</a>`;
+            const ca = window.chainManager?.getContractAddress('XENFT_TORRENT') ||
+              (window.xenft && window.xenft.CONTRACT_ADDRESS) ||
+              "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
+            const explorerUrl = window.chainManager?.getExplorerUrl('address', ca) || `https://etherscan.io/token/${ca}`;
+            return `<a href="${explorerUrl}?a=${value}" target="_blank">${value}</a>`;
           }
 
           // Stake XENFT rows → link NFT page
@@ -2838,10 +3051,12 @@ function populateTable(mints) {
             const first = acts && acts.length ? acts[0] : null;
             const hash = first && (first.hash || first.txHash);
             if (hash) {
-              return `<a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noopener">${value}</a>`;
+              const txUrl = window.chainManager?.getExplorerUrl('tx', hash) || `https://etherscan.io/tx/${hash}`;
+              return `<a href="${txUrl}" target="_blank" rel="noopener">${value}</a>`;
             }
             const ca = "0xfeda03b91514d31b435d4e1519fd9e699c29bbfc";
-            return `<a href="https://etherscan.io/nft/${ca}/${value}" target="_blank" rel="noopener">${value}</a>`;
+            const nftUrl = window.chainManager?.getExplorerUrl('address', ca) || `https://etherscan.io/nft/${ca}`;
+            return `<a href="${nftUrl}/${value}" target="_blank" rel="noopener">${value}</a>`;
           }
 
           // ✅ Regular Stakes → show short id (last 8)
@@ -2851,7 +3066,8 @@ function populateTable(mints) {
             const first = acts && acts.length ? acts[0] : null;
             const hash = first && (first.hash || first.txHash);
             if (hash) {
-              return `<a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noopener">${short}</a>`;
+              const txUrl = window.chainManager?.getExplorerUrl('tx', hash) || `https://etherscan.io/tx/${hash}`;
+              return `<a href="${txUrl}" target="_blank" rel="noopener">${short}</a>`;
             }
             // keep full value in a tooltip for convenience
             return `<span title="${value}">${short}</span>`;
@@ -2859,7 +3075,8 @@ function populateTable(mints) {
 
           // CoinTool rows → link to mint tx if present
           if (row.TX_Hash) {
-            return `<a href="https://etherscan.io/tx/${row.TX_Hash}" target="_blank">${value}</a>`;
+            const txUrl = window.chainManager?.getExplorerUrl('tx', row.TX_Hash) || `https://etherscan.io/tx/${row.TX_Hash}`;
+            return `<a href="${txUrl}" target="_blank">${value}</a>`;
           }
 
           return value;
@@ -2962,7 +3179,8 @@ function populateTable(mints) {
           }
 
           const links = actions.map((action, index) => {
-            const href = `https://etherscan.io/tx/${(action.hash || action.txHash || '')}`;
+            const txHash = action.hash || action.txHash || '';
+            const href = window.chainManager?.getExplorerUrl('tx', txHash) || `https://etherscan.io/tx/${txHash}`;
             const date = luxon.DateTime.fromSeconds(Number(action.timeStamp)).toFormat('MMM d, yyyy, hh:mm a');
             let tooltipText = `${date}\nHash: ${(action.hash || action.txHash || 'n/a')}`;
             if (action.rank) {
@@ -3119,7 +3337,11 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
       {
         title: "Owner", field: "Owner", headerFilter: "input", formatter: cell => {
           let val = cell.getValue();
-          return (val && val.length > 12) ? `<a href="https://etherscan.io/address/${val}" target="_blank"">${val.substring(0, 4)}...${val.substring(val.length - 4)}</a>` : val;
+          if (val && val.length > 12) {
+            const addrUrl = window.chainManager?.getExplorerUrl('address', val) || `https://etherscan.io/address/${val}`;
+            return `<a href="${addrUrl}" target="_blank">${val.substring(0, 4)}...${val.substring(val.length - 4)}</a>`;
+          }
+          return val;
         }
       }
     ],
@@ -3443,8 +3665,27 @@ function startStatusTicker() {
 
 // --- USER PREFERENCES ---
 function saveUserPreferences(addresses, customRPC, apiKey) {
-  localStorage.setItem("ethAddress", addresses);
-  localStorage.setItem("customRPC", customRPC);
+  // Save addresses with chain prefix
+  if (window.chainStorage) {
+    window.chainStorage.setItem("ethAddress", addresses);
+    // For Ethereum, also update the prefixed key directly for safety
+    if (window.chainManager && window.chainManager.getCurrentChain() === 'ETHEREUM') {
+      localStorage.setItem("ETHEREUM_ethAddress", addresses);
+    }
+  } else {
+    // Fallback to chain-specific key
+    localStorage.setItem("ETHEREUM_ethAddress", addresses);
+  }
+  
+  // Save RPC with chain prefix
+  if (window.chainManager) {
+    const rpcList = customRPC.split('\n').filter(Boolean);
+    window.chainManager.saveRPCEndpoints(rpcList);
+  } else {
+    localStorage.setItem("customRPC", customRPC);
+  }
+  
+  // API key is global across all chains
   localStorage.setItem("etherscanApiKey", apiKey);
   
   // Check if setup is now complete and hide onboarding modal if it's showing
@@ -3453,8 +3694,64 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
   }
 }
 function loadUserPreferences() {
-  document.getElementById("ethAddress").value = localStorage.getItem("ethAddress") || "";
-  document.getElementById("customRPC").value = localStorage.getItem("customRPC") || DEFAULT_RPC;
+  // Load addresses - chain-specific (migration should have already run)
+  let addresses = "";
+  
+  if (window.chainStorage && window.chainManager) {
+    const currentChain = window.chainManager.getCurrentChain();
+    
+    // Load chain-specific addresses (should be migrated already)
+    addresses = window.chainStorage.getItem("ethAddress") || "";
+    
+    // If on Ethereum and no addresses, check if migration happened
+    if (!addresses && currentChain === 'ETHEREUM') {
+      // Double-check the migrated key directly
+      addresses = localStorage.getItem("ETHEREUM_ethAddress") || "";
+      if (!addresses) {
+        // Last resort - check old format (shouldn't happen if migration ran)
+        const oldAddresses = localStorage.getItem("ethAddress");
+        if (oldAddresses) {
+          console.log('Found unmigrated ethAddress, migrating now...');
+          localStorage.setItem("ETHEREUM_ethAddress", oldAddresses);
+          localStorage.removeItem("ethAddress");
+          addresses = oldAddresses;
+        }
+      }
+    }
+    
+    // If no addresses found and we're on Base, try Ethereum addresses as fallback
+    if (!addresses && currentChain === 'BASE') {
+      // Check if this is first time loading Base (no saved preference)
+      const baseLoadedKey = 'BASE_addresses_loaded';
+      if (!localStorage.getItem(baseLoadedKey)) {
+        // First time on Base - load Ethereum addresses
+        addresses = localStorage.getItem("ETHEREUM_ethAddress") || "";
+        // Mark that we've loaded Base once
+        localStorage.setItem(baseLoadedKey, '1');
+        // Save Ethereum addresses as Base addresses for user to modify
+        if (addresses) {
+          window.chainStorage.setItem("ethAddress", addresses);
+        }
+      }
+    }
+  } else {
+    // Fallback for when chain system not available - check both formats
+    addresses = localStorage.getItem("ETHEREUM_ethAddress") || localStorage.getItem("ethAddress") || "";
+  }
+  
+  document.getElementById("ethAddress").value = addresses;
+  
+  // Load chain-specific RPC - empty for Base unless user has saved
+  let rpcValue = "";
+  if (window.chainManager) {
+    const rpcs = window.chainManager.getRPCEndpoints();
+    rpcValue = rpcs.join('\n');
+  } else {
+    rpcValue = localStorage.getItem("customRPC") || DEFAULT_RPC;
+  }
+  document.getElementById("customRPC").value = rpcValue;
+  
+  // API key is global
   document.getElementById("etherscanApiKey").value = localStorage.getItem("etherscanApiKey") || "";
 }
 
@@ -3546,8 +3843,11 @@ function validateInputs() {
   const rpcText = document.getElementById("customRPC").value.trim();
   const apiKey = document.getElementById("etherscanApiKey").value.trim();
   const scanBtn = document.getElementById("scanBtn");
-  const hasRpc = rpcText.split("\n").some(s => s.trim().startsWith("http"));
-  scanBtn.disabled = !hasRpc || !apiKey;
+  
+  // RPC is optional - we have defaults for each chain
+  // Only validate if user has entered something
+  const hasValidRpc = !rpcText || rpcText.split("\n").some(s => s.trim().startsWith("http"));
+  scanBtn.disabled = !hasValidRpc || !apiKey;
 }
 
 // --- SUMMARY STATS ---
@@ -4125,14 +4425,56 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   // Load Ethereum addresses
   const addrInput = document.getElementById("ethAddress");
   if (addrInput) {
-    const saved = localStorage.getItem("ethAddress");
+    // Load chain-specific addresses (migration should have already run)
+    let saved = "";
+    
+    if (window.chainStorage && window.chainManager) {
+      const currentChain = window.chainManager.getCurrentChain();
+      
+      // Load chain-specific addresses
+      saved = window.chainStorage.getItem("ethAddress") || "";
+      
+      // For Ethereum, double-check migration
+      if (!saved && currentChain === 'ETHEREUM') {
+        saved = localStorage.getItem("ETHEREUM_ethAddress") || "";
+        if (!saved) {
+          // Check old format as last resort
+          const oldSaved = localStorage.getItem("ethAddress");
+          if (oldSaved) {
+            console.log('Found unmigrated ethAddress, migrating now...');
+            localStorage.setItem("ETHEREUM_ethAddress", oldSaved);
+            localStorage.removeItem("ethAddress");
+            saved = oldSaved;
+          }
+        }
+      }
+      
+      // For Base, use Ethereum addresses as initial default if first time
+      if (!saved && currentChain === 'BASE') {
+        const baseLoadedKey = 'BASE_addresses_loaded';
+        if (!localStorage.getItem(baseLoadedKey)) {
+          saved = localStorage.getItem("ETHEREUM_ethAddress") || "";
+          localStorage.setItem(baseLoadedKey, '1');
+          if (saved) {
+            window.chainStorage.setItem("ethAddress", saved);
+          }
+        }
+      }
+    } else {
+      // Fallback - check both formats
+      saved = localStorage.getItem("ETHEREUM_ethAddress") || localStorage.getItem("ethAddress") || "";
+    }
+    
     if (saved) addrInput.value = saved;
   }
 
   // Load custom RPCs
   const rpcInput = document.getElementById("customRPC");
   if (rpcInput) {
-    const saved = localStorage.getItem("customRPC");
+    // Load chain-specific RPC
+    const saved = window.chainManager ? 
+      window.chainManager.getRPCEndpoints().join('\n') : 
+      localStorage.getItem("customRPC");
     if (saved) rpcInput.value = saved;
   }
 
@@ -4285,8 +4627,11 @@ function validateSettings() {
   const okAddr  = isNonEmptyTextarea("ethAddress");
   markValidity("field-ethAddress", okAddr, "At least one Ethereum address is required.");
 
-  const okRPC   = isNonEmptyTextarea("customRPC");
-  markValidity("field-customRPC", okRPC, "Enter at least one RPC endpoint.");
+  // Custom RPC is optional - we have defaults for each chain
+  // Only validate format if user has entered something
+  const rpcText = document.getElementById("customRPC")?.value.trim() || "";
+  const okRPC = !rpcText || rpcText.split("\n").some(s => s.trim().startsWith("http"));
+  markValidity("field-customRPC", okRPC, "Invalid RPC format. URLs must start with http or https.");
 
   const okKey   = isNonEmptyInput("etherscanApiKey");
   markValidity("field-etherscanApiKey", okKey, "Etherscan API key is required.");
@@ -4345,7 +4690,9 @@ async function scanMints() {
   web3 = new Web3(rpcEndpoints[0]);
   ETHERSCAN_CHAIN_ID = await web3.eth.getChainId();
 
-  contract = new web3.eth.Contract(cointoolAbi, CONTRACT_ADDRESS);
+  // Get current chain's contract address
+  const currentContractAddress = window.chainManager?.getContractAddress('COINTOOL') || CONTRACT_ADDRESS;
+  contract = new web3.eth.Contract(cointoolAbi, currentContractAddress);
   contract.setProvider(web3.currentProvider);
 
   window.progressUI.show(true);
@@ -4683,9 +5030,13 @@ async function connectWallet() {
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
     const chainId = parseInt(chainIdHex, 16);
-    if (chainId !== 1) {
-      // Not on Ethereum Mainnet: show message and prevent connecting
-      alert('Please switch your wallet to Ethereum Mainnet to use the app.');
+    
+    // Don't force app to match wallet - let user control app chain
+    const walletChainKey = window.chainManager?.getChainById(chainId);
+    
+    if (!walletChainKey) {
+      // Wallet is on unsupported chain
+      alert(`Your wallet is connected to an unsupported network (chain ID ${chainId}). Please switch to Ethereum or Base.`);
       // Ensure UI remains in disconnected state
       connectedAccount = null;
       window.connectedAccount = null;
@@ -4696,6 +5047,9 @@ async function connectWallet() {
       try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
       return;
     }
+    
+    // Just connect - don't change app chain
+    console.log(`Wallet connected on ${walletChainKey}, app is on ${window.chainManager?.getCurrentChain()}`);
 
     connectedAccount = accounts[0];
     window.connectedAccount = connectedAccount; // expose for other scripts
@@ -4709,19 +5063,20 @@ async function connectWallet() {
     __updateWalletEyeSize();
 
     // keep UI in sync
-    window.ethereum.removeAllListeners?.('chainChanged');
+    // Note: chainChanged is now handled by networkSelector.js which will sync the app to match wallet's chain
+    // We only need to listen for account changes here
     window.ethereum.removeAllListeners?.('accountsChanged');
-    window.ethereum.on?.('chainChanged', async (cidHex) => {
+    
+    // The networkSelector will handle chain changes and sync the app accordingly
+    // We just need to update the badge when network changes occur
+    const chainChangeHandler = async (cidHex) => {
       const cid = parseInt(cidHex, 16);
       await updateNetworkBadge();
-      if (cid !== 1) {
-        alert('Please switch your wallet to Ethereum Mainnet to use the app.');
-        await disconnectWallet();
-        try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
-        return;
-      }
       if (cointoolTable) cointoolTable.redraw(true);
-    });
+    };
+    
+    // Add a simple listener just for UI updates (network selector handles the actual switching)
+    window.ethereum.on?.('chainChanged', chainChangeHandler);
     window.ethereum.on?.('accountsChanged', async (accs) => {
       connectedAccount = accs?.[0] || null;
       window.connectedAccount = connectedAccount;
@@ -4753,12 +5108,16 @@ async function connectWallet() {
   // 1b) Require Ethereum mainnet
   try {
     const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-    if (parseInt(chainId, 16) !== 1) {
-      alert("Please switch your wallet to Ethereum Mainnet to claim/remint.");
+    const expectedChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    const currentChainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+    
+    if (parseInt(chainId, 16) !== expectedChainId) {
+      alert(`Please switch your wallet to ${currentChainName} (chain ID ${expectedChainId}) to claim/remint.`);
       return;
     }
   } catch {
-    alert("Could not read current network. Please switch to Ethereum Mainnet.");
+    const currentChainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+    alert(`Could not read current network. Please switch to ${currentChainName}.`);
     return;
   }
 
@@ -4795,7 +5154,7 @@ async function connectWallet() {
     if (!Number.isFinite(tokenId)) { alert("Bad Stake XENFT tokenId."); return; }
 
     // Use the address exported by xenft_stake_scanner.js, fallback to canonical mainnet address
-    const STAKE_ADDR =
+    const STAKE_ADDR = window.chainManager?.getContractAddress('XENFT_STAKE') ||
       (window.xenftStake && window.xenftStake.CONTRACT_ADDRESS) ||
       '0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC';
 
@@ -4881,6 +5240,31 @@ async function connectWallet() {
 
 
 window.onload = async () => {
+  // Initialize chain system first
+  try {
+    if (window.chainManager) {
+      // Update all chain-specific configurations
+      updateChainConfig();
+      
+      // Update display to show current chain
+      const chainName = window.chainManager.getCurrentConfig().name;
+      const networkNameEl = document.getElementById('networkName');
+      if (networkNameEl) {
+        networkNameEl.textContent = `(${chainName})`;
+      }
+      
+      // Listen for chain changes if not already listening
+      if (!window._chainListenerRegistered) {
+        window.chainManager.onChainChange(() => {
+          updateChainConfig();
+        });
+        window._chainListenerRegistered = true;
+      }
+    }
+  } catch (e) {
+    console.warn('Chain manager not initialized:', e);
+  }
+  
   loadUserPreferences();
   try { initShowMaskToggles(); } catch {}
   validateInputs();
@@ -4913,12 +5297,12 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   // Track last saved values and blur timestamps to prevent duplicates
   const fieldState = {
     customRPC: {
-      lastValue: localStorage.getItem("customRPC") || "",
+      lastValue: (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : localStorage.getItem("customRPC")) || "",
       lastBlurTime: 0,
       saveTimer: null
     },
     ethAddress: {
-      lastValue: localStorage.getItem("ethAddress") || "",
+      lastValue: (window.chainStorage ? window.chainStorage.getItem("ethAddress") : localStorage.getItem("ethAddress")) || "",
       lastBlurTime: 0,
       saveTimer: null
     },
@@ -4928,6 +5312,16 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
       saveTimer: null
     }
   };
+  
+  // Helper function to show save status (simple console log for now)
+  function showSaveStatus(message, success = true) {
+    console.log(`[Save Status] ${message}`);
+    // You could enhance this to show a visual toast/notification
+    // For now, just log to console to avoid the error
+  }
+  
+  // Make it globally available for event handlers
+  window.showSaveStatus = showSaveStatus;
   
   // Helper function to save field with duplicate prevention
   function saveField(fieldName, value, displayName) {
@@ -4955,9 +5349,8 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
     localStorage.setItem(fieldName, value);
     state.lastValue = value;
     
-    if (typeof showToast === "function") {
-      showToast(displayName + " saved", "success");
-    }
+    // Show save status
+    showSaveStatus(displayName + " saved", true);
     
     // Check if setup is complete
     if (isSetupComplete()) {
@@ -4969,14 +5362,29 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   const customRPCField = document.getElementById("customRPC");
   if (customRPCField) {
     customRPCField.addEventListener("blur", function() {
-      saveField("customRPC", this.value, "Custom RPCs");
+      // Save chain-specific RPC
+      if (window.chainManager) {
+        const rpcList = this.value.split('\n').filter(Boolean);
+        window.chainManager.saveRPCEndpoints(rpcList);
+        // RPC saved via chainManager
+        showSaveStatus("Custom RPCs saved", true);
+      } else {
+        saveField("customRPC", this.value, "Custom RPCs");
+      }
     });
   }
   
   const ethAddressField = document.getElementById("ethAddress");
   if (ethAddressField) {
     ethAddressField.addEventListener("blur", function() {
-      saveField("ethAddress", this.value, "Addresses");
+      // Save chain-specific addresses
+      if (window.chainStorage) {
+        window.chainStorage.setItem("ethAddress", this.value);
+        // Addresses saved via chainStorage
+        showSaveStatus("Addresses saved", true);
+      } else {
+        saveField("ethAddress", this.value, "Addresses");
+      }
     });
   }
   
@@ -5047,8 +5455,40 @@ function setMaturityHeaderFilterText(text) {
 }
 
 
-// Delete content of ALL IndexedDBs (stores only; DB shells remain)
+// Delete ALL IndexedDBs completely (including new chain-specific ones)
 async function clearAllAppData() {
+  console.log("Clearing all app data and databases...");
+  
+  // List of all possible databases (old and new)
+  const allDatabases = [
+    // Legacy databases
+    "DB_Cointool", "DB_Xenft", "DB-Xenft-Stake", "DB-Xen-Stake",
+    "DB_XenStake", "DB_XenftStake", // Alternative names
+    // New chain-specific databases
+    "ETH_DB_Cointool", "ETH_DB_Xenft", "ETH_DB_XenStake", "ETH_DB_XenftStake",
+    "BASE_DB_Cointool", "BASE_DB_Xenft", "BASE_DB_XenStake", "BASE_DB_XenftStake"
+  ];
+  
+  // Delete all databases
+  const deletePromises = allDatabases.map(dbName => 
+    deleteDatabaseByName(dbName).catch(e => {
+      console.log(`Could not delete ${dbName}:`, e);
+      return 'failed';
+    })
+  );
+  
+  const results = await Promise.allSettled(deletePromises);
+  console.log("Database deletion results:", results);
+  
+  // Reset migration flags so old backups can be migrated
+  localStorage.removeItem('dbMigrationCompleted');
+  localStorage.removeItem('lastSuccessfulMigration');
+  localStorage.removeItem('migrationDuration');
+  localStorage.removeItem('migrationDeletionLog');
+  localStorage.removeItem('onboardingDismissed');
+  console.log("Migration flags reset");
+  
+  // For backwards compatibility, also try to clear stores if databases exist
   // DB_Cointool
   try {
     const ctDb = await openDB();
@@ -5113,14 +5553,50 @@ function clearStore(db, storeName) {
   });
 }
 
-// bulk put
+// bulk put with error handling
 function bulkPut(db, storeName, items) {
   return new Promise((resolve, reject) => {
     if (!Array.isArray(items) || items.length === 0) return resolve();
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
-    for (const it of items) store.put(it);
-    tx.oncomplete = () => resolve();
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const item of items) {
+      try {
+        // Ensure the item has the required key field
+        if (storeName === "xenfts") {
+          // XENFTs use Xenft_id as key
+          if (!item.Xenft_id && item.tokenId) {
+            item.Xenft_id = item.tokenId;
+          }
+          if (!item.Xenft_id && item.ID) {
+            item.Xenft_id = item.ID;
+          }
+          if (!item.Xenft_id) {
+            console.warn(`[Import] Skipping XENFT without Xenft_id:`, item);
+            errorCount++;
+            continue;
+          }
+        }
+        
+        const req = store.put(item);
+        req.onsuccess = () => successCount++;
+        req.onerror = (e) => {
+          console.warn(`[Import] Failed to import item in ${storeName}:`, e);
+          errorCount++;
+        };
+      } catch (e) {
+        console.warn(`[Import] Error processing item for ${storeName}:`, e, item);
+        errorCount++;
+      }
+    }
+    
+    tx.oncomplete = () => {
+      console.log(`[Import] ${storeName}: imported ${successCount} items, ${errorCount} errors`);
+      resolve();
+    };
     tx.onerror = e => reject(e);
   });
 }
@@ -5133,13 +5609,30 @@ function getGasRefreshMs() {
 
 // collect all settings on the Settings tab (+ optional throttle)
 function collectSettingsSnapshot() {
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+  
   const settings = {
     ethAddress: (document.getElementById("ethAddress")?.value ?? "").trim(),
-    customRPC: (document.getElementById("customRPC")?.value ?? "").trim(),
+    customRPC: (function(){
+      const val = document.getElementById("customRPC")?.value;
+      if (val) return val.trim();
+      // Load chain-specific customRPC
+      if (window.chainManager) {
+        const rpcs = window.chainManager.getRPCEndpoints();
+        return rpcs.join('\n');
+      }
+      return (localStorage.getItem(chainPrefix + "customRPC") || "").trim();
+    })(),
     etherscanApiKey: (document.getElementById("etherscanApiKey")?.value ?? "").trim(),
     chunkSize: (document.getElementById("chunkSize")?.value ?? "").trim(),
     gasRefreshSeconds: (document.getElementById("gasRefreshSeconds")?.value ?? "").trim(),
-    mintTermDays: (document.getElementById("mintTermDays")?.value ?? (localStorage.getItem("mintTermDays") || "")).trim(),
+    mintTermDays: (function(){
+      const val = document.getElementById("mintTermDays")?.value;
+      if (val) return val.trim();
+      // Load chain-specific mintTermDays
+      return (localStorage.getItem(chainPrefix + "mintTermDays") || "").trim();
+    })(),
     theme: (function(){ try { return getStoredTheme(); } catch { return (localStorage.getItem("theme") || "system"); } })(),
     vmuChartExpanded: (localStorage.getItem("vmuChartExpanded") || '0'),
     // Persist the last active tab id (Dashboard/Mint/Settings/About)
@@ -5159,7 +5652,10 @@ function collectSettingsSnapshot() {
     ethAddressMasked: (localStorage.getItem("ethAddressMasked") || '0'),
     connectWalletMasked: (localStorage.getItem("connectWalletMasked") || '0'),
     summaryCollapsed: (localStorage.getItem("summaryCollapsed") || 'false'),
-    xenBreakdownExpanded: (localStorage.getItem("xenBreakdownExpanded") || 'false')
+    xenBreakdownExpanded: (localStorage.getItem("xenBreakdownExpanded") || 'false'),
+    // Chain-specific settings
+    onboardingDismissed: (localStorage.getItem(chainPrefix + "onboardingDismissed") || '0'),
+    selectedChain: currentChain
   };
   const throttle = localStorage.getItem("etherscanThrottleMs");
   if (throttle) settings.etherscanThrottleMs = throttle;
@@ -5168,6 +5664,11 @@ function collectSettingsSnapshot() {
 
 function applySettingsSnapshot(settings) {
   if (!settings || typeof settings !== "object") return;
+  
+  // Determine which chain the settings are for
+  const targetChain = settings.selectedChain || window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainPrefix = targetChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+  
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
   setVal("ethAddress", settings.ethAddress);
   setVal("customRPC", settings.customRPC);
@@ -5176,13 +5677,35 @@ function applySettingsSnapshot(settings) {
   setVal("gasRefreshSeconds", settings.gasRefreshSeconds);
   setVal("mintTermDays", settings.mintTermDays);
 
-  if (typeof settings.ethAddress === "string") localStorage.setItem("ethAddress", settings.ethAddress);
-  if (typeof settings.customRPC === "string") localStorage.setItem("customRPC", settings.customRPC);
+  // Save addresses with chain prefix
+  if (typeof settings.ethAddress === "string") {
+    if (window.chainStorage) {
+      window.chainStorage.setItem("ethAddress", settings.ethAddress);
+    } else {
+      localStorage.setItem("ethAddress", settings.ethAddress);
+    }
+  }
+  if (typeof settings.customRPC === "string") {
+    // Save chain-specific customRPC
+    if (window.chainManager) {
+      const rpcList = settings.customRPC.split('\n').filter(Boolean);
+      window.chainManager.saveRPCEndpoints(rpcList);
+    } else {
+      localStorage.setItem(chainPrefix + "customRPC", settings.customRPC);
+    }
+  }
   if (typeof settings.etherscanApiKey === "string") localStorage.setItem("etherscanApiKey", settings.etherscanApiKey);
   if (settings.chunkSize != null) localStorage.setItem("chunkSize", String(settings.chunkSize));
   if (typeof settings.etherscanThrottleMs === "string") localStorage.setItem("etherscanThrottleMs", settings.etherscanThrottleMs);
   if (settings.gasRefreshSeconds != null) localStorage.setItem("gasRefreshSeconds", String(settings.gasRefreshSeconds));
-  if (settings.mintTermDays != null) localStorage.setItem("mintTermDays", String(settings.mintTermDays));
+  if (settings.mintTermDays != null) {
+    // Save chain-specific mintTermDays
+    localStorage.setItem(chainPrefix + "mintTermDays", String(settings.mintTermDays));
+  }
+  if (settings.onboardingDismissed != null) {
+    // Save chain-specific onboardingDismissed
+    localStorage.setItem(chainPrefix + "onboardingDismissed", String(settings.onboardingDismissed));
+  }
   if (settings.etherscanApiKeyVisible != null) localStorage.setItem("etherscanApiKeyVisible", String(settings.etherscanApiKeyVisible));
   if (settings.ethAddressMasked != null) localStorage.setItem("ethAddressMasked", String(settings.ethAddressMasked));
   if (settings.connectWalletMasked != null) localStorage.setItem("connectWalletMasked", String(settings.connectWalletMasked));
@@ -5290,8 +5813,27 @@ function formatBackupFileName(now = new Date()){
   return `mintscanner-backup-${y}-${m}-${d}_${h}-${mm}-${ss}_${suffix}.json`;
 }
 async function exportBackup() {
-  // --- DB_Cointool ---
-  const ctDb = await openDB();
+  // Determine current chain to export the right databases
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+  
+  console.log(`Exporting backup for chain: ${currentChain}`);
+  
+  // Try chain-specific databases first, fallback to legacy
+  let dbName = chainPrefix + 'DB_Cointool';
+  let ctDb;
+  
+  try {
+    // Try to open chain-specific database
+    ctDb = await openDatabaseByName(dbName);
+    console.log(`Exporting from ${dbName}`);
+  } catch (e) {
+    // Fallback to legacy database
+    console.log(`${dbName} not found, trying legacy DB_Cointool`);
+    ctDb = await openDB();
+    dbName = 'DB_Cointool';
+  }
+  
   const [mints, scanState, actionsCache] = await Promise.all([
     getAllFromStore(ctDb, "mints"),
     getAllFromStore(ctDb, "scanState"),
@@ -5339,12 +5881,15 @@ async function exportBackup() {
 
   const payload = {
     fileType: "mintscanner-backup",
-    version: 4, // Bump version for regular Stake data
+    version: 5, // Version 5 supports chain-specific databases
     exportedAt: new Date().toISOString(),
+    exportedChain: currentChain,
+    exportedDatabase: dbName, // Track which database was exported
     settings: collectSettingsSnapshot(),
     databases: [
       {
-        name: "DB_Cointool",
+        name: dbName, // Use the actual database name (could be ETH_DB_Cointool or BASE_DB_Cointool)
+        originalName: "DB_Cointool", // Keep track of original name for import compatibility
         version: 3,
         stores: { mints, scanState, actionsCache }
       },
@@ -5404,6 +5949,34 @@ async function exportBackup() {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 
+// Check if migration is needed by looking for old database names
+async function checkIfMigrationNeeded() {
+  const oldDatabases = ['DB_Cointool', 'DB_Xenft', 'DB-Xenft-Stake', 'DB-Xen-Stake'];
+  
+  for (const dbName of oldDatabases) {
+    try {
+      // Try to open the database - if it exists, migration is needed
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName);
+        request.onsuccess = () => {
+          request.result.close();
+          resolve(true);
+        };
+        request.onerror = () => reject(false);
+      });
+      
+      if (db) {
+        console.log(`[Migration Check] Found old database: ${dbName}`);
+        return true;
+      }
+    } catch {
+      // Database doesn't exist, continue checking
+    }
+  }
+  
+  return false;
+}
+
 // Import: supports new "mintscanner-backup" AND legacy "cointool-backup"
 async function importBackupFromFile(file) {
   if (!file) return;
@@ -5413,6 +5986,43 @@ async function importBackupFromFile(file) {
   try { data = JSON.parse(text); }
   catch { alert("Invalid backup file."); return; }
 
+  // Clear only chain-specific databases, preserve old ones for migration
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+  
+  // Delete chain-specific databases
+  const chainDatabases = [
+    `${chainPrefix}DB_Cointool`,
+    `${chainPrefix}DB_Xenft`,
+    `${chainPrefix}DB-Xenft-Stake`,
+    `${chainPrefix}DB-Xen-Stake`
+  ];
+  
+  for (const dbName of chainDatabases) {
+    try {
+      await deleteDatabaseByName(dbName);
+      console.log(`[Import] Deleted chain database: ${dbName}`);
+    } catch (e) {
+      console.warn(`[Import] Could not delete ${dbName}:`, e);
+    }
+  }
+  
+  // Clear localStorage but preserve critical items
+  const preserveKeys = ['selectedChain', 'privacyAccepted', 'onboardingDismissed'];
+  const preserved = {};
+  for (const key of preserveKeys) {
+    preserved[key] = localStorage.getItem(key);
+  }
+  localStorage.clear();
+  for (const key of preserveKeys) {
+    if (preserved[key] !== null) {
+      localStorage.setItem(key, preserved[key]);
+    }
+  }
+
+  // Track if we imported any old databases
+  let importedOldDatabases = false;
+
   // New multi-DB format
   if (data && data.fileType === "mintscanner-backup" && Array.isArray(data.databases)) {
     applySettingsSnapshot(data.settings || {}); // settings first
@@ -5421,70 +6031,147 @@ async function importBackupFromFile(file) {
       const name = dbDef?.name;
       const stores = dbDef?.stores || {};
 
-      if (name === "DB_Cointool") {
-        const db = await openDB();
-        await clearStore(db, "mints").catch(()=>{});
-        await clearStore(db, "scanState").catch(()=>{});
-        await clearStore(db, "actionsCache").catch(()=>{});
-        await bulkPut(db, "mints", stores.mints || []);
-        await bulkPut(db, "scanState", stores.scanState || []);
-        if (Array.isArray(stores.actionsCache)) {
-          await bulkPut(db, "actionsCache", stores.actionsCache);
+      // Check if this is an old database name
+      const isOldDatabase = name === "DB_Cointool" || name === "DB_Xenft" || 
+                           name === "DB-Xenft-Stake" || name === "DB-Xen-Stake";
+      
+      if (isOldDatabase) {
+        importedOldDatabases = true;
+        console.log(`[Import] Importing old database: ${name}`);
+      }
+
+      // Handle both legacy and new database names
+      const originalName = dbDef?.originalName || name;
+      
+      if (originalName === "DB_Cointool" || name === "DB_Cointool" || 
+          name.endsWith("DB_Cointool")) {
+        // For old backups, import to legacy DB_Cointool
+        // For new backups with chain prefix, also create legacy for migration
+        if (isOldDatabase || name.includes("_DB_Cointool")) {
+          // Create/update the old database for migration
+          const legacyDb = await openDatabaseByName("DB_Cointool");
+          await clearStore(legacyDb, "mints").catch(()=>{});
+          await clearStore(legacyDb, "scanState").catch(()=>{});
+          await clearStore(legacyDb, "actionsCache").catch(()=>{});
+          await bulkPut(legacyDb, "mints", stores.mints || []);
+          await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          if (Array.isArray(stores.actionsCache)) {
+            await bulkPut(legacyDb, "actionsCache", stores.actionsCache);
+          }
+          importedOldDatabases = true;
         }
       }
 
-      if (name === "DB_Xenft" && window.xenft?.openDB) {
-        const xfDb = await window.xenft.openDB();
-        await clearStore(xfDb, "xenfts").catch(()=>{});
-        await bulkPut(xfDb, "xenfts", stores.xenfts || []);
+      if (name === "DB_Xenft" || name.includes("_DB_Xenft")) {
+        // Check for data under different possible keys
+        const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
+        
+        if (isOldDatabase || name.includes("_DB_Xenft")) {
+          // Create/update the old database for migration
+          const legacyDb = await openDatabaseByName("DB_Xenft");
+          await clearStore(legacyDb, "xenfts").catch(()=>{});
+          
+          // Ensure each item has Xenft_id field (the correct keyPath)
+          const processedData = xenftData.map(item => {
+            if (!item.Xenft_id && item.tokenId) {
+              return { ...item, Xenft_id: item.tokenId };
+            }
+            if (!item.Xenft_id && item.ID) {
+              return { ...item, Xenft_id: item.ID };
+            }
+            return item;
+          }).filter(item => item.Xenft_id); // Only keep items with valid Xenft_id
+          
+          if (processedData.length > 0) {
+            await bulkPut(legacyDb, "xenfts", processedData);
+            console.log(`[Import] Imported ${processedData.length} XENFTs to DB_Xenft`);
+          }
+          
+          if (isOldDatabase) importedOldDatabases = true;
+        }
       }
 
-      if (name === "DB-Xenft-Stake" && window.xenftStake?.openDB) {
-        const stakeDb = await window.xenftStake.openDB();
-        await clearStore(stakeDb, "stakes").catch(() => {});
-        await clearStore(stakeDb, "scanState").catch(() => {});
-        await bulkPut(stakeDb, "stakes", stores.stakes || []);
-        await bulkPut(stakeDb, "scanState", stores.scanState || []);
+      if ((name === "DB-Xenft-Stake" || name.includes("_DB-Xenft-Stake")) && stores.stakes) {
+        if (isOldDatabase || name.includes("_DB-Xenft-Stake")) {
+          // Create/update the old database for migration
+          const legacyDb = await openDatabaseByName("DB-Xenft-Stake");
+          await clearStore(legacyDb, "stakes").catch(() => {});
+          await clearStore(legacyDb, "scanState").catch(() => {});
+          await bulkPut(legacyDb, "stakes", stores.stakes || []);
+          await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          if (isOldDatabase) importedOldDatabases = true;
+        }
       }
 
-      // ADD THIS NEW BLOCK for DB-Xen-Stake
-      if (name === "DB-Xen-Stake" && window.xenStake?.openDB) { //
-        const xsDb = await window.xenStake.openDB(); //
-        await clearStore(xsDb, "stakes").catch(() => {}); //
-        await clearStore(xsDb, "scanState").catch(() => {}); //
-        await bulkPut(xsDb, "stakes", stores.stakes || []);
-        await bulkPut(xsDb, "scanState", stores.scanState || []);
+      if ((name === "DB-Xen-Stake" || name.includes("_DB-Xen-Stake")) && stores.stakes) {
+        if (isOldDatabase || name.includes("_DB-Xen-Stake")) {
+          // Create/update the old database for migration
+          const legacyDb = await openDatabaseByName("DB-Xen-Stake");
+          await clearStore(legacyDb, "stakes").catch(() => {});
+          await clearStore(legacyDb, "scanState").catch(() => {});
+          await bulkPut(legacyDb, "stakes", stores.stakes || []);
+          await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          if (isOldDatabase) importedOldDatabases = true;
+        }
       }
     }
 
-    alert("Backup imported. The app will now reload.");
-    // Switch to dashboard tab before reload
-    if (typeof window.setActiveTab === 'function') {
-      window.setActiveTab('tab-dashboard');
+    // Force migration if we imported old databases or if old databases exist
+    if (importedOldDatabases || await checkIfMigrationNeeded()) {
+      alert("Backup imported. Old data detected - migration will run on reload.");
+      console.log("[Import] Forcing migration on reload due to old databases");
+      // Clear ALL migration flags to force migration
+      localStorage.removeItem('dbMigrationCompleted');
+      localStorage.removeItem('ETH_dbMigrationCompleted');
+      localStorage.removeItem('BASE_dbMigrationCompleted');
+      localStorage.removeItem('localStorageMigrated');
+      localStorage.removeItem('ETH_localStorageMigrated');
+      localStorage.removeItem('BASE_localStorageMigrated');
+    } else {
+      alert("Backup imported successfully.");
     }
-    setTimeout(() => window.location.reload(), 100);
+    
+    // Navigate to dashboard
+    setTimeout(() => {
+      // Use URL with hash to go directly to dashboard
+      window.location.href = window.location.origin + window.location.pathname + '#dashboard';
+      window.location.reload();
+    }, 100);
     return;
   }
 
-  // Legacy single-DB format
+  // Legacy single-DB format (always uses old DB_Cointool)
   if (!data || data.fileType !== "cointool-backup" || !data.stores) {
     alert("Invalid backup structure.");
     return;
   }
 
-  const db = await openDB();
-  await clearStore(db, "mints");
-  await clearStore(db, "scanState");
-  await bulkPut(db, "mints", data.stores.mints || []);
-  await bulkPut(db, "scanState", data.stores.scanState || []);
+  // Import to legacy DB_Cointool database
+  const legacyDb = await openDatabaseByName("DB_Cointool");
+  await clearStore(legacyDb, "mints");
+  await clearStore(legacyDb, "scanState");
+  await bulkPut(legacyDb, "mints", data.stores.mints || []);
+  await bulkPut(legacyDb, "scanState", data.stores.scanState || []);
   applySettingsSnapshot(data.settings || {});
 
-  alert("Backup imported successfully. The app will now reload.");
-  // Switch to dashboard tab before reload
-  if (typeof window.setActiveTab === 'function') {
-    window.setActiveTab('tab-dashboard');
-  }
-  setTimeout(() => window.location.reload(), 100);
+  // Legacy format always needs migration
+  alert("Legacy backup imported. Migration will run on reload.");
+  console.log("[Import] Legacy backup format detected, forcing migration on reload");
+  
+  // Clear ALL migration flags to force migration
+  localStorage.removeItem('dbMigrationCompleted');
+  localStorage.removeItem('ETH_dbMigrationCompleted');
+  localStorage.removeItem('BASE_dbMigrationCompleted');
+  localStorage.removeItem('localStorageMigrated');
+  localStorage.removeItem('ETH_localStorageMigrated');
+  localStorage.removeItem('BASE_localStorageMigrated');
+  
+  // Navigate to dashboard
+  setTimeout(() => {
+    // Use URL with hash to go directly to dashboard
+    window.location.href = window.location.origin + window.location.pathname + '#dashboard';
+    window.location.reload();
+  }, 100);
 }
 
 // Promise-based DB deletion with blocked handling
@@ -5501,52 +6188,93 @@ function deleteDatabaseByName(name) {
   });
 }
 
+// Helper function to open database by name with schema
+function openDatabaseByName(name) {
+  return new Promise((resolve, reject) => {
+    // Determine version and schema based on database name
+    let version = 1;
+    if (name.includes("Cointool")) version = 3;
+    else if (name.includes("Xenft-Stake")) version = 2;
+    
+    const request = indexedDB.open(name, version);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      
+      // Create stores based on database type
+      if (name.includes("Cointool")) {
+        if (!db.objectStoreNames.contains("mints")) {
+          db.createObjectStore("mints", { keyPath: "ID" });
+        }
+        if (!db.objectStoreNames.contains("scanState")) {
+          db.createObjectStore("scanState", { keyPath: "address" });
+        }
+        if (!db.objectStoreNames.contains("actionsCache")) {
+          db.createObjectStore("actionsCache", { keyPath: "address" });
+        }
+      } else if (name.includes("Xenft") && name.includes("Stake")) {
+        if (!db.objectStoreNames.contains("stakes")) {
+          db.createObjectStore("stakes", { keyPath: "tokenId" });
+        }
+        if (!db.objectStoreNames.contains("scanState")) {
+          db.createObjectStore("scanState", { keyPath: "address" });
+        }
+      } else if (name.includes("Xenft")) {
+        if (!db.objectStoreNames.contains("xenfts")) {
+          db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+        }
+      } else if (name.includes("Xen-Stake")) {
+        if (!db.objectStoreNames.contains("stakes")) {
+          const store = db.createObjectStore("stakes", { keyPath: "id" });
+          store.createIndex("byOwner", "owner", { unique: false });
+        }
+        if (!db.objectStoreNames.contains("scanState")) {
+          db.createObjectStore("scanState", { keyPath: "address" });
+        }
+      }
+    };
+    
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = () => reject(new Error(`Failed to open database: ${name}`));
+  });
+}
+
 // Backup & Restore wiring (runs after DOM is available)
 (function wireBackupRestore(){
   const exportBtn  = document.getElementById("exportBackupBtn");
   const importInput = document.getElementById("importBackupInput");
-  const importLabel = document.getElementById("importBackupBtn"); // The button-styled label
+  const importBtn = document.getElementById("importBackupBtn"); // The import button
 
   if (exportBtn) {
-    exportBtn.addEventListener("click", exportBackup);
+    exportBtn.addEventListener("click", () => {
+      const ok = confirm("Export backup of your data?");
+      if (ok) {
+        exportBackup();
+      }
+    });
   }
 
-  if (importLabel && importInput) {
+  if (importBtn && importInput) {
     // For iOS compatibility, we need to trigger file input on the first user interaction
     // iOS Safari blocks file input clicks that come after async operations like confirm()
     
-    // Handle clicks on the styled label.
-    importLabel.addEventListener("click", (e) => {
-      e.preventDefault(); // Prevent the label's default action.
+    // Handle clicks on the button.
+    importBtn.addEventListener("click", (e) => {
+      // Show confirmation dialog
+      const ok = confirm(
+        "This will permanently DELETE your current databases before importing.\n\nContinue?"
+      );
+      if (!ok) return;
       
-      // On iOS, we need to trigger the file input immediately
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      
-      if (isIOS) {
-        // Show warning first, then let user select file
-        alert("WARNING: After selecting a file, your current data (DB_Cointool, DB_Xenft, DB-Xenft-Stake, and DB-Xen-Stake) will be permanently DELETED before importing.\n\nMake sure you have a backup!");
-        importInput.click();
-      } else {
-        // Non-iOS: use confirm dialog as before
-        const ok = confirm(
-          "This will permanently DELETE your current data (DB_Cointool, DB_Xenft, DB-Xenft-Stake, and DB-Xen-Stake) before importing.\n\nContinue?"
-        );
-        if (!ok) return;
-        
-        // Clear data first on non-iOS
-        clearAllAppData().catch(e => {
-          console.error("Failed to clear app data before import:", e);
-        }).finally(() => {
-          importInput.click();
-        });
-      }
+      // Trigger file input immediately to maintain user gesture context
+      importInput.click();
     });
 
     // Handle keyboard accessibility (Enter/Space).
-    importLabel.addEventListener("keydown", (e) => {
+    importBtn.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        startImportProcess();
+        importBtn.click(); // Trigger the same click handler
       }
     });
 
@@ -5554,16 +6282,9 @@ function deleteDatabaseByName(name) {
     importInput.addEventListener("change", async () => {
       const file = importInput.files && importInput.files[0];
       if (file) {
-        // On iOS, we need to clear data here since we couldn't do it earlier
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        if (isIOS) {
-          try {
-            await clearAllAppData();
-          } catch(e) {
-            console.error("Failed to clear app data before import:", e);
-          }
-        }
-        importBackupFromFile(file);
+        // Don't clear data here - let importBackupFromFile handle it
+        // This ensures old databases are preserved for migration
+        await importBackupFromFile(file);
       }
       // Reset the input so the user can select the same file again if needed.
       importInput.value = "";
@@ -5970,7 +6691,7 @@ async function disconnectWallet(){
     await updateNetworkBadge();
     try { window.prefillStakeAmountFromBalance?.(); window.updateStakeStartEnabled?.(); } catch {}
     try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
-    try { window.ethereum?.removeAllListeners?.('chainChanged'); } catch {}
+    // Don't remove chainChanged listeners - networkSelector needs them for app/wallet sync
     try { window.ethereum?.removeAllListeners?.('accountsChanged'); } catch {}
   } catch (e) { console.warn('disconnectWallet: ', e); }
 }
@@ -5981,4 +6702,71 @@ function handleWalletConnectClick(){
     if (isWalletConnected()) { disconnectWallet(); } else { connectWallet(); }
   } catch {}
 }
+
+// Utility function to force database migration (for debugging)
+window.forceDatabaseMigration = async function() {
+  console.log('Forcing database migration...');
+  
+  // Clear the migration flag to force re-migration
+  localStorage.removeItem('dbMigrationCompleted');
+  
+  // Import and run the migrator
+  try {
+    const { dbMigrator } = await import('./js/utils/databaseMigration.js');
+    const results = await dbMigrator.migrate();
+    console.log('Migration results:', results);
+    
+    // Reload the page to use the new databases
+    setTimeout(() => {
+      console.log('Reloading page to apply changes...');
+      window.location.reload();
+    }, 2000);
+  } catch (error) {
+    console.error('Migration failed:', error);
+  }
+};
+
+// Utility function to list all IndexedDB databases (for debugging)
+window.listAllDatabases = async function() {
+  try {
+    if (indexedDB.databases) {
+      const databases = await indexedDB.databases();
+      console.log('Current IndexedDB databases:');
+      databases.forEach(db => {
+        console.log(`  - ${db.name} (version ${db.version})`);
+      });
+      return databases;
+    } else {
+      console.log('Browser does not support indexedDB.databases()');
+      
+      // Try to open known databases
+      const knownDbs = [
+        'DB_Cointool', 'DB_Xenft', 'DB-Xen-Stake', 'DB_XenStake',
+        'DB-Xenft-Stake', 'DB_XenftStake',
+        'ETH_DB_Cointool', 'ETH_DB_Xenft', 'ETH_DB_XenStake', 'ETH_DB_XenftStake',
+        'BASE_DB_Cointool', 'BASE_DB_Xenft', 'BASE_DB_XenStake', 'BASE_DB_XenftStake'
+      ];
+      
+      console.log('Checking known database names:');
+      for (const name of knownDbs) {
+        try {
+          const request = indexedDB.open(name);
+          await new Promise((resolve, reject) => {
+            request.onsuccess = () => {
+              const db = request.result;
+              console.log(`  - ${name} exists (version ${db.version})`);
+              db.close();
+              resolve();
+            };
+            request.onerror = () => resolve();
+          });
+        } catch (e) {
+          // Database doesn't exist
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error listing databases:', error);
+  }
+};
 

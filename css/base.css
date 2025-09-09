@@ -18,6 +18,157 @@ body {
   margin: 20px
 }
 
+/* Network Selector Styles */
+.network-selector {
+  position: relative;
+  display: inline-block;
+  margin-right: 10px;
+}
+
+.network-selector-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--btn-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.network-selector-btn:hover {
+  background: var(--chip-bg);
+  border-color: var(--accent-color);
+}
+
+.network-icon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.network-chevron {
+  transition: transform 0.2s ease;
+}
+
+.network-selector-btn[aria-expanded="true"] .network-chevron {
+  transform: rotate(180deg);
+}
+
+.network-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.network-dropdown[hidden] {
+  display: none;
+}
+
+.network-dropdown-header {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.network-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-color);
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.network-option:hover {
+  background: var(--chip-bg);
+}
+
+.network-option-icon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.network-option-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.network-option-check {
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+/* Chain switching overlay */
+.chain-switching-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.chain-switching-modal {
+  background: var(--panel);
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  max-width: 400px;
+}
+
+.chain-switching-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.chain-switching-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-color);
+}
+
+.chain-switching-message {
+  font-size: 14px;
+  color: var(--muted);
+}
+
 input, button, textarea {
   margin: 5px 0;
   padding: 8px

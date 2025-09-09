@@ -1,7 +1,73 @@
 // Global configuration - centralized contract addresses, API endpoints, and constants
 // This file contains all configuration values used across the application
 
-export const config = {
+import { chainManager, getCurrentChainConfig } from './chainConfig.js';
+
+// Dynamic config that delegates to chain-specific settings
+export const config = new Proxy({}, {
+  get(target, prop) {
+    // Get current chain config
+    const chainConfig = getCurrentChainConfig();
+    
+    // Map old config structure to new chain config
+    switch(prop) {
+      case 'contracts':
+        return chainConfig.contracts;
+      case 'rpc':
+        return {
+          DEFAULT_RPC: chainConfig.rpcUrls.default,
+          FALLBACK_RPCS: chainConfig.rpcUrls.fallback,
+          CHAINLIST_URL: 'https://chainid.network/chains.json'
+        };
+      case 'apis':
+        return {
+          etherscan: {
+            BASE_URL: chainConfig.explorer.apiUrl,
+            TRANSACTION_URL: chainConfig.explorer.txUrl
+          },
+          coingecko: {
+            XEN_PRICE_URL: `https://api.coingecko.com/api/v3/simple/price?ids=${chainConfig.coingecko.xenId}&vs_currencies=usd`
+          }
+        };
+      case 'events':
+        return chainConfig.events;
+      case 'constants':
+        return chainConfig.constants;
+      case 'analytics':
+        return {
+          GOOGLE_ANALYTICS_ID: 'G-333LEVEH6W',
+          GTAG_URL: 'https://www.googletagmanager.com/gtag/js'
+        };
+      case 'network':
+        return {
+          ETHEREUM_CHAIN_ID: chainConfig.id,
+          ETHERSCAN_MAX_RESULTS: 10000,
+          ETHERSCAN_RATE_LIMIT_DELAY: 200,
+          MAX_RPC_RETRIES: 5,
+          RPC_RETRY_DELAY: 1000,
+          MAX_BLOCK_RANGE: 10000,
+          SAFE_BLOCK_RANGE: 2000
+        };
+      case 'databases':
+        return {
+          COINTOOL_DB_NAME: chainConfig.databases.COINTOOL_DB,
+          XENFT_DB_NAME: chainConfig.databases.XENFT_DB,
+          XEN_STAKE_DB_NAME: chainConfig.databases.XEN_STAKE_DB,
+          XENFT_STAKE_DB_NAME: chainConfig.databases.XENFT_STAKE_DB,
+          STORES: {
+            MINTS: 'mints',
+            SCAN_STATE: 'scanState',
+            ACTIONS_CACHE: 'actionsCache'
+          }
+        };
+      default:
+        return target[prop];
+    }
+  }
+});
+
+// Legacy static config for backwards compatibility
+export const staticConfig = {
   // === CONTRACT ADDRESSES ===
   contracts: {
     // Main XEN contract
@@ -138,19 +204,18 @@ export const config = {
 
 // Get current AMP value based on days since genesis
 export function getCurrentAMP() {
-  const daysSinceGenesis = Math.floor((Date.now() - config.constants.XEN_GENESIS_DATE_MS) / 86_400_000);
-  const amp = config.constants.BASE_AMP - daysSinceGenesis;
-  return amp > 0 ? amp : 0;
+  return chainManager.getCurrentAMP();
 }
 
 // Get days since XEN genesis
 export function getDaysSinceGenesis() {
-  return Math.floor((Date.now() - config.constants.XEN_GENESIS_DATE_MS) / 86_400_000);
+  return chainManager.getDaysSinceGenesis();
 }
 
-// Build Etherscan API URL
+// Build Explorer API URL (Etherscan/BaseScan/etc)
 export function buildEtherscanUrl(module, action, params = {}) {
-  const baseUrl = config.apis.etherscan.BASE_URL;
+  const chainConfig = getCurrentChainConfig();
+  const baseUrl = chainConfig.explorer.apiUrl;
   const urlParams = new URLSearchParams({
     module,
     action,
@@ -159,9 +224,9 @@ export function buildEtherscanUrl(module, action, params = {}) {
   return `${baseUrl}?${urlParams.toString()}`;
 }
 
-// Build Etherscan transaction URL
+// Build Explorer transaction URL
 export function buildTransactionUrl(txHash) {
-  return `${config.apis.etherscan.TRANSACTION_URL}${txHash}`;
+  return chainManager.getExplorerUrl('tx', txHash);
 }
 
 // Get contract address by name (with fallback)
@@ -174,22 +239,9 @@ export function getContractAddress(name, fallback = null) {
   return address;
 }
 
-// Get RPC endpoint list from configuration or DOM
+// Get RPC endpoint list for current chain
 export function getRPCEndpoints() {
-  // Try to get from DOM first (user settings)
-  const rpcInput = document.getElementById('customRPC');
-  if (rpcInput && rpcInput.value.trim()) {
-    return rpcInput.value.trim().split('\n').map(s => s.trim()).filter(Boolean);
-  }
-  
-  // Try localStorage
-  const stored = localStorage.getItem('customRPC');
-  if (stored) {
-    return stored.split('\n').map(s => s.trim()).filter(Boolean);
-  }
-  
-  // Return default
-  return [config.rpc.DEFAULT_RPC, ...config.rpc.FALLBACK_RPCS];
+  return chainManager.getRPCEndpoints();
 }
 
 // Expose config globally for non-module scripts

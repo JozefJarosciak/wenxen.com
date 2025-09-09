@@ -135,8 +135,11 @@ export const web3Utils = {
       const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
       const chainId = parseInt(chainIdHex, 16);
       
-      if (chainId !== 1) {
-        throw new Error('Please switch to Ethereum Mainnet');
+      const expectedChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+      const currentChainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+      
+      if (chainId !== expectedChainId) {
+        throw new Error(`Please switch to ${currentChainName} (chain ID ${expectedChainId})`);
       }
       
       return true;

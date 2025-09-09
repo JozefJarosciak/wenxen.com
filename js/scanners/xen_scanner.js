@@ -2,8 +2,13 @@
 // Fix: decode log `data` with w3.eth.abi (window.Web3.eth.abi can be undefined in some builds)
 // Result: amount/term are now populated; maturity/status render correctly in table + calendar.
 (function () {
-  const CONTRACT_ADDRESS = (window.appConfig?.contracts?.XEN_ETH || "0x06450dee7fd2fb8e39061434babcfc05599a6fb8").toLowerCase();
-  const DEFAULT_RPC = window.appConfig?.rpc?.DEFAULT_RPC || "https://ethereum-rpc.publicnode.com";
+  // Get chain-specific contract address
+  const CONTRACT_ADDRESS = (window.chainManager?.getContractAddress('XEN_CRYPTO') || 
+    window.appConfig?.contracts?.XEN_ETH || 
+    "0x06450dee7fd2fb8e39061434babcfc05599a6fb8").toLowerCase();
+  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 
+    window.appConfig?.rpc?.DEFAULT_RPC || 
+    "https://ethereum-rpc.publicnode.com";
   const MIN_CONTRACT_BLOCK = 15700000;
   const SCAN_BACKTRACK_BLOCKS = 1000;
 
@@ -25,9 +30,13 @@
   // fmtLocalDateTime, dayKeyLocal -> js/utils/dateUtils.js
 
   // IDB
-  const DB_NAME="DB-Xen-Stake", DB_VER=1, STORE="stakes", STORE_ST="scanState";
+  const STORE="stakes", STORE_ST="scanState";
   function openDB(){return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(DB_NAME,DB_VER);
+    // Get chain-specific database name
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+    const dbName = `${chainPrefix}_DB-Xen-Stake`;
+    const req=indexedDB.open(dbName,1);
     req.onupgradeneeded=e=>{const db=e.target.result;
       if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:"id"}); os.createIndex("byOwner","owner",{unique:false});}
       if(!db.objectStoreNames.contains(STORE_ST)){db.createObjectStore(STORE_ST,{keyPath:"address"});}

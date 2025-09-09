@@ -96,14 +96,17 @@
   }
 
   // --- IndexedDB ---
-  const DB_NAME = "DB-Xenft-Stake";
-  const DB_VERSION = 2; // Bump version for schema change
   const STORE_STAKES = "stakes";
   const STORE_STATE = "scanState";
 
   function openDB(){
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      // Get chain-specific database name
+      const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+      const dbName = `${chainPrefix}_DB-Xenft-Stake`;
+      
+      const req = indexedDB.open(dbName, 2);
       req.onupgradeneeded = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains(STORE_STAKES)) {

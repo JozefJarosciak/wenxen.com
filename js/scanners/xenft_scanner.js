@@ -33,8 +33,13 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
 
 (function(){
-  const CONTRACT_ADDRESS = window.appConfig?.contracts?.XENFT_TORRENT || "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
-  const DEFAULT_RPC = window.appConfig?.rpc?.DEFAULT_RPC || "https://ethereum-rpc.publicnode.com";
+  // Get chain-specific contract address
+  const CONTRACT_ADDRESS = window.chainManager?.getContractAddress('XENFT_TORRENT') || 
+    window.appConfig?.contracts?.XENFT_TORRENT || 
+    "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
+  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 
+    window.appConfig?.rpc?.DEFAULT_RPC || 
+    "https://ethereum-rpc.publicnode.com";
 
 
 
@@ -83,7 +88,12 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   // --- INDEXEDDB ---
   function openDB() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("DB_Xenft", 1);
+      // Get chain-specific database name
+      const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+      const dbName = `${chainPrefix}_DB_Xenft`;
+      
+      const request = indexedDB.open(dbName, 1);
       request.onupgradeneeded = event => {
         const db = event.target.result;
         if (!db.objectStoreNames.contains("xenfts")) {

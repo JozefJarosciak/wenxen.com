@@ -98,6 +98,9 @@ export const modalManager = {
         return;
       }
       
+      // Mark onboarding as dismissed to prevent showing again
+      privacyStorage.setOnboardingDismissed(true);
+      
       modalManager.onboarding.hide();
       
       // Switch to Settings tab
@@ -191,10 +194,19 @@ export const modalManager = {
       declineButton.addEventListener('click', this.privacy.decline);
     }
     
-    // Set up onboarding modal button
+    // Set up onboarding modal buttons
     const getStartedButton = document.getElementById('onboardingGetStartedBtn');
     if (getStartedButton) {
       getStartedButton.addEventListener('click', this.onboarding.complete);
+    }
+    
+    const onboardingCloseBtn = document.getElementById('onboardingCloseBtn');
+    if (onboardingCloseBtn) {
+      onboardingCloseBtn.addEventListener('click', () => {
+        // Mark onboarding as dismissed so it doesn't show again
+        privacyStorage.setOnboardingDismissed(true);
+        this.onboarding.hide();
+      });
     }
     
     // Set up privacy link in footer
