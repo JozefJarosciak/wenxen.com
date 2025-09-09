@@ -4151,20 +4151,45 @@ function updateSummaryStats() {
  */
 // Verbose Etherscan range fetcher with dynamic splitting + reason-aware retries
 // Global rate limiter for Etherscan API calls (5 requests per second)
+// Uses a queue to handle parallel requests properly
 const etherscanRateLimiter = {
+  queue: [],
+  processing: false,
   lastRequestTime: 0,
-  minInterval: 200, // 200ms = 5 requests per second
+  minInterval: 250, // 250ms = 4 requests per second (more conservative to avoid rate limits)
   
   async throttle() {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
+    return new Promise((resolve) => {
+      this.queue.push(resolve);
+      this.processQueue();
+    });
+  },
+  
+  async processQueue() {
+    if (this.processing || this.queue.length === 0) return;
     
-    if (timeSinceLastRequest < this.minInterval) {
-      const waitTime = this.minInterval - timeSinceLastRequest;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      
+      if (timeSinceLastRequest < this.minInterval) {
+        const waitTime = this.minInterval - timeSinceLastRequest;
+        await new Promise(r => setTimeout(r, waitTime));
+      }
+      
+      this.lastRequestTime = Date.now();
+      const resolve = this.queue.shift();
+      resolve();
+      
+      // Small delay between queue processing to prevent tight loops
+      if (this.queue.length > 0) {
+        await new Promise(r => setTimeout(r, 10));
+      }
     }
     
-    this.lastRequestTime = Date.now();
+    this.processing = false;
   }
 };
 
@@ -4178,7 +4203,10 @@ async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKe
     `&sort=asc&apikey=${etherscanApiKey}`
   );
 
-  const statusMsg = `${indent}- Fetching transactions in block range: ${startBlock} to ${endBlock}...`;
+  const queueLength = etherscanRateLimiter.queue.length;
+  const statusMsg = queueLength > 0 
+    ? `${indent}- [Queue: ${queueLength}] Fetching transactions in block range: ${startBlock} to ${endBlock}...`
+    : `${indent}- Fetching transactions in block range: ${startBlock} to ${endBlock}...`;
   if (typeof onStatus === "function") onStatus(statusMsg);
   console.log(statusMsg);
 
