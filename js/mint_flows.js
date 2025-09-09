@@ -282,15 +282,22 @@ async function fetchXenBalanceWei(){
     console.debug('[STAKE] Fetching XEN balance for', acct);
 
     let provider = null;
+    const currentChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    
     if (window.web3Wallet) {
       try {
         const cid = await window.web3Wallet.eth.getChainId();
-        if (Number(cid) === 1) provider = window.web3Wallet; // use wallet if on mainnet
+        // Use wallet if on the same chain as selected in app
+        if (Number(cid) === currentChainId) {
+          provider = window.web3Wallet;
+        }
       } catch (_) {}
     }
+    
     if (!provider) {
-      // Fallback to read-only mainnet RPC
-      provider = new Web3(DEFAULT_RPC_READ);
+      // Fallback to chain-specific RPC
+      const rpcList = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC_READ];
+      provider = new Web3(rpcList[0]);
     }
 
     // Get chain-specific XEN contract address

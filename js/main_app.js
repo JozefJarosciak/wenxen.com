@@ -5154,7 +5154,14 @@ async function connectWallet() {
     if (btnTxt) btnTxt.textContent = `${connectedAccount.slice(0, 6)}...${connectedAccount.slice(-4)}`;
 
     await updateNetworkBadge();
-    try { window.prefillStakeAmountFromBalance?.(); window.updateStakeStartEnabled?.(); } catch {}
+    
+    // Only fetch XEN balance if wallet is on the same chain as the app
+    const walletChainId = await web3Wallet.eth.getChainId();
+    const appChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    if (Number(walletChainId) === appChainId) {
+      try { window.prefillStakeAmountFromBalance?.(); window.updateStakeStartEnabled?.(); } catch {}
+    }
+    
     try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
     __updateWalletEyeSize();
 
@@ -5184,7 +5191,19 @@ async function connectWallet() {
       selectedRows.clear();
       refreshBulkUI();
       if (cointoolTable) cointoolTable.redraw(true);
-      try { window.prefillStakeAmountFromBalance?.(); window.updateStakeStartEnabled?.(); } catch {}
+      
+      // Only fetch XEN balance if wallet exists and is on same chain as app
+      if (window.web3Wallet && connectedAccount) {
+        try {
+          const walletChainId = await window.web3Wallet.eth.getChainId();
+          const appChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+          if (Number(walletChainId) === appChainId) {
+            window.prefillStakeAmountFromBalance?.();
+            window.updateStakeStartEnabled?.();
+          }
+        } catch {}
+      }
+      
       try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
     });
 
