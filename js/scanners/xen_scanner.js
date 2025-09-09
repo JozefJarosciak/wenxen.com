@@ -32,10 +32,8 @@
   // IDB
   const STORE="stakes", STORE_ST="scanState";
   function openDB(){return new Promise((resolve,reject)=>{
-    // Get chain-specific database name
-    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
-    const dbName = `${chainPrefix}_DB-Xen-Stake`;
+    // Get chain-specific database name from chainManager
+    const dbName = window.chainManager?.getDatabaseName('xen_stake') || 'ETH_DB_XenStake';
     const req=indexedDB.open(dbName,1);
     req.onupgradeneeded=e=>{const db=e.target.result;
       if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:"id"}); os.createIndex("byOwner","owner",{unique:false});}

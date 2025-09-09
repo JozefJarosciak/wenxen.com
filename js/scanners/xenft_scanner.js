@@ -214,15 +214,20 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   // --- RPC helper ---
   // xenft_scanner.js — getWorkingContract
   async function getWorkingContract(rpcList) {
+    // Get chain-specific XENFT contract address dynamically
+    const xenftAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') || 
+      window.appConfig?.contracts?.XENFT_TORRENT || 
+      "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
+    
     for (let i = 0; i < rpcList.length; i++) {
       const rpc = rpcList[i].trim();
       if (!rpc) continue;
       try {
         const w3 = new Web3(rpc);
         await w3.eth.getChainId();
-        // NEW: remember which RPC we’re using for XENFT scanning
+        // NEW: remember which RPC we're using for XENFT scanning
         window._activeXenftRpc = rpc;
-        return new w3.eth.Contract(window.xenftAbi, CONTRACT_ADDRESS);
+        return new w3.eth.Contract(window.xenftAbi, xenftAddress);
       } catch {}
     }
     throw new Error("No working RPC endpoints found");
