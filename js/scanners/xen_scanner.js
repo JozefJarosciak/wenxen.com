@@ -260,7 +260,20 @@
               const elapsed=(now-startedAt)/1000, rate=chunksDone/Math.max(1,elapsed);
               const remainingChunks=Math.max(0,totalChunks-chunksDone);
               const remainingSec= rate>0 ? remainingChunks/rate : 0;
-              if (etrEl) etrEl.textContent = isFinite(remainingSec)?`ETA: ${Math.round(remainingSec)}s`:"";
+              if (etrEl) {
+                if (isFinite(remainingSec)) {
+                  const totalSecs = Math.round(remainingSec);
+                  if (totalSecs < 60) {
+                    etrEl.textContent = `ETA: ${totalSecs}s`;
+                  } else {
+                    const mins = Math.floor(totalSecs / 60);
+                    const secs = totalSecs % 60;
+                    etrEl.textContent = `ETA: ${mins}m ${secs}s`;
+                  }
+                } else {
+                  etrEl.textContent = "";
+                }
+              }
               lastUiUpdate=now;
             }
           }
