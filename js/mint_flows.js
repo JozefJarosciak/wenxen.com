@@ -2,6 +2,7 @@
 // Depends on globals from main_app.js & cointool-ABI.js: web3, web3Wallet, connectedAccount,
 // COINTOOL_MAIN, cointoolAbi.
 
+// These are Ethereum defaults, but will be overridden by chainManager
 const XEN_MAIN = '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
 const DEFAULT_RPC_READ = 'https://ethereum-rpc.publicnode.com';
 
@@ -128,6 +129,7 @@ const APEX_PRESETS = {
 };
 
 
+// Ethereum default XENFT address (will be overridden by chainManager for other chains)
 const XENFT_TORRENT = '0x0a252663DBCc0b073063D6420a40319e438Cfa59';
 
 function presetBurnForSelection(){
@@ -159,7 +161,9 @@ async function ensureXenApprovalIfNeeded(spender, requiredWei){
 }
 
 async function startCointoolMint(vmu, termDays){
-  const contract = new web3Wallet.eth.Contract(cointoolAbi, COINTOOL_MAIN);
+  // Get chain-specific Cointool contract address
+  const cointoolAddress = window.chainManager?.getContractAddress('COINTOOL') || COINTOOL_MAIN;
+  const contract = new web3Wallet.eth.Contract(cointoolAbi, cointoolAddress);
   const dataHex  = buildCointoolDataHex(termDays);
   const saltHex  = "0x01";
   let est = await contract.methods.t(vmu, dataHex, saltHex).estimateGas({ from: connectedAccount });
@@ -181,7 +185,9 @@ async function startCointoolMint(vmu, termDays){
 }
 
 async function startXenftMint(vmu, termDays, kind, burnRaw){
-  const xenft = new web3Wallet.eth.Contract(window.xenftAbi, XENFT_TORRENT);
+  // Get chain-specific XENFT contract address
+  const xenftAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') || XENFT_TORRENT;
+  const xenft = new web3Wallet.eth.Contract(window.xenftAbi, xenftAddress);
   if (kind === 'apex') {
     if (vmu <= 99) {
       alert("XENFT APEX requires min. 100 VMUs (contract rule). Please increase VMUs.");
@@ -189,7 +195,7 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
     }
     const burnWei = parseBurnToWei(burnRaw);
     if (Web3.utils.toBN(burnWei).lte(Web3.utils.toBN('0'))) { alert("Enter XEN amount to burn."); throw new Error('no-burn'); }
-    await ensureXenApprovalIfNeeded(XENFT_TORRENT, burnWei);
+    await ensureXenApprovalIfNeeded(xenftAddress, burnWei);
     let est = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
     const r = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).send({ from: connectedAccount, gas: est });

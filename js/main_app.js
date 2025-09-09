@@ -1599,7 +1599,8 @@ async function handleBulkAction(mode){
     if (mode !== 'claim') {
       alert("Remint does not apply to XENFTs. XENFT rows will be ignored for remint.");
     } else {
-      const TORRENT_ADDR =
+      // Get chain-specific XENFT Torrent contract address
+      const TORRENT_ADDR = window.chainManager?.getContractAddress('XENFT_TORRENT') ||
         (typeof XENFT_TORRENT === 'string' && XENFT_TORRENT) ||
         (window.xenft && window.xenft.CONTRACT_ADDRESS) ||
         '0x0a252663DBCc0b073063D6420a40319e438Cfa59';
@@ -5300,7 +5301,8 @@ async function connectWallet() {
     const tokenId = Number(row.Xenft_id || row.Mint_id_Start || row.tokenId);
     if (!Number.isFinite(tokenId)) { alert("Bad XENFT tokenId."); return; }
 
-    const TORRENT_ADDR =
+    // Get chain-specific XENFT Torrent contract address
+    const TORRENT_ADDR = window.chainManager?.getContractAddress('XENFT_TORRENT') ||
       (typeof XENFT_TORRENT === 'string' && XENFT_TORRENT) ||
       (window.xenft && window.xenft.CONTRACT_ADDRESS) ||
       '0x0a252663DBCc0b073063D6420a40319e438Cfa59';
