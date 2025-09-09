@@ -758,47 +758,27 @@ if (window.chainManager) {
     window.chainManager.onChainChange((newChain, config) => {
       updateChainConfig();
       
-      // Update API key UI for the new chain
+      // Update API key label to show it's multichain
       const apiKeyLabel = document.querySelector('label[for="etherscanApiKey"]');
       if (apiKeyLabel) {
-        apiKeyLabel.textContent = config.explorer.name + ' API Key';
+        apiKeyLabel.textContent = 'Etherscan Multichain API Key';
       }
       
       const apiKeyInput = document.getElementById('etherscanApiKey');
       if (apiKeyInput) {
-        apiKeyInput.placeholder = `Your ${config.explorer.name} API Key`;
-        
-        // Load chain-specific API key
-        const chainApiKey = localStorage.getItem(`${newChain}_explorerApiKey`) || '';
-        apiKeyInput.value = chainApiKey;
-        
-        // Save API key when it changes
-        const saveApiKey = () => {
-          const value = apiKeyInput.value.trim();
-          if (value) {
-            localStorage.setItem(`${newChain}_explorerApiKey`, value);
-          }
-        };
-        
-        // Remove old listeners and add new one
-        apiKeyInput.removeEventListener('change', apiKeyInput._saveHandler);
-        apiKeyInput._saveHandler = saveApiKey;
-        apiKeyInput.addEventListener('change', saveApiKey);
+        apiKeyInput.placeholder = 'Your Etherscan API Key (works for all chains)';
       }
       
-      // Update API help link
+      // Update API help link to always point to Etherscan
       const apiHelp = document.getElementById('etherscanApiHelp');
       if (apiHelp) {
         const helpLink = apiHelp.querySelector('a');
         if (helpLink) {
-          if (newChain === 'BASE') {
-            helpLink.href = 'https://basescan.org/myapikey';
-            helpLink.textContent = 'Get a free BaseScan API key';
-          } else {
-            helpLink.href = 'https://etherscan.io/apidashboard';
-            helpLink.textContent = 'Get a free Etherscan API key';
-          }
+          helpLink.href = 'https://etherscan.io/apidashboard';
+          helpLink.textContent = 'Get a free Etherscan Multichain API key';
         }
+        // Update help text to explain multichain support
+        apiHelp.innerHTML = 'No key? <a href="https://etherscan.io/apidashboard" target="_blank" rel="noopener noreferrer">Get a free Etherscan Multichain API key</a> (works across 60+ chains including Base)';
       }
     });
   } catch (e) {
@@ -1463,20 +1443,11 @@ async function updateNetworkBadge(){
 
 function es2url(queryString) {
   // queryString should NOT start with "?" (just "module=...&action=...&...")
-  // Get explorer API URL for current chain
-  const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
+  // Always use Etherscan V2 multichain API for all chains
+  const baseUrl = 'https://api.etherscan.io/v2/api';
+  const chainId = window.chainManager?.getCurrentConfig()?.id || ETHERSCAN_CHAIN_ID || 1;
   
-  // For Etherscan, use v2 API; for others (BaseScan), use the URL as-is
-  let baseUrl;
-  if (explorerUrl.includes('etherscan.io')) {
-    // Replace /api with /v2/api for Etherscan
-    baseUrl = explorerUrl.replace('/api', '/v2/api');
-  } else {
-    // Keep the URL as-is for BaseScan and other explorers
-    baseUrl = explorerUrl;
-  }
-  
-  return `${baseUrl}?chainid=${ETHERSCAN_CHAIN_ID}&${queryString}`;
+  return `${baseUrl}?chainid=${chainId}&${queryString}`;
 }
 
 function ensureBulkBar(){
@@ -3802,10 +3773,7 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
     localStorage.setItem("customRPC", customRPC);
   }
   
-  // Save chain-specific API key
-  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  localStorage.setItem(`${currentChain}_explorerApiKey`, apiKey);
-  // Also save to old format for backward compatibility
+  // Save Etherscan API key (works for all chains)
   localStorage.setItem("etherscanApiKey", apiKey);
   
   // Check if setup is now complete and hide onboarding modal if it's showing
@@ -3872,15 +3840,8 @@ function loadUserPreferences() {
   document.getElementById("customRPC").value = rpcValue;
   
   // API key is global
-  // Load chain-specific API key
-  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainApiKey = localStorage.getItem(`${currentChain}_explorerApiKey`);
-  if (chainApiKey) {
-    document.getElementById("etherscanApiKey").value = chainApiKey;
-  } else {
-    // Fallback to old format for backward compatibility
-    document.getElementById("etherscanApiKey").value = localStorage.getItem("etherscanApiKey") || "";
-  }
+  // Load Etherscan API key (now works for all chains)
+  document.getElementById("etherscanApiKey").value = localStorage.getItem("etherscanApiKey") || "";
 }
 
 // --- Show/Hide Toggles for sensitive fields ---
@@ -4808,23 +4769,13 @@ async function scanMints() {
   const rpcInput = document.getElementById("customRPC").value.trim();
   rpcEndpoints = rpcInput.split("\n").map(s => s.trim()).filter(Boolean);
   
-  // Get chain-specific API key
-  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  let etherscanApiKey = document.getElementById("etherscanApiKey").value.trim();
-  
-  // Try to get chain-specific API key from localStorage
-  const chainApiKey = localStorage.getItem(`${currentChain}_explorerApiKey`);
-  if (chainApiKey) {
-    etherscanApiKey = chainApiKey;
-  } else if (!etherscanApiKey) {
-    const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
-    alert(`Please enter a ${explorerName} API Key.`);
+  // Get Etherscan API key (works for all chains with V2 API)
+  const etherscanApiKey = document.getElementById("etherscanApiKey").value.trim();
+  if (!etherscanApiKey) {
+    alert("Please enter an Etherscan API Key (works for all chains).");
     // DELETED: restoreScanBtn();
     return;
   }
-  
-  // Save the API key for the current chain
-  localStorage.setItem(`${currentChain}_explorerApiKey`, etherscanApiKey);
   saveUserPreferences(addressInput, rpcInput, etherscanApiKey);
 
   web3 = new Web3(rpcEndpoints[0]);

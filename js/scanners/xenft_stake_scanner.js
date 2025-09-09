@@ -176,8 +176,9 @@
 
   // --- Explorer helper: Fetch NFT transfers in a specific block range ---
   async function fetchStakeTxsInRange(userAddress, apiKey, startBlock, endBlock) {
-    const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
-    const url = `${explorerUrl}?module=account&action=tokennfttx&contractaddress=${CONTRACT_ADDRESS}&address=${userAddress}&startblock=${startBlock}&endblock=${endBlock}&page=1&offset=10000&sort=asc&apikey=${apiKey}`;
+    // Use Etherscan V2 multichain API
+    const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${CONTRACT_ADDRESS}&address=${userAddress}&startblock=${startBlock}&endblock=${endBlock}&page=1&offset=10000&sort=asc&apikey=${apiKey}`;
 
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {

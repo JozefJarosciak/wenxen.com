@@ -69,9 +69,9 @@
   // Logs API
   async function fetchLogsOnce(apiKey, params){
     const qs=new URLSearchParams(params).toString();
-    // Get explorer API URL for current chain
-    const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
-    const url=`${explorerUrl}?module=logs&action=getLogs&${qs}&apikey=${apiKey}`;
+    // Use Etherscan V2 multichain API
+    const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    const url=`https://api.etherscan.io/v2/api?chainid=${chainId}&module=logs&action=getLogs&${qs}&apikey=${apiKey}`;
     await throttle();
     const res=await fetch(url); if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json().catch(()=>({status:"0",message:"bad json"})); return data;
