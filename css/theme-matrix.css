@@ -1,4 +1,51 @@
 /* Matrix/Hacker Theme - Green on Black Terminal Aesthetic */
+
+/* Network Selector - Matrix Theme Specific */
+body.matrix-mode .network-selector-btn {
+  background: #000000;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+body.matrix-mode .network-selector-btn:hover {
+  background: #001100;
+  border-color: #00ff00;
+  box-shadow: 0 0 15px #00ff00, inset 0 0 10px rgba(0, 255, 0, 0.2);
+}
+
+body.matrix-mode .network-dropdown {
+  background: #000000;
+  border: 1px solid #00ff00;
+  box-shadow: 0 0 20px #00ff00;
+}
+
+body.matrix-mode .network-dropdown-header {
+  color: #00aa00;
+  border-bottom: 1px solid #00ff00;
+  background: #001100;
+  text-shadow: 0 0 3px #00ff00;
+}
+
+body.matrix-mode .network-option {
+  color: #00ff00;
+  text-shadow: 0 0 2px #00ff00;
+}
+
+body.matrix-mode .network-option:hover {
+  background: #001100;
+  box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+body.matrix-mode .network-option.selected {
+  background: rgba(0, 255, 0, 0.1);
+  border-left: 3px solid #00ff00;
+}
+
+body.matrix-mode .network-option-check {
+  color: #00ff00;
+  text-shadow: 0 0 5px #00ff00;
+}
 body.matrix-mode {
   --border: #00ff00;        /* Matrix green */
   --panel: #001100;         /* Very dark green */

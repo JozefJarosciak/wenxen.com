@@ -1,4 +1,52 @@
 /* Generated from style.css split by theme. */
+
+/* Network Selector - Retro Theme Specific */
+body.retro-mode .network-selector-btn {
+  background: #0a1db8;
+  color: #c7fff7;
+  border: 2px solid #4e5bd4;
+  font-family: 'Courier New', monospace;
+}
+
+body.retro-mode .network-selector-btn:hover {
+  background: #2749dc;
+  border-color: #c7fff7;
+  box-shadow: 0 0 10px rgba(199, 255, 247, 0.4);
+}
+
+body.retro-mode .network-dropdown {
+  background: #06138a;
+  border: 2px solid #4e5bd4;
+  box-shadow: 0 4px 20px rgba(78, 91, 212, 0.4);
+}
+
+body.retro-mode .network-dropdown-header {
+  color: #8ab4ff;
+  border-bottom: 2px solid #4e5bd4;
+  background: #0a1db8;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+
+body.retro-mode .network-option {
+  color: #c7fff7;
+  font-family: 'Courier New', monospace;
+}
+
+body.retro-mode .network-option:hover {
+  background: #0a1db8;
+  box-shadow: inset 0 0 10px rgba(199, 255, 247, 0.2);
+}
+
+body.retro-mode .network-option.selected {
+  background: rgba(199, 255, 247, 0.1);
+  border-left: 3px solid #c7fff7;
+}
+
+body.retro-mode .network-option-check {
+  color: #c7fff7;
+  font-weight: bold;
+}
 body.retro-mode {
   --border: #4e5bd4;
   --panel:  #0a1db8;

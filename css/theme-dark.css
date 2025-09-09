@@ -1,4 +1,45 @@
 /* Generated from style.css split by theme. */
+
+/* Network Selector - Dark Theme Specific */
+body.dark-mode .network-selector-btn {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+}
+
+body.dark-mode .network-selector-btn:hover {
+  background: #374151;
+  border-color: #60a5fa;
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.2);
+}
+
+body.dark-mode .network-dropdown {
+  background: #111827;
+  border: 1px solid #374151;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-mode .network-dropdown-header {
+  color: #9ca3af;
+  border-bottom: 1px solid #374151;
+  background: #1f2937;
+}
+
+body.dark-mode .network-option {
+  color: #e5e7eb;
+}
+
+body.dark-mode .network-option:hover {
+  background: #1f2937;
+}
+
+body.dark-mode .network-option.selected {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+body.dark-mode .network-option-check {
+  color: #60a5fa;
+}
 /* Comprehensive Flatpickr calendar styling for dark theme */
 body.dark-mode .flatpickr-calendar {
   background: var(--panel, #1f2937);

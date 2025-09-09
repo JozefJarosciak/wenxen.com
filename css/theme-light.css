@@ -1,4 +1,46 @@
 /* Generated from style.css split by theme. */
+
+/* Network Selector - Light Theme Specific */
+body.light-mode .network-selector-btn {
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+}
+
+body.light-mode .network-selector-btn:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
+}
+
+body.light-mode .network-dropdown {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+body.light-mode .network-dropdown-header {
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+body.light-mode .network-option {
+  color: #1f2937;
+}
+
+body.light-mode .network-option:hover {
+  background: #f3f4f6;
+}
+
+body.light-mode .network-option.selected {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+body.light-mode .network-option-check {
+  color: #3b82f6;
+}
+
 body.light-mode {
   --border: #e5e7eb;
   --panel: #fff;
