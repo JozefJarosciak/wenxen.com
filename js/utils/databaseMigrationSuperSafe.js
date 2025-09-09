@@ -12,25 +12,25 @@ export class SuperSafeDatabaseMigrator {
     this.legacyToEthereumMap = {
       'DB_Cointool': 'ETH_DB_Cointool',
       'DB_Xenft': 'ETH_DB_Xenft',
-      'DB-Xen-Stake': 'ETH_DB-Xen-Stake',
-      'DB_XenStake': 'ETH_DB-Xen-Stake',
-      'DB-Xenft-Stake': 'ETH_DB-Xenft-Stake',
-      'DB_XenftStake': 'ETH_DB-Xenft-Stake'
+      'DB-Xen-Stake': 'ETH_DB_XenStake',
+      'DB_XenStake': 'ETH_DB_XenStake',
+      'DB-Xenft-Stake': 'ETH_DB_XenftStake',
+      'DB_XenftStake': 'ETH_DB_XenftStake'
     };
     
     // Database configurations
     this.ethereumDatabases = [
       { name: 'ETH_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
       { name: 'ETH_DB_Xenft', version: 1, stores: ['xenfts'] },  // XENFTs only has xenfts store
-      { name: 'ETH_DB-Xen-Stake', version: 1, stores: ['stakes', 'scanState'] },
-      { name: 'ETH_DB-Xenft-Stake', version: 2, stores: ['stakes', 'scanState'] }
+      { name: 'ETH_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
+      { name: 'ETH_DB_XenftStake', version: 2, stores: ['stakes', 'scanState'] }
     ];
     
     this.baseDatabases = [
       { name: 'BASE_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
       { name: 'BASE_DB_Xenft', version: 1, stores: ['xenfts'] },  // XENFTs only has xenfts store
-      { name: 'BASE_DB-Xen-Stake', version: 1, stores: ['stakes', 'scanState'] },
-      { name: 'BASE_DB-Xenft-Stake', version: 2, stores: ['stakes', 'scanState'] }
+      { name: 'BASE_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
+      { name: 'BASE_DB_XenftStake', version: 2, stores: ['stakes', 'scanState'] }
     ];
     
     // Validation rules

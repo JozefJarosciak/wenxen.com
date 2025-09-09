@@ -76,7 +76,7 @@
         } else {
           // Fallback - try to open known databases
           const knownDbs = [
-            'DB_Cointool', 'DB_Xenft', 'DB-Xen-Stake', 'DB-Xenft-Stake',
+            'DB_Cointool', 'DB_Xenft', 'DB_XenStake', 'DB_XenftStake',
             'ETH_DB_Cointool', 'ETH_DB_Xenft', 'ETH_DB_XenStake', 'ETH_DB_XenftStake',
             'BASE_DB_Cointool', 'BASE_DB_Xenft', 'BASE_DB_XenStake', 'BASE_DB_XenftStake'
           ];
@@ -140,8 +140,8 @@
       const oldDbs = [
         { name: 'DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
         { name: 'DB_Xenft', version: 1, stores: ['mints', 'scanState'] },
-        { name: 'DB-Xen-Stake', version: 1, stores: ['stakes', 'scanState'] },
-        { name: 'DB-Xenft-Stake', version: 1, stores: ['stakes', 'scanState'] }
+        { name: 'DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
+        { name: 'DB_XenftStake', version: 1, stores: ['stakes', 'scanState'] }
       ];
       
       const results = [];
@@ -192,7 +192,7 @@
       if (!confirm('This will delete ALL databases. Are you sure?')) return;
       
       const allDbs = [
-        'DB_Cointool', 'DB_Xenft', 'DB-Xen-Stake', 'DB-Xenft-Stake',
+        'DB_Cointool', 'DB_Xenft', 'DB_XenStake', 'DB_XenftStake',
         'ETH_DB_Cointool', 'ETH_DB_Xenft', 'ETH_DB_XenStake', 'ETH_DB_XenftStake',
         'BASE_DB_Cointool', 'BASE_DB_Xenft', 'BASE_DB_XenStake', 'BASE_DB_XenftStake'
       ];
@@ -279,7 +279,7 @@
       }
       
       // Check old databases are gone
-      const oldDbs = ['DB_Cointool', 'DB_Xenft', 'DB-Xen-Stake', 'DB-Xenft-Stake'];
+      const oldDbs = ['DB_Cointool', 'DB_Xenft', 'DB_XenStake', 'DB_XenftStake'];
       for (const name of oldDbs) {
         try {
           const db = await openDb(name);

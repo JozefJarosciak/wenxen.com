@@ -1,5 +1,5 @@
 // === Stake XENFTs module (Etherscan-Optimized with Incremental Scanning) ===========================
-// Scans the Stake XENFT contract and stores rows in IndexedDB "DB-Xenft-Stake".
+// Scans the Stake XENFT contract and stores rows in IndexedDB.
 // Exposes window.xenftStake = { CONTRACT_ADDRESS, openDB, getAll, scan }.
 //
 // Key behavior per user request:
@@ -12,11 +12,29 @@
 //   • Actions include endStake with txHash/timeStamp when available.
 
 (function(){
-  const CONTRACT_ADDRESS = "0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC";
-  const CONTRACT_CREATION_BLOCK = 16339900; // Optimization: don't scan before this
+  // Get chain-specific contract address
+  const getContractAddress = () => {
+    return window.chainManager?.getContractAddress('XENFT_STAKE') || 
+           "0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC"; // Ethereum fallback
+  };
+  
+  const CONTRACT_ADDRESS = getContractAddress();
+  
+  // Chain-specific creation blocks
+  const getContractCreationBlock = () => {
+    const chain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    return chain === 'BASE' ? 3095343 : 16339900; // Base creation block vs Ethereum
+  };
+  
+  const CONTRACT_CREATION_BLOCK = getContractCreationBlock();
   const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
-  const DEFAULT_RPC = `https://ethereum-rpc.publicnode.com`;
+  const DEFAULT_RPC = (() => {
+    const chain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    return chain === 'BASE' ? 
+      'https://base-rpc.publicnode.com' : 
+      'https://ethereum-rpc.publicnode.com';
+  })();
 
   // ABI moved to ./ABI/xenft-stake-ABI.js as window.xenftStakeAbi
 
@@ -104,7 +122,7 @@
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
       const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
-      const dbName = `${chainPrefix}_DB-Xenft-Stake`;
+      const dbName = window.chainManager?.getDatabaseName('xenft_stake') || `${chainPrefix}_DB_XenftStake`;
       
       const req = indexedDB.open(dbName, 2);
       req.onupgradeneeded = e => {
@@ -176,9 +194,11 @@
 
   // --- Explorer helper: Fetch NFT transfers in a specific block range ---
   async function fetchStakeTxsInRange(userAddress, apiKey, startBlock, endBlock) {
-    // Use Etherscan V2 multichain API
+    const contractAddr = getContractAddress(); // Get current chain's contract
     const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
-    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${CONTRACT_ADDRESS}&address=${userAddress}&startblock=${startBlock}&endblock=${endBlock}&page=1&offset=10000&sort=asc&apikey=${apiKey}`;
+    
+    // Use Etherscan V2 multichain API for all chains (including Base with chainId 8453)
+    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${contractAddr}&address=${userAddress}&startblock=${startBlock}&endblock=${endBlock}&page=1&offset=10000&sort=asc&apikey=${apiKey}`;
 
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -229,13 +249,18 @@
       return;
     }
     if (!etherscanApiKey) {
-      alert("An Etherscan API Key is required for this fast scan method. Please add one in Settings.");
+      alert("An Etherscan Multichain API Key is required for this fast scan method. Please add one in Settings.");
       return;
     }
 
     const w3 = newWeb3();
     const db = await openDB();
-    const c  = new w3.eth.Contract(window.xenftStakeAbi, CONTRACT_ADDRESS);
+    const contractAddr = getContractAddress(); // Get current chain's contract
+    const c  = new w3.eth.Contract(window.xenftStakeAbi, contractAddr);
+    
+    // Log current chain and contract for debugging
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    console.log(`[XENFT Stake Scanner] Starting scan on ${currentChain} with contract ${contractAddr}`);
 
     const addrLbl = document.getElementById("addressProgressText");
     const tokenBar = document.getElementById("tokenProgressBar");
@@ -255,7 +280,8 @@
         }
 
         const scanState = await getScanState(db, addr);
-        const startBlock = scanState ? scanState.lastScannedBlock + 1 : CONTRACT_CREATION_BLOCK;
+        const creationBlock = getContractCreationBlock(); // Get chain-specific creation block
+        const startBlock = scanState ? scanState.lastScannedBlock + 1 : creationBlock;
 
         if (startBlock > latestBlock && !forceRescan) {
           if(tokenTxt) tokenTxt.textContent = `Stake XENFTs for ${addr.slice(0,6)}... are up to date.`;
@@ -381,5 +407,10 @@
   }
 
   // Export
-  window.xenftStake = { CONTRACT_ADDRESS, openDB, getAll, scan };
+  window.xenftStake = { 
+    get CONTRACT_ADDRESS() { return getContractAddress(); }, 
+    openDB, 
+    getAll, 
+    scan 
+  };
 })();

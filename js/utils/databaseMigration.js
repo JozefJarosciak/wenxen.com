@@ -349,8 +349,8 @@ export class DatabaseMigrator {
     
     // List of all possible legacy database names to clean up
     const legacyNames = [
-      'DB_Cointool', 'DB_Xenft', 'DB-Xen-Stake', 'DB_XenStake',
-      'DB-Xenft-Stake', 'DB_XenftStake', 'DB_XENFT', 'DB_XENFT_STAKE',
+      'DB_Cointool', 'DB_Xenft', 'DB_XenStake', 'DB_XenftStake',
+      'DB-Xen-Stake', 'DB-Xenft-Stake', 'DB_XENFT', 'DB_XENFT_STAKE',
       'DB-XEN-STAKE', 'DB-XENFT-STAKE'
     ];
     

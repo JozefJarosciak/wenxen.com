@@ -9,8 +9,8 @@ export class DatabaseMigrator {
     this.legacyToEthereumMap = {
       'DB_Cointool': 'ETH_DB_Cointool',
       'DB_Xenft': 'ETH_DB_Xenft',
-      'DB-Xen-Stake': 'ETH_DB_XenStake',
-      'DB-Xenft-Stake': 'ETH_DB_XenftStake'
+      'DB_XenStake': 'ETH_DB_XenStake',
+      'DB_XenftStake': 'ETH_DB_XenftStake'
     };
     
     // Base databases to create

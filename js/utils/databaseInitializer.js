@@ -84,10 +84,10 @@
           dbName = `${chainPrefix}_DB_Xenft`;
           break;
         case 'xenft-stake':
-          dbName = `${chainPrefix}_DB-Xenft-Stake`;
+          dbName = `${chainPrefix}_DB_XenftStake`;
           break;
         case 'xen-stake':
-          dbName = `${chainPrefix}_DB-Xen-Stake`;
+          dbName = `${chainPrefix}_DB_XenStake`;
           break;
         default:
           dbName = `${chainPrefix}_DB_${dbType}`;

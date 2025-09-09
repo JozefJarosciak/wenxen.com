@@ -73,7 +73,10 @@ function updateThemeMenuUI(){
 // Legacy functions like isPrivacyAccepted(), openPrivacyModal(), acceptPrivacy(), 
 // isSetupComplete(), showOnboardingModal(), etc. are available globally
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Cleanup incorrectly named databases on load
+  await cleanupIncorrectDatabases();
+  
   // Update chain-specific labels on page load
   updateChainSpecificLabels();
   
@@ -2788,10 +2791,12 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
     switch(baseName){
       case 'DB_Cointool': return 'Cointool (mints)';
       case 'DB_Xenft': return 'XENFT (NFT scans)';
-      case 'DB_XenftStake': 
-      case 'DB-Xenft-Stake': return 'XENFT Stake (stakes)';
-      case 'DB_XenStake':
-      case 'DB-Xen-Stake': return 'XEN Stake (regular)';
+      case 'ETH_DB_XenftStake':
+      case 'BASE_DB_XenftStake': 
+      case 'DB_XenftStake': return 'XENFT Stake (stakes)';
+      case 'ETH_DB_XenStake':
+      case 'BASE_DB_XenStake':
+      case 'DB_XenStake': return 'XEN Stake (regular)';
       default: return id;
     }
   }
@@ -2819,7 +2824,7 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
       }
     } catch {}
     try {
-      if (window.xenStake?.openDB) {                 // ✅ close DB-Xen-Stake
+      if (window.xenStake?.openDB) {                 // ✅ close XEN Stake DB
         const xsDb = await window.xenStake.openDB();
         try { xsDb.close(); } catch {}
       }
@@ -2829,8 +2834,8 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
     const results = await Promise.allSettled([
       deleteDatabaseByName("DB_Cointool"),
       deleteDatabaseByName("DB_Xenft"),
-      deleteDatabaseByName("DB-Xenft-Stake"),
-      deleteDatabaseByName("DB-Xen-Stake")          // ✅ regular stakes DB
+      deleteDatabaseByName("DB_XenftStake"),
+      deleteDatabaseByName("DB_XenStake")          // ✅ regular stakes DB
     ]);
 
     const blocked = results.some(r => r.status === 'fulfilled' && r.value === 'blocked');
@@ -2862,13 +2867,13 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
     }
   } catch {}
   try {
-    if (choice === "DB-Xenft-Stake" && window.xenftStake?.openDB) {
+    if ((choice === "DB_XenftStake" || choice.endsWith("_DB_XenftStake")) && window.xenftStake?.openDB) {
       const stakeDb = await window.xenftStake.openDB();
       try { stakeDb.close(); } catch {}
     }
   } catch {}
   try {
-    if (choice === "DB-Xen-Stake" && window.xenStake?.openDB) {
+    if ((choice === "DB_XenStake" || choice.endsWith("_DB_XenStake")) && window.xenStake?.openDB) {
       const xsDb = await window.xenStake.openDB();
       try { xsDb.close(); } catch {}
     }
@@ -5465,7 +5470,8 @@ document.getElementById("customRPC").addEventListener("input", validateInputs);
 document.getElementById("etherscanApiKey").addEventListener("input", validateInputs);
 document.getElementById("ethAddress").addEventListener("input", validateInputs);
 
-document.getElementById("scanBtn").addEventListener("click", scanMints);
+// Commented out to prevent conflict with unified scanner
+// document.getElementById("scanBtn").addEventListener("click", scanMints);
 document.getElementById("connectWalletBtn").addEventListener("click", handleWalletConnectClick);
 // Individual field save handlers with proper duplicate prevention
 (function() {
@@ -5637,8 +5643,7 @@ async function clearAllAppData() {
   // List of all possible databases (old and new)
   const allDatabases = [
     // Legacy databases
-    "DB_Cointool", "DB_Xenft", "DB-Xenft-Stake", "DB-Xen-Stake",
-    "DB_XenStake", "DB_XenftStake", // Alternative names
+    "DB_Cointool", "DB_Xenft", "DB_XenftStake", "DB_XenStake",
     // New chain-specific databases
     "ETH_DB_Cointool", "ETH_DB_Xenft", "ETH_DB_XenStake", "ETH_DB_XenftStake",
     "BASE_DB_Cointool", "BASE_DB_Xenft", "BASE_DB_XenStake", "BASE_DB_XenftStake"
@@ -5682,7 +5687,7 @@ async function clearAllAppData() {
     }
   } catch (_) {}
 
-  // DB-Xenft-Stake
+  // DB_XenftStake
   try {
     if (window.xenftStake?.openDB) {
       const stakeDb = await window.xenftStake.openDB();
@@ -5693,7 +5698,7 @@ async function clearAllAppData() {
     }
   } catch (_) {}
 
-  // ✅ DB-Xen-Stake (regular stakes)
+  // ✅ DB_XenStake (regular stakes)
   try {
     if (window.xenStake?.openDB) {
       const xsDb = await window.xenStake.openDB();
@@ -5988,103 +5993,182 @@ function formatBackupFileName(now = new Date()){
   return `mintscanner-backup-${y}-${m}-${d}_${h}-${mm}-${ss}_${suffix}.json`;
 }
 async function exportBackup() {
-  // Determine current chain to export the right databases
-  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+  console.log(`Exporting backup for ALL chains`);
   
-  console.log(`Exporting backup for chain: ${currentChain}`);
+  const allDatabases = [];
   
-  // Try chain-specific databases first, fallback to legacy
-  let dbName = chainPrefix + 'DB_Cointool';
-  let ctDb;
+  // Define all database names for all chains
+  const chains = ['ETHEREUM', 'BASE'];
+  const dbTypes = [
+    { suffix: 'DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
+    { suffix: 'DB_Xenft', version: 1, stores: ['xenfts'] },
+    { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState'] },
+    { suffix: 'DB_XenStake', version: 1, stores: ['stakes', 'scanState'] }
+  ];
   
-  try {
-    // Try to open chain-specific database
-    ctDb = await openDatabaseByName(dbName);
-    console.log(`Exporting from ${dbName}`);
-  } catch (e) {
-    // Fallback to legacy database
-    console.log(`${dbName} not found, trying legacy DB_Cointool`);
-    ctDb = await openDB();
-    dbName = 'DB_Cointool';
+  // Export data from all chains
+  for (const chain of chains) {
+    const chainPrefix = chain === 'BASE' ? 'BASE_' : 'ETH_';
+    
+    for (const dbType of dbTypes) {
+      const dbName = chainPrefix + dbType.suffix;
+      
+      try {
+        console.log(`Attempting to export ${dbName}...`);
+        
+        // Special handling for different database modules
+        let db;
+        let storeData = {};
+        
+        if (dbType.suffix === 'DB_Cointool') {
+          // Cointool database
+          try {
+            db = await openDatabaseByName(dbName);
+          } catch {
+            // Skip if doesn't exist
+            console.log(`${dbName} does not exist, skipping`);
+            continue;
+          }
+          
+          for (const storeName of dbType.stores) {
+            try {
+              storeData[storeName] = await getAllFromStore(db, storeName);
+            } catch {
+              storeData[storeName] = [];
+            }
+          }
+        } else if (dbType.suffix === 'DB_Xenft') {
+          // XENFT database uses different API
+          if (window.xenft?.openDB && window.xenft?.getAll) {
+            // Need to temporarily switch chain for xenft module
+            const originalChain = window.chainManager?.getCurrentChain();
+            if (window.chainManager?.setChain) {
+              window.chainManager.setChain(chain, false);
+            }
+            
+            try {
+              db = await window.xenft.openDB();
+              storeData.xenfts = await window.xenft.getAll(db);
+            } catch {
+              storeData.xenfts = [];
+            }
+            
+            // Restore original chain
+            if (originalChain && window.chainManager?.setChain) {
+              window.chainManager.setChain(originalChain, false);
+            }
+          } else {
+            continue;
+          }
+        } else if (dbType.suffix === 'DB_XenftStake') {
+          // XENFT Stake database
+          if (window.xenftStake?.openDB) {
+            // Need to temporarily switch chain
+            const originalChain = window.chainManager?.getCurrentChain();
+            if (window.chainManager?.setChain) {
+              window.chainManager.setChain(chain, false);
+            }
+            
+            try {
+              db = await window.xenftStake.openDB();
+              for (const storeName of dbType.stores) {
+                try {
+                  storeData[storeName] = await getAllFromStore(db, storeName);
+                } catch {
+                  storeData[storeName] = [];
+                }
+              }
+            } catch {
+              console.log(`Could not open ${dbName}`);
+              continue;
+            }
+            
+            // Restore original chain
+            if (originalChain && window.chainManager?.setChain) {
+              window.chainManager.setChain(originalChain, false);
+            }
+          } else {
+            continue;
+          }
+        } else if (dbType.suffix === 'DB_XenStake') {
+          // XEN Stake database
+          if (window.xenStake?.openDB) {
+            // Need to temporarily switch chain
+            const originalChain = window.chainManager?.getCurrentChain();
+            if (window.chainManager?.setChain) {
+              window.chainManager.setChain(chain, false);
+            }
+            
+            try {
+              db = await window.xenStake.openDB();
+              for (const storeName of dbType.stores) {
+                try {
+                  storeData[storeName] = await getAllFromStore(db, storeName);
+                } catch {
+                  storeData[storeName] = [];
+                }
+              }
+            } catch {
+              console.log(`Could not open ${dbName}`);
+              continue;
+            }
+            
+            // Restore original chain
+            if (originalChain && window.chainManager?.setChain) {
+              window.chainManager.setChain(originalChain, false);
+            }
+          } else {
+            continue;
+          }
+        }
+        
+        // Only add if we have some data
+        const hasData = Object.values(storeData).some(data => 
+          Array.isArray(data) ? data.length > 0 : data !== null && data !== undefined
+        );
+        
+        if (hasData) {
+          allDatabases.push({
+            name: dbName,
+            chain: chain,
+            version: dbType.version,
+            stores: storeData
+          });
+          console.log(`Successfully exported ${dbName}`);
+        }
+      } catch (e) {
+        console.log(`Error exporting ${dbName}:`, e);
+      }
+    }
   }
   
-  const [mints, scanState, actionsCache] = await Promise.all([
-    getAllFromStore(ctDb, "mints"),
-    getAllFromStore(ctDb, "scanState"),
-    // actionsCache was added in DB v3; if not present, resolve to []
-    getAllFromStore(ctDb, "actionsCache").catch(() => [])
-  ]);
-
-  // --- DB_Xenft (optional if module unavailable/empty) ---
-  let xenftRows = [];
+  // Also check for legacy databases
   try {
-    if (window.xenft?.openDB && window.xenft?.getAll) {
-      const xfDb = await window.xenft.openDB();
-      xenftRows = await window.xenft.getAll(xfDb);
-    }
-  } catch (_) {
-    // ignore; we still export what we have
-  }
-
-  // --- DB-Xenft-Stake (NEW) ---
-  let stakeXenftRows = [];
-  let stakeXenftState = [];
-  try {
-    if (window.xenftStake?.openDB) {
-      const stakeDb = await window.xenftStake.openDB();
-      [stakeXenftRows, stakeXenftState] = await Promise.all([
-        getAllFromStore(stakeDb, "stakes"),
-        getAllFromStore(stakeDb, "scanState")
-      ]);
-    }
-  } catch (_) {}
-
-
-  // --- DB-Xen-Stake (NEW) ---
-  let stakeRows = [];
-  let stakeState = [];
-  try {
-    if (window.xenStake?.openDB) { //
-      const xsDb = await window.xenStake.openDB(); //
-      [stakeRows, stakeState] = await Promise.all([
-        getAllFromStore(xsDb, "stakes"), //
-        getAllFromStore(xsDb, "scanState") //
-      ]);
-    }
-  } catch (_) {}
-
-  const payload = {
-    fileType: "mintscanner-backup",
-    version: 5, // Version 5 supports chain-specific databases
-    exportedAt: new Date().toISOString(),
-    exportedChain: currentChain,
-    exportedDatabase: dbName, // Track which database was exported
-    settings: collectSettingsSnapshot(),
-    databases: [
-      {
-        name: dbName, // Use the actual database name (could be ETH_DB_Cointool or BASE_DB_Cointool)
-        originalName: "DB_Cointool", // Keep track of original name for import compatibility
+    const legacyDb = await openDB();
+    const [mints, scanState, actionsCache] = await Promise.all([
+      getAllFromStore(legacyDb, "mints"),
+      getAllFromStore(legacyDb, "scanState"),
+      getAllFromStore(legacyDb, "actionsCache").catch(() => [])
+    ]);
+    
+    if (mints.length > 0 || scanState.length > 0) {
+      allDatabases.push({
+        name: "DB_Cointool",
+        chain: "LEGACY",
         version: 3,
         stores: { mints, scanState, actionsCache }
-      },
-      {
-        name: "DB_Xenft",
-        version: 1,
-        stores: { xenfts: xenftRows }
-      },
-      {
-        name: "DB-Xenft-Stake",
-        version: 2,
-        stores: { stakes: stakeXenftRows, scanState: stakeXenftState }
-      },
-      // ADD THIS NEW OBJECT
-      {
-        name: "DB-Xen-Stake",
-        version: 1, //
-        stores: { stakes: stakeRows, scanState: stakeState }
-      }
-    ]
+      });
+      console.log(`Successfully exported legacy DB_Cointool`);
+    }
+  } catch {}
+  
+  const payload = {
+    fileType: "mintscanner-backup",
+    version: 6, // Version 6 supports all chains export
+    exportedAt: new Date().toISOString(),
+    exportedChain: "ALL", // Indicates this is a full backup
+    settings: collectSettingsSnapshot(),
+    databases: allDatabases
   };
 
   const json = JSON.stringify(payload, null, 2);
@@ -6124,9 +6208,29 @@ async function exportBackup() {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 
+// Cleanup incorrectly named databases (with hyphens)
+async function cleanupIncorrectDatabases() {
+  const incorrectDatabases = [
+    'BASE_DB-Xen-Stake', 'BASE_DB-Xenft-Stake',
+    'ETH_DB-Xen-Stake', 'ETH_DB-Xenft-Stake',
+    'DB-Xen-Stake', 'DB-Xenft-Stake'
+  ];
+  
+  console.log('[Cleanup] Removing incorrectly named databases with hyphens...');
+  
+  for (const dbName of incorrectDatabases) {
+    try {
+      await deleteDatabaseByName(dbName);
+      console.log(`[Cleanup] Deleted incorrect database: ${dbName}`);
+    } catch (e) {
+      // Database might not exist, that's ok
+    }
+  }
+}
+
 // Check if migration is needed by looking for old database names
 async function checkIfMigrationNeeded() {
-  const oldDatabases = ['DB_Cointool', 'DB_Xenft', 'DB-Xenft-Stake', 'DB-Xen-Stake'];
+  const oldDatabases = ['DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'];
   
   for (const dbName of oldDatabases) {
     try {
@@ -6161,24 +6265,48 @@ async function importBackupFromFile(file) {
   try { data = JSON.parse(text); }
   catch { alert("Invalid backup file."); return; }
 
-  // Clear only chain-specific databases, preserve old ones for migration
-  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+  // For version 6+ backups (all chains), delete ALL databases
+  const isAllChainsBackup = data?.version >= 6 && data?.exportedChain === 'ALL';
   
-  // Delete chain-specific databases
-  const chainDatabases = [
-    `${chainPrefix}DB_Cointool`,
-    `${chainPrefix}DB_Xenft`,
-    `${chainPrefix}DB-Xenft-Stake`,
-    `${chainPrefix}DB-Xen-Stake`
-  ];
-  
-  for (const dbName of chainDatabases) {
-    try {
-      await deleteDatabaseByName(dbName);
-      console.log(`[Import] Deleted chain database: ${dbName}`);
-    } catch (e) {
-      console.warn(`[Import] Could not delete ${dbName}:`, e);
+  if (isAllChainsBackup) {
+    // Delete all chain-specific databases for complete restore
+    const allDatabases = [
+      'ETH_DB_Cointool', 'BASE_DB_Cointool',
+      'ETH_DB_Xenft', 'BASE_DB_Xenft',
+      'ETH_DB_XenftStake', 'BASE_DB_XenftStake',
+      'ETH_DB_XenStake', 'BASE_DB_XenStake',
+      // Also legacy names that might exist
+      'DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'
+    ];
+    
+    for (const dbName of allDatabases) {
+      try {
+        await deleteDatabaseByName(dbName);
+        console.log(`[Import] Deleted database: ${dbName}`);
+      } catch (e) {
+        // Database might not exist, that's ok
+      }
+    }
+  } else {
+    // Old behavior for single-chain backups
+    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+    
+    // Delete only current chain databases
+    const chainDatabases = [
+      `${chainPrefix}DB_Cointool`,
+      `${chainPrefix}DB_Xenft`,
+      `${chainPrefix}DB_XenftStake`,
+      `${chainPrefix}DB_XenStake`
+    ];
+    
+    for (const dbName of chainDatabases) {
+      try {
+        await deleteDatabaseByName(dbName);
+        console.log(`[Import] Deleted chain database: ${dbName}`);
+      } catch (e) {
+        console.warn(`[Import] Could not delete ${dbName}:`, e);
+      }
     }
   }
   
@@ -6205,47 +6333,40 @@ async function importBackupFromFile(file) {
     for (const dbDef of data.databases) {
       const name = dbDef?.name;
       const stores = dbDef?.stores || {};
+      const chain = dbDef?.chain; // Get chain info from backup
 
-      // Check if this is an old database name
+      // Check if this is an old database name or legacy chain
       const isOldDatabase = name === "DB_Cointool" || name === "DB_Xenft" || 
-                           name === "DB-Xenft-Stake" || name === "DB-Xen-Stake";
+                           name === "DB_XenftStake" || name === "DB_XenStake" ||
+                           chain === "LEGACY";
       
       if (isOldDatabase) {
         importedOldDatabases = true;
-        console.log(`[Import] Importing old database: ${name}`);
+        console.log(`[Import] Found old/legacy database: ${name}`);
       }
 
-      // Handle both legacy and new database names
-      const originalName = dbDef?.originalName || name;
-      
-      if (originalName === "DB_Cointool" || name === "DB_Cointool" || 
-          name.endsWith("DB_Cointool")) {
-        // For old backups, import to legacy DB_Cointool
-        // For new backups with chain prefix, also create legacy for migration
-        if (isOldDatabase || name.includes("_DB_Cointool")) {
-          // Create/update the old database for migration
-          const legacyDb = await openDatabaseByName("DB_Cointool");
-          await clearStore(legacyDb, "mints").catch(()=>{});
-          await clearStore(legacyDb, "scanState").catch(()=>{});
-          await clearStore(legacyDb, "actionsCache").catch(()=>{});
-          await bulkPut(legacyDb, "mints", stores.mints || []);
-          await bulkPut(legacyDb, "scanState", stores.scanState || []);
+      // For version 6+ backups, directly import to the specified database
+      if (data.version >= 6 && !isOldDatabase) {
+        // Import directly to the chain-specific database
+        if (name.endsWith("DB_Cointool")) {
+          const db = await openDatabaseByName(name);
+          await clearStore(db, "mints").catch(()=>{});
+          await clearStore(db, "scanState").catch(()=>{});
+          await clearStore(db, "actionsCache").catch(()=>{});
+          await bulkPut(db, "mints", stores.mints || []);
+          await bulkPut(db, "scanState", stores.scanState || []);
           if (Array.isArray(stores.actionsCache)) {
-            await bulkPut(legacyDb, "actionsCache", stores.actionsCache);
+            await bulkPut(db, "actionsCache", stores.actionsCache);
           }
-          importedOldDatabases = true;
+          console.log(`[Import] Imported ${name} with ${(stores.mints || []).length} mints`);
         }
-      }
 
-      if (name === "DB_Xenft" || name.includes("_DB_Xenft")) {
-        // Check for data under different possible keys
-        const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
-        
-        if (isOldDatabase || name.includes("_DB_Xenft")) {
-          // Create/update the old database for migration
-          const legacyDb = await openDatabaseByName("DB_Xenft");
-          await clearStore(legacyDb, "xenfts").catch(()=>{});
+        else if (name.endsWith("DB_Xenft")) {
+          // Import XENFT database
+          const db = await openDatabaseByName(name);
+          await clearStore(db, "xenfts").catch(()=>{});
           
+          const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
           // Ensure each item has Xenft_id field (the correct keyPath)
           const processedData = xenftData.map(item => {
             if (!item.Xenft_id && item.tokenId) {
@@ -6255,38 +6376,81 @@ async function importBackupFromFile(file) {
               return { ...item, Xenft_id: item.ID };
             }
             return item;
-          }).filter(item => item.Xenft_id); // Only keep items with valid Xenft_id
+          }).filter(item => item.Xenft_id);
+          
+          if (processedData.length > 0) {
+            await bulkPut(db, "xenfts", processedData);
+            console.log(`[Import] Imported ${processedData.length} XENFTs to ${name}`);
+          }
+        }
+        else if (name.endsWith("DB_XenftStake")) {
+          // Import XENFT Stake database
+          const db = await openDatabaseByName(name);
+          await clearStore(db, "stakes").catch(() => {});
+          await clearStore(db, "scanState").catch(() => {});
+          await bulkPut(db, "stakes", stores.stakes || []);
+          await bulkPut(db, "scanState", stores.scanState || []);
+          console.log(`[Import] Imported ${(stores.stakes || []).length} XENFT stakes to ${name}`);
+        }
+        else if (name.endsWith("DB_XenStake")) {
+          // Import XEN Stake database
+          const db = await openDatabaseByName(name);
+          await clearStore(db, "stakes").catch(() => {});
+          await clearStore(db, "scanState").catch(() => {});
+          await bulkPut(db, "stakes", stores.stakes || []);
+          await bulkPut(db, "scanState", stores.scanState || []);
+          console.log(`[Import] Imported ${(stores.stakes || []).length} XEN stakes to ${name}`);
+        }
+        
+        continue; // Skip old import logic for v6+ backups
+      }
+      
+      // Handle legacy databases and old backup formats
+      if (isOldDatabase) {
+        // Import legacy format databases for migration
+        if (name === "DB_Cointool" || chain === "LEGACY") {
+          const legacyDb = await openDatabaseByName("DB_Cointool");
+          await clearStore(legacyDb, "mints").catch(()=>{});
+          await clearStore(legacyDb, "scanState").catch(()=>{});
+          await clearStore(legacyDb, "actionsCache").catch(()=>{});
+          await bulkPut(legacyDb, "mints", stores.mints || []);
+          await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          if (Array.isArray(stores.actionsCache)) {
+            await bulkPut(legacyDb, "actionsCache", stores.actionsCache);
+          }
+        }
+        else if (name === "DB_Xenft") {
+          const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
+          const legacyDb = await openDatabaseByName("DB_Xenft");
+          await clearStore(legacyDb, "xenfts").catch(()=>{});
+          
+          const processedData = xenftData.map(item => {
+            if (!item.Xenft_id && item.tokenId) {
+              return { ...item, Xenft_id: item.tokenId };
+            }
+            if (!item.Xenft_id && item.ID) {
+              return { ...item, Xenft_id: item.ID };
+            }
+            return item;
+          }).filter(item => item.Xenft_id);
           
           if (processedData.length > 0) {
             await bulkPut(legacyDb, "xenfts", processedData);
-            console.log(`[Import] Imported ${processedData.length} XENFTs to DB_Xenft`);
           }
-          
-          if (isOldDatabase) importedOldDatabases = true;
         }
-      }
-
-      if ((name === "DB-Xenft-Stake" || name.includes("_DB-Xenft-Stake")) && stores.stakes) {
-        if (isOldDatabase || name.includes("_DB-Xenft-Stake")) {
-          // Create/update the old database for migration
-          const legacyDb = await openDatabaseByName("DB-Xenft-Stake");
+        else if (name === "DB_XenftStake") {
+          const legacyDb = await openDatabaseByName("DB_XenftStake");
           await clearStore(legacyDb, "stakes").catch(() => {});
           await clearStore(legacyDb, "scanState").catch(() => {});
           await bulkPut(legacyDb, "stakes", stores.stakes || []);
           await bulkPut(legacyDb, "scanState", stores.scanState || []);
-          if (isOldDatabase) importedOldDatabases = true;
         }
-      }
-
-      if ((name === "DB-Xen-Stake" || name.includes("_DB-Xen-Stake")) && stores.stakes) {
-        if (isOldDatabase || name.includes("_DB-Xen-Stake")) {
-          // Create/update the old database for migration
-          const legacyDb = await openDatabaseByName("DB-Xen-Stake");
+        else if (name === "DB_XenStake") {
+          const legacyDb = await openDatabaseByName("DB_XenStake");
           await clearStore(legacyDb, "stakes").catch(() => {});
           await clearStore(legacyDb, "scanState").catch(() => {});
           await bulkPut(legacyDb, "stakes", stores.stakes || []);
           await bulkPut(legacyDb, "scanState", stores.scanState || []);
-          if (isOldDatabase) importedOldDatabases = true;
         }
       }
     }
@@ -6976,10 +7140,13 @@ window.listAllDatabases = async function() {
     } else {
       console.log('Browser does not support indexedDB.databases()');
       
-      // Try to open known databases
+      // Try to open known databases (including old hyphenated names for cleanup)
       const knownDbs = [
-        'DB_Cointool', 'DB_Xenft', 'DB-Xen-Stake', 'DB_XenStake',
-        'DB-Xenft-Stake', 'DB_XenftStake',
+        // Legacy correct names
+        'DB_Cointool', 'DB_Xenft', 'DB_XenStake', 'DB_XenftStake',
+        // Old incorrect hyphenated names (for cleanup)
+        'DB-Xen-Stake', 'DB-Xenft-Stake',
+        // Current chain-specific names
         'ETH_DB_Cointool', 'ETH_DB_Xenft', 'ETH_DB_XenStake', 'ETH_DB_XenftStake',
         'BASE_DB_Cointool', 'BASE_DB_Xenft', 'BASE_DB_XenStake', 'BASE_DB_XenftStake'
       ];

@@ -142,11 +142,11 @@ function updateStakeSummaryLine(){
         const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
         
         const dbIds = (
-          mode === 'all' ? [`${chainPrefix}_DB_Cointool`,`${chainPrefix}_DB_Xenft`,`${chainPrefix}_DB-Xenft-Stake`,`${chainPrefix}_DB-Xen-Stake`] :
+          mode === 'all' ? [`${chainPrefix}_DB_Cointool`,`${chainPrefix}_DB_Xenft`,`${chainPrefix}_DB_XenftStake`,`${chainPrefix}_DB_XenStake`] :
           mode === 'cointool' ? [`${chainPrefix}_DB_Cointool`] :
           mode === 'xenft' ? [`${chainPrefix}_DB_Xenft`] :
-          mode === 'stake-xenft' ? [`${chainPrefix}_DB-Xenft-Stake`] :
-          mode === 'stake' ? [`${chainPrefix}_DB-Xen-Stake`] :
+          mode === 'stake-xenft' ? [`${chainPrefix}_DB_XenftStake`] :
+          mode === 'stake' ? [`${chainPrefix}_DB_XenStake`] :
           [`${chainPrefix}_DB_Cointool`]
         );
 
@@ -156,8 +156,8 @@ function updateStakeSummaryLine(){
           return (
             baseId === 'DB_Cointool' ? 'Cointool (mints)' :
             baseId === 'DB_Xenft' ? 'XENFT (NFT scans)' :
-            baseId === 'DB-Xenft-Stake' ? 'XENFT Stake (stakes)' :
-            baseId === 'DB-Xen-Stake' ? 'XEN Stake (regular)' : baseId
+            baseId === 'DB_XenftStake' ? 'XENFT Stake (stakes)' :
+            baseId === 'DB_XenStake' ? 'XEN Stake (regular)' : baseId
           );
         };
 
@@ -192,7 +192,7 @@ function updateStakeSummaryLine(){
               if (!db) return; await clearStore(db, 'xenfts').catch(()=>{});
             });
           }
-          if (baseId === 'DB-Xenft-Stake') {
+          if (baseId === 'DB_XenftStake') {
             return (window.xenftStake?.openDB ? window.xenftStake.openDB() : Promise.resolve(null)).then(async (db) => {
               if (!db) return; await Promise.all([
                 clearStore(db, 'stakes').catch(()=>{}),
@@ -200,7 +200,7 @@ function updateStakeSummaryLine(){
               ]);
             });
           }
-          if (baseId === 'DB-Xen-Stake') {
+          if (baseId === 'DB_XenStake') {
             return (window.xenStake?.openDB ? window.xenStake.openDB() : Promise.resolve(null)).then(async (db) => {
               if (!db) return; await Promise.all([
                 clearStore(db, 'stakes').catch(()=>{}),

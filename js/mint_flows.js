@@ -103,12 +103,16 @@ function readMintForm(){
 
 // Build data hex (Python parity) with term injected
 function buildCointoolDataHex(termDays){
+  // Get chain-specific XEN address
+  const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+  const xenNo = xenAddress.toLowerCase().replace('0x', '');
+  
   const term3 = Number(termDays).toString(16).toLowerCase().padStart(3, '0');
   const term4 = term3.padStart(4, '0');
   const base =
     "0x" +
     "59635f6f" + // selector
-    "00000000000000000000000006450dee7fd2fb8e39061434babcfc05599a6fb8" + // XEN
+    "000000000000000000000000" + xenNo + // XEN address (chain-specific)
     "0000000000000000000000000000000000000000000000000000000000000040" +
     "0000000000000000000000000000000000000000000000000000000000000024" +
     "9ff054df" + // inner selector

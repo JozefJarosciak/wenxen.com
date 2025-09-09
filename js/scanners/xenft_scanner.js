@@ -125,21 +125,89 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
 
   // --- LOG SCAN (bulkClaimMintReward -> EndTorrent) ---
-  async function fetchEndTorrentActions(w3, addr, fromBlock) {
+  async function fetchEndTorrentActions(w3OrRpcList, addr, fromBlock) {
+    // If we get an array, try each RPC until one works
+    if (Array.isArray(w3OrRpcList)) {
+      for (const rpc of w3OrRpcList) {
+        try {
+          const w3 = new window.Web3(rpc);
+          const result = await fetchEndTorrentActionsWithW3(w3, addr, fromBlock, rpc);
+          if (result !== null) return result;
+        } catch (e) {
+          console.log(`RPC ${rpc} failed for events, trying next...`);
+        }
+      }
+      console.log('No RPC could fetch EndTorrent events. Events not critical for display.');
+      return [];
+    } else {
+      // Single web3 instance
+      return fetchEndTorrentActionsWithW3(w3OrRpcList, addr, fromBlock, 'current');
+    }
+  }
+  
+  async function fetchEndTorrentActionsWithW3(w3, addr, fromBlock, rpcName) {
     const c = new w3.eth.Contract(window.xenftAbi, CONTRACT_ADDRESS);
-    const latest = await w3.eth.getBlockNumber();
+    let latest;
+    try {
+      latest = await w3.eth.getBlockNumber();
+    } catch (e) {
+      console.log(`RPC ${rpcName} can't get block number`);
+      return null;
+    }
+    
     const start = Math.max(0, Number(fromBlock || 0));
     let events = [];
+    
     try {
-      events = await c.getPastEvents("EndTorrent", {
-        filter: { user: addr },
-        fromBlock: start,
-        toBlock: 'latest'
-      });
+      // Skip if range too large
+      if (latest - start > 1000000) {
+        console.log('Range too large for EndTorrent events, skipping.');
+        return [];
+      }
+      
+      // Try reasonable chunk size first
+      let CHUNK_SIZE = 50000;
+      let currentBlock = start;
+      let failedChunks = 0;
+      
+      while (currentBlock < latest && failedChunks < 2) {
+        const toBlock = Math.min(currentBlock + CHUNK_SIZE - 1, latest);
+        
+        try {
+          const chunkEvents = await c.getPastEvents("EndTorrent", {
+            filter: { user: addr },
+            fromBlock: currentBlock,
+            toBlock: toBlock
+          });
+          events.push(...chunkEvents);
+          failedChunks = 0; // Reset on success
+        } catch (chunkError) {
+          // If it's a range limit error, try smaller chunks
+          if (chunkError.message && (chunkError.message.includes('413') || chunkError.message.includes('range'))) {
+            if (CHUNK_SIZE > 100) {
+              CHUNK_SIZE = Math.floor(CHUNK_SIZE / 10); // Reduce chunk size
+              console.log(`Reducing chunk size to ${CHUNK_SIZE} blocks`);
+              continue; // Retry same range with smaller chunk
+            }
+          }
+          failedChunks++;
+          console.log(`RPC ${rpcName} failed chunk ${currentBlock}-${toBlock}`);
+          
+          // This RPC doesn't work well, signal to try another
+          if (failedChunks >= 2) {
+            return null;
+          }
+        }
+        
+        currentBlock = toBlock + 1;
+      }
+      
+      console.log(`RPC ${rpcName} fetched ${events.length} EndTorrent events`);
     } catch (e) {
-      // Some RPCs don't allow getPastEvents; skip logs on those endpoints.
-      events = [];
+      console.log(`RPC ${rpcName} doesn't support getPastEvents`);
+      return null;
     }
+    
     // Decorate with block timestamps and normalized action objects
     const actions = [];
     for (const ev of events) {
@@ -264,13 +332,111 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       let tokenIds = [];
       // xenft_scanner.js — inside scan(), where tokenIds are fetched per address
       try {
-        if (typeof contract.methods.ownedTokens === "function") {
-          tokenIds = await contract.methods.ownedTokens().call({ from: addr });
-        } else if (typeof contract.methods.balanceOf === "function") {
-          const balance = await contract.methods.balanceOf(addr).call();
-          tokenIds = await Promise.all(
-            Array.from({length:Number(balance)},(_,j)=>contract.methods.tokenOfOwnerByIndex(addr,j).call())
-          );
+        // Debug logging
+        const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+        const contractAddress = contract.options.address;
+        console.log(`XENFT Scanner - Chain: ${currentChain}, Contract: ${contractAddress}, Address: ${addr}`);
+        
+        // Special handling for Base chain
+        if (currentChain === 'BASE') {
+          // For Base, we need a different approach since it doesn't support enumeration properly
+          // First check the balance to know how many tokens to look for
+          let targetBalance = 0;
+          try {
+            targetBalance = Number(await contract.methods.balanceOf(addr).call());
+            console.log(`XENFT Scanner - ${addr} has ${targetBalance} XENFTs on Base`);
+          } catch (e) {
+            console.log(`Balance check failed for ${addr}:`, e.message);
+          }
+          
+          if (targetBalance > 0) {
+            // Get the latest token ID to know where to start searching
+            let latestTokenId = 860000; // Default estimate
+            try {
+              latestTokenId = Number(await contract.methods.tokenIdCounter().call());
+              console.log(`XENFT Scanner - Latest token ID on Base: ${latestTokenId}`);
+            } catch (e) {
+              console.log(`Could not get tokenIdCounter, using estimate`);
+            }
+            
+            // Search backwards from the latest token ID
+            // Need to search enough range to find all tokens
+            let foundCount = 0;
+            const maxSearch = Math.max(20000, targetBalance * 100); // Search at least 20k tokens or 100x the balance
+            const startId = latestTokenId;
+            const endId = Math.max(1, latestTokenId - maxSearch);
+            
+            console.log(`XENFT Scanner - Searching for ${targetBalance} tokens from ID ${startId} down to ${endId}`);
+            
+            for (let testId = startId; testId >= endId && foundCount < targetBalance; testId--) {
+              try {
+                const testOwner = await contract.methods.ownerOf(testId.toString()).call();
+                if (testOwner.toLowerCase() === addr.toLowerCase()) {
+                  // Validate with vmuCount like in Python code
+                  try {
+                    const vmuCount = await contract.methods.vmuCount(testId.toString()).call();
+                    if (Number(vmuCount) > 0) {
+                      tokenIds.push(testId.toString());
+                      foundCount++;
+                      console.log(`XENFT Scanner - Found valid Base token ${testId} for ${addr} (${foundCount}/${targetBalance})`);
+                    }
+                  } catch (e) {
+                    // If vmuCount fails, still add it as it passed ownerOf check
+                    tokenIds.push(testId.toString());
+                    foundCount++;
+                    console.log(`XENFT Scanner - Found Base token ${testId} for ${addr} (${foundCount}/${targetBalance})`);
+                  }
+                }
+              } catch (err) {
+                // Token doesn't exist or not owned, continue
+              }
+              
+              // Add small delay every 25 tokens to avoid rate limiting
+              if (testId % 25 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 20));
+              }
+              
+              // Show progress
+              if (testId % 100 === 0 && window.progressUI) {
+                const searched = startId - testId;
+                window.progressUI.setStage(`Searching Base tokens (found ${foundCount}/${targetBalance})`, searched, maxSearch);
+              }
+            }
+            
+            // Sort token IDs in ascending order for display
+            tokenIds.sort((a, b) => Number(a) - Number(b));
+            
+            if (tokenIds.length > 0) {
+              console.log(`XENFT Scanner - Found ${tokenIds.length}/${targetBalance} Base tokens for ${addr}: ${tokenIds.join(', ')}`);
+              if (tokenIds.length < targetBalance) {
+                console.log(`XENFT Scanner - Note: Could not find all tokens, may need wider search range`);
+              }
+            } else {
+              console.log(`XENFT Scanner - No tokens found for ${addr} in range ${endId}-${startId}`);
+            }
+          }
+        } else {
+          // For other chains, use standard methods
+          // Try ownedTokens first (Ethereum XENFT method)
+          if (contract.methods.ownedTokens) {
+            try {
+              tokenIds = await contract.methods.ownedTokens().call({ from: addr });
+            } catch (ownedTokensError) {
+              // If ownedTokens fails, try standard ERC721 enumerable methods
+              if (contract.methods.balanceOf) {
+                const balance = await contract.methods.balanceOf(addr).call();
+                tokenIds = await Promise.all(
+                  Array.from({length:Number(balance)},(_,j)=>contract.methods.tokenOfOwnerByIndex(addr,j).call())
+                );
+              }
+            }
+          } else if (contract.methods.balanceOf) {
+            // Fallback to standard ERC721 enumerable methods
+            const balance = await contract.methods.balanceOf(addr).call();
+            tokenIds = await Promise.all(
+              Array.from({length:Number(balance)},(_,j)=>contract.methods.tokenOfOwnerByIndex(addr,j).call())
+            );
+          }
         }
       } catch (e) {
         const msg = (e && (e.message || String(e))) || "";
@@ -313,11 +479,11 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
           // --- After tokens: scan EndTorrent logs once for this owner and merge into entries
           try {
-            const w3 = new Web3(rpcEndpoints[0]);
             let startBlock = 0;
             try { startBlock = Number(await contract.methods.startBlockNumber().call()); } catch {}
 
-            const actions = await fetchEndTorrentActions(w3, addr, startBlock);
+            // Try all RPCs for event fetching
+            const actions = await fetchEndTorrentActions(rpcEndpoints, addr, startBlock);
             if (actions.length) {
               const byToken = actions.reduce((acc, a) => {
                 (acc[String(a.tokenId)] ||= []).push(a);
@@ -352,14 +518,40 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           if (!refresh) { continue; }
 
           let detail = null;
+          
+          // Get the correct contract address for the current chain
+          const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+          const xenftContractAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') || CONTRACT_ADDRESS;
+          console.log(`XENFT Scanner - Processing token ${tokenId} with contract ${xenftContractAddress}`);
+          
           for (const rpc of rpcEndpoints) {
             try {
               const w3 = new Web3(rpc);
-              const c  = new w3.eth.Contract(window.xenftAbi, CONTRACT_ADDRESS);
+              const c  = new w3.eth.Contract(window.xenftAbi, xenftContractAddress);
+              
+              // First check if token exists by checking vmuCount (like Python code)
+              let vmuCount = 0;
+              try {
+                console.log(`XENFT Scanner - Checking vmuCount for token ${tokenId} on ${rpc}`);
+                vmuCount = await c.methods.vmuCount(tokenId).call();
+                console.log(`XENFT Scanner - Token ${tokenId} has vmuCount: ${vmuCount}`);
+              } catch (e) {
+                console.log(`Token ${tokenId} vmuCount check failed: ${e.message}`);
+                break; // Token doesn't exist, no point trying other RPCs
+              }
+              
+              // Only process if vmuCount > 0 (token exists)
+              if (Number(vmuCount) === 0) {
+                console.log(`Token ${tokenId} has vmuCount of 0, skipping`);
+                break;
+              }
+              
               const tokenUri = await c.methods.tokenURI(tokenId).call();
               const tokenData = extractTokenData(tokenUri);
               const xenftId = tokenData.name ? tokenData.name.split('#').pop().trim() : tokenId;
-              const mintInfoRaw = await c.methods.mintInfo(xenftId).call();
+              
+              // Use tokenId directly for mintInfo, like in Python code
+              const mintInfoRaw = await c.methods.mintInfo(tokenId).call();
               const mintInfo = decodeMintInfo(mintInfoRaw);
               const maturityDate = new Date(mintInfo.maturityTs * 1000);
               const localMaturity = (typeof luxon !== "undefined"
@@ -373,6 +565,14 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
                 : (function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); })(new Date(mintInfo.maturityTs*1000));
 
 
+              // Get xenBurned value like Python code
+              let xenBurned = 0;
+              try {
+                xenBurned = await c.methods.xenBurned(tokenId).call();
+              } catch (e) {
+                console.log(`Failed to get xenBurned for token ${tokenId}`);
+              }
+              
               detail = {
                 owner: addr,
                 tokenId: tokenId,
@@ -384,8 +584,8 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
                 "Maturity_Date_Fmt": localMaturity,
                 "Maturity UTC": utcMaturity,
                 Term: tokenData.attributes ? (tokenData.attributes.find(a => a.trait_type === "Term")?.value || "") : "",
-                VMUs: tokenData.attributes ? (tokenData.attributes.find(a => a.trait_type === "VMUs")?.value || "") : "",
-                "XEN Burned": tokenData.attributes ? (tokenData.attributes.find(a => a.trait_type === "XEN Burned")?.value || "") : "",
+                VMUs: vmuCount.toString(), // Use the actual vmuCount we fetched
+                "XEN Burned": xenBurned.toString(),
                 redeemed: mintInfo.redeemed,
                 maturityDateOnly: maturityKey,
                 Maturity_Timestamp: Number(mintInfo.maturityTs),
@@ -408,8 +608,9 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               if (!Array.isArray(detail.actions)) detail.actions = [];
               await save(db, detail);
               break;
-            } catch (err) { /* try next RPC */ }
+            } catch {}
           }
+          if (!detail) { console.warn("Could not fetch detail for token", tokenId); continue; }
         } catch (e) {
           console.warn("Failed token", tokenId, e);
         } finally {
