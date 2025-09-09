@@ -4150,6 +4150,24 @@ function updateSummaryStats() {
  * - Retries/backoffs on transient errors
  */
 // Verbose Etherscan range fetcher with dynamic splitting + reason-aware retries
+// Global rate limiter for Etherscan API calls (5 requests per second)
+const etherscanRateLimiter = {
+  lastRequestTime: 0,
+  minInterval: 200, // 200ms = 5 requests per second
+  
+  async throttle() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.minInterval) {
+      const waitTime = this.minInterval - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+};
+
 async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKey, sink, depth = 0, onStatus = null) {
   if (startBlock > endBlock) return;
 
@@ -4168,6 +4186,8 @@ async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKe
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      // Apply rate limiting before making the request
+      await etherscanRateLimiter.throttle();
       const res = await fetch(url);
       const data = await res.json();
 
@@ -4190,7 +4210,7 @@ async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKe
         }
 
         window.__scanLastActivityTs = Date.now();
-        await new Promise(r => setTimeout(r, 300));
+        // Rate limiting is now handled by etherscanRateLimiter.throttle()
         return;
       }
 
@@ -4223,10 +4243,18 @@ async function fetchRangeWithSplit(address, startBlock, endBlock, etherscanApiKe
         return;
       }
 
-      // Rate limit / generic NOTOK -> retry with backoff
-      console.warn(`${indent}  ! Transient error (${human}). Retrying in ${backoff}ms...`);
-      if (typeof onStatus === "function") onStatus(`${indent}  ! ${human}. Retrying...`);
-      await new Promise(r => setTimeout(r, backoff));
+      // Rate limit error - wait longer
+      if (/rate limit/i.test(human)) {
+        const rateLimitWait = Math.max(1000, 500 * (attempt + 1)); // Progressive backoff for rate limits
+        console.warn(`${indent}  ! Rate limit hit. Waiting ${rateLimitWait}ms before retry...`);
+        if (typeof onStatus === "function") onStatus(`${indent}  ! Rate limit. Waiting...`);
+        await new Promise(r => setTimeout(r, rateLimitWait));
+      } else {
+        // Other transient errors -> retry with backoff
+        console.warn(`${indent}  ! Transient error (${human}). Retrying in ${backoff}ms...`);
+        if (typeof onStatus === "function") onStatus(`${indent}  ! ${human}. Retrying...`);
+        await new Promise(r => setTimeout(r, backoff));
+      }
 
     } catch (e) {
       const backoff = Math.min(2500, 200 * Math.pow(1.6, attempt));
@@ -4255,6 +4283,8 @@ async function findEarliestTxBlock(address, etherscanApiKey) {
     `&address=${address}&startblock=${xenDeploymentBlock}&endblock=99999999&page=1&offset=1&sort=asc&apikey=${etherscanApiKey}`
   );
   try {
+    // Apply rate limiting before making the request
+    await etherscanRateLimiter.throttle();
     const res = await fetch(url);
     const data = await res.json();
     if (data?.status === "1" && Array.isArray(data.result) && data.result.length > 0) {

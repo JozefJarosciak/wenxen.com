@@ -12,8 +12,8 @@
   const MIN_CONTRACT_BLOCK = 15700000;
   const SCAN_BACKTRACK_BLOCKS = 1000;
 
-  // Throttle (2 req/sec)
-  const RATE_PER_SEC = 1;
+  // Throttle (5 req/sec - Etherscan limit)
+  const RATE_PER_SEC = 5;
   const MIN_INTERVAL_MS = Math.ceil(1000 / RATE_PER_SEC);
   let __lastCallAt = 0;
   async function throttle() {
@@ -82,7 +82,9 @@
       if (data.status==="1" && Array.isArray(data.result)) { sink.push(...data.result); return; }
       const msg=`${data.message||""} ${data.result||""}`;
       if (/Max calls per sec rate limit reached/i.test(msg)) {
-        const backoff=Math.min(4000, 600*attempt);
+        // Progressive backoff for rate limits
+        const backoff=Math.min(5000, 1000 * (attempt + 1));
+        console.warn(`Rate limit hit. Waiting ${backoff}ms before retry...`);
         await new Promise(r=>setTimeout(r, backoff));
         return fetchLogsSplit(apiKey, params, sink, depth, attempt+1);
       }
