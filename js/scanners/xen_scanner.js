@@ -69,7 +69,9 @@
   // Logs API
   async function fetchLogsOnce(apiKey, params){
     const qs=new URLSearchParams(params).toString();
-    const url=`https://api.etherscan.io/api?module=logs&action=getLogs&${qs}&apikey=${apiKey}`;
+    // Get explorer API URL for current chain
+    const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
+    const url=`${explorerUrl}?module=logs&action=getLogs&${qs}&apikey=${apiKey}`;
     await throttle();
     const res=await fetch(url); if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json().catch(()=>({status:"0",message:"bad json"})); return data;

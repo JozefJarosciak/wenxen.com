@@ -189,11 +189,12 @@ async function fetchMintDetails(address, mintId, etherscanApiKey) {
   // Compute proxy address
   const proxyAddress = computeProxyAddress(mintId, COINTOOL_SALT_BYTES, address);
   
-  // Get contract creation info from Etherscan
-  const url = `https://api.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${proxyAddress}&apikey=${etherscanApiKey}`;
+  // Get contract creation info from explorer API
+  const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
+  const url = `${explorerUrl}?module=contract&action=getcontractcreation&contractaddresses=${proxyAddress}&apikey=${etherscanApiKey}`;
   
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Etherscan API failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Explorer API failed: ${response.status}`);
   
   const data = await response.json();
   if (data.status !== "1" || !data.result || data.result.length === 0) {

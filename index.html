@@ -126,6 +126,26 @@
   <sup class="brand-suffix">
     <span class="brand-suffix-text">Ethereum</span>
     <span id="headerGasNow" class="gas-sup" title="Current gas (gwei)"></span>
+    <div id="gasTooltip" class="gas-tooltip" hidden>
+      <div class="gas-tooltip-content">
+        <div class="gas-tooltip-row">
+          <span class="gas-tooltip-label">RPC Latency:</span>
+          <span class="gas-tooltip-value" id="gasLatency">-</span>
+        </div>
+        <div class="gas-tooltip-row">
+          <span class="gas-tooltip-label">Gas Price:</span>
+          <span class="gas-tooltip-value gas-price" id="gasPrice">-</span>
+        </div>
+        <div class="gas-tooltip-row">
+          <span class="gas-tooltip-label">RPC Endpoint:</span>
+          <span class="gas-tooltip-value gas-rpc" id="gasRpcEndpoint">-</span>
+        </div>
+        <div class="gas-tooltip-row">
+          <span class="gas-tooltip-label">Last Update:</span>
+          <span class="gas-tooltip-value" id="gasLastUpdate">-</span>
+        </div>
+      </div>
+    </div>
   </sup>
 </h1>
 <div class="tabs">

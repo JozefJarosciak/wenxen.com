@@ -489,3 +489,27 @@ body.dark-mode .chain-switching-title {
 body.dark-mode .chain-switching-message {
   color: #9ca3af;
 }
+
+/* Gas tooltip dark theme styles */
+body.dark-mode .gas-tooltip-content {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-mode .gas-tooltip-row:not(:last-child) {
+  border-bottom: 1px solid #374151;
+}
+
+body.dark-mode .gas-tooltip-label {
+  color: #9ca3af;
+}
+
+body.dark-mode .gas-tooltip-value {
+  color: #e5e7eb;
+}
+
+body.dark-mode .gas-tooltip-value.gas-price {
+  color: #4da3ff;
+}

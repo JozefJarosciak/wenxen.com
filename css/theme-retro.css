@@ -461,3 +461,31 @@ body.retro-mode .chain-switching-title {
 body.retro-mode .chain-switching-message {
   color: #8ab4ff;
 }
+
+/* Gas tooltip retro theme styles */
+body.retro-mode .gas-tooltip-content {
+  background: #0a1db8;
+  color: #c7fff7;
+  border: 2px solid #4e5bd4;
+  box-shadow: 0 4px 12px rgba(3, 8, 58, 0.6);
+  font-family: 'VT323', monospace;
+}
+
+body.retro-mode .gas-tooltip-row:not(:last-child) {
+  border-bottom: 1px solid #4e5bd4;
+}
+
+body.retro-mode .gas-tooltip-label {
+  color: #8ab4ff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+body.retro-mode .gas-tooltip-value {
+  color: #c7fff7;
+}
+
+body.retro-mode .gas-tooltip-value.gas-price {
+  color: #00ffff;
+  font-weight: bold;
+}

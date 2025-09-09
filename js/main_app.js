@@ -493,8 +493,8 @@ if (window.chainManager) {
   }
 }
 const selectedRows = new Set();
-// This address is hard-coded in the Python remint path
-const REMINT_HELPER = '0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98';
+// This address is hard-coded in the Python remint path (Ethereum)
+const REMINT_HELPER_ETH = '0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98';
 // Safety cap: CoinTool can handle up to this many VMUs per tx
 const MAX_VMU_PER_TX = 128;
 const blockTsCache = new Map();
@@ -1202,6 +1202,35 @@ function chainIdToName(chainIdHexOrNum){
 let xenUsdPrice = null;
 let xenPriceLast = { ok: false, price: null, ts: null, source: null };
 
+// Format very small prices with subscript notation (e.g., $0.0₁₀4410)
+function formatTinyPrice(price) {
+  if (!Number.isFinite(price)) return 'Unavailable';
+  
+  // Convert to string with enough precision
+  const priceStr = price.toFixed(15);
+  
+  // Find the position of first non-zero digit after decimal
+  const match = priceStr.match(/^0\.0*[1-9]/);
+  if (!match) {
+    // Price is not tiny, just format normally
+    return `$${price.toFixed(10)}`;
+  }
+  
+  // Count the zeros after decimal point
+  const zeros = (match[0].match(/0/g) || []).length - 1; // -1 for the initial 0 before decimal
+  
+  if (zeros < 4) {
+    // Not that many zeros, show normally
+    return `$${price.toFixed(10)}`;
+  }
+  
+  // Get the significant digits after the zeros
+  const significantPart = priceStr.substring(match[0].length, match[0].length + 4);
+  
+  // Create HTML with subscript for zero count
+  return `$0.0<sub>${zeros}</sub>${significantPart}`;
+}
+
 function updateXenPriceStatus(){
   const el = document.getElementById('xenPriceStatus');
   if (!el) return;
@@ -1214,28 +1243,52 @@ function updateXenPriceStatus(){
     return;
   }
   const priceText = Number.isFinite(xenPriceLast.price)
-    ? `$${xenPriceLast.price.toFixed(10)}`
+    ? formatTinyPrice(xenPriceLast.price)
     : 'Unavailable';
-  el.textContent = `Last refresh (${xenPriceLast.source || '—'}): ${priceText} at ${new Date(xenPriceLast.ts).toLocaleString('en-CA', { timeZone: 'America/Toronto' })}`;
+  // Use innerHTML to render the subscript
+  el.innerHTML = `Last refresh (${xenPriceLast.source || '—'}): ${priceText} at ${new Date(xenPriceLast.ts).toLocaleString('en-CA', { timeZone: 'America/Toronto' })}`;
 }
 
-// Primary: Dexscreener token endpoint
+// Primary: Dexscreener token/pair endpoint
 async function fetchFromDexscreener(tokenAddress){
-  const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Dexscreener HTTP ${res.status}`);
-  const data = await res.json();
-
-  // Dexscreener returns an array of pairs for the token — pick an Ethereum one if present
-  const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
-  if (!pairs.length) throw new Error('Dexscreener: no pairs');
-
-  const preferred = pairs.find(p => (p.chainId || p.chain || '').toLowerCase().includes('eth')) || pairs[0];
-  const price = parseFloat(preferred?.priceUsd ?? preferred?.price?.usd ?? preferred?.priceUsd);
-  if (!Number.isFinite(price)) throw new Error('Dexscreener: no priceUsd');
-
-  const dexName = preferred?.dexId || preferred?.url || 'Dex';
-  return { price, source: `${dexName} Dexscreener` };
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  let url;
+  let data;
+  
+  if (currentChain === 'BASE') {
+    // For Base CBXEN, use the pairs endpoint
+    url = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddress}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Dexscreener HTTP ${res.status}`);
+    data = await res.json();
+    
+    // For pairs endpoint, check if we got a single pair or array
+    const pair = data?.pair || (Array.isArray(data?.pairs) && data.pairs[0]);
+    if (!pair) throw new Error('Dexscreener: no pair data for Base');
+    
+    const price = parseFloat(pair?.priceUsd);
+    if (!Number.isFinite(price)) throw new Error('Dexscreener: no priceUsd for Base');
+    
+    const dexName = pair?.dexId || 'Aerodrome';
+    return { price, source: `${dexName} Dexscreener` };
+  } else {
+    // For Ethereum XEN, use the tokens endpoint
+    url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Dexscreener HTTP ${res.status}`);
+    data = await res.json();
+    
+    // Dexscreener returns an array of pairs for the token — pick an Ethereum one if present
+    const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
+    if (!pairs.length) throw new Error('Dexscreener: no pairs');
+    
+    const preferred = pairs.find(p => (p.chainId || p.chain || '').toLowerCase().includes('eth')) || pairs[0];
+    const price = parseFloat(preferred?.priceUsd ?? preferred?.price?.usd ?? preferred?.priceUsd);
+    if (!Number.isFinite(price)) throw new Error('Dexscreener: no priceUsd');
+    
+    const dexName = preferred?.dexId || preferred?.url || 'Dex';
+    return { price, source: `${dexName} Dexscreener` };
+  }
 }
 
 // Fallback: CoinGecko simple price
@@ -1251,8 +1304,19 @@ async function fetchFromCoinGecko(){
 
 async function fetchXenUsdPrice(){
   try {
-    // XEN_ETH is already defined above in your file (0x0645...6Fb8 on ETH)
-    const primary = await fetchFromDexscreener(XEN_ETH);
+    // Get the appropriate token address based on current chain
+    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+    let tokenAddress;
+    
+    if (currentChain === 'BASE') {
+      // Use CBXEN liquidity pool address on Base
+      tokenAddress = '0xe28f5637d009732259fcbb5cea23488a411a5ead';
+    } else {
+      // Use XEN token address on Ethereum
+      tokenAddress = XEN_ETH;
+    }
+    
+    const primary = await fetchFromDexscreener(tokenAddress);
     xenUsdPrice  = primary.price;
     xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: primary.source };
   } catch (e1) {
@@ -1358,9 +1422,17 @@ function es2url(queryString) {
   // queryString should NOT start with "?" (just "module=...&action=...&...")
   // Get explorer API URL for current chain
   const explorerUrl = window.chainManager?.getCurrentConfig()?.explorer?.apiUrl || 'https://api.etherscan.io/api';
-  // Use v2 API if available (Etherscan), otherwise v1
-  const apiPath = explorerUrl.includes('etherscan.io') ? '/v2/api' : '';
-  const baseUrl = explorerUrl.replace('/api', '') + apiPath;
+  
+  // For Etherscan, use v2 API; for others (BaseScan), use the URL as-is
+  let baseUrl;
+  if (explorerUrl.includes('etherscan.io')) {
+    // Replace /api with /v2/api for Etherscan
+    baseUrl = explorerUrl.replace('/api', '/v2/api');
+  } else {
+    // Keep the URL as-is for BaseScan and other explorers
+    baseUrl = explorerUrl;
+  }
+  
   return `${baseUrl}?chainid=${ETHERSCAN_CHAIN_ID}&${queryString}`;
 }
 
@@ -1614,7 +1686,9 @@ async function handleBulkAction(mode){
 //  + 32 bytes (manual_max_term as 3-hex-digit, e.g. 0x064) in the low bits
 //  + padding
 function buildRemintData(minter, manualDays /* integer 1..999 */) {
-  const helperNo = no0x(REMINT_HELPER);
+  // Get chain-specific REMINT_HELPER address
+  const remintHelper = window.chainManager?.getContractAddress('REMINT_HELPER') || REMINT_HELPER_ETH;
+  const helperNo = no0x(remintHelper);
   const minterNo = no0x(minter);
 
   // 3-digit hex (lowercase), like the Python code (e.g., 100 -> "064")
@@ -6513,6 +6587,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // initial fetch + periodic refresh (optional)
   fetchXenUsdPrice();
   setInterval(fetchXenUsdPrice, 60_000);
+  
+  // Refresh XEN price when chain changes
+  if (window.chainManager) {
+    window.chainManager.onChainChange(() => {
+      console.log('Chain changed, refreshing XEN/CBXEN price');
+      fetchXenUsdPrice();
+    });
+  }
 });
 
 
@@ -6553,7 +6635,12 @@ updateDownloadButtonsVisibility();
 
 
   function getRpcListFromSettings() {
-    // Reads from the same source as your scan functions
+    // Get chain-specific RPCs
+    if (window.chainManager) {
+      const rpcs = window.chainManager.getRPCEndpoints();
+      return rpcs.length > 0 ? rpcs : [DEFAULT_RPC];
+    }
+    // Fallback to old method if chainManager not available
     const customRPC = document.getElementById("customRPC")?.value || localStorage.getItem("customRPC") || DEFAULT_RPC;
     return customRPC.split("\n").map(s => s.trim()).filter(Boolean);
   }
@@ -6575,29 +6662,35 @@ updateDownloadButtonsVisibility();
 
   async function fetchGasPrice() {
     rpcList = getRpcListFromSettings();
+    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+    //console.log(`Gas Watcher: Fetching gas for ${currentChain} using RPCs:`, rpcList);
+    
     if (!rpcList.length) {
       console.warn("Gas Watcher: No RPC endpoints configured.");
       updateDisplay(null, "No RPCs configured");
       return;
     }
 
-    if (!web3Gas) {
-      web3Gas = new Web3(rpcList[0]);
-    }
+    // Always create new Web3 instance with current RPC to ensure we're using the right chain
+    web3Gas = new Web3(rpcList[0]);
+    currentRpcIndex = 0;
 
     const maxAttempts = rpcList.length * 2;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
+        const startTime = performance.now();
         const wei = await web3Gas.eth.getGasPrice();
+        const latency = Math.round(performance.now() - startTime);
         const gwei = parseFloat(Web3.utils.fromWei(wei, 'gwei'));
+        //console.log(`Gas Watcher: Got gas price ${gwei} gwei from ${rpcList[currentRpcIndex]} (latency: ${latency}ms)`);
 
         if (isFinite(gwei)) {
-          updateDisplay(gwei, null, rpcList[currentRpcIndex]);
+          updateDisplay(gwei, null, rpcList[currentRpcIndex], latency);
           startHeaderGasCountdown(getGasRefreshMs()); // Use the dynamic value
           return;
         }
       } catch (error) {
-        console.warn(`Gas Watcher: Failed to get gas price from ${rpcList[currentRpcIndex]}.`);
+        //console.warn(`Gas Watcher: Failed to get gas price from ${rpcList[currentRpcIndex]}.`);
         switchRpc(); // Try next RPC
         await new Promise(resolve => setTimeout(resolve, 200));
       }
@@ -6606,15 +6699,38 @@ updateDownloadButtonsVisibility();
     updateDisplay(null, "All RPCs failed");
   }
 
-  function updateDisplay(gwei, errorMsg = null, rpcUrl = null) {
+  function updateDisplay(gwei, errorMsg = null, rpcUrl = null, latency = null) {
     const now = new Date();
+    const chainName = window.chainManager?.getCurrentConfig()?.name || 'Ethereum';
+    const tooltip = document.getElementById('gasTooltip');
+    
     if (gwei !== null) {
       headerGasEl.textContent = `${gwei.toFixed(2)} gwei`;
-      const rpcName = rpcUrl ? ` via ${new URL(rpcUrl).hostname}` : '';
-      headerGasEl.title = `Last refresh: ${now.toLocaleTimeString()}${rpcName}`;
+      
+      // Update HTML tooltip elements
+      if (tooltip) {
+        const latencyEl = document.getElementById('gasLatency');
+        const priceEl = document.getElementById('gasPrice');
+        const rpcEl = document.getElementById('gasRpcEndpoint');
+        const updateEl = document.getElementById('gasLastUpdate');
+        
+        if (latencyEl) latencyEl.textContent = latency ? `${latency} ms` : '-';
+        if (priceEl) priceEl.textContent = `${gwei.toFixed(2)} Gwei`;
+        if (rpcEl) {
+          rpcEl.textContent = rpcUrl ? new URL(rpcUrl).hostname : '-';
+          rpcEl.title = rpcUrl || '';
+        }
+        if (updateEl) updateEl.textContent = now.toLocaleTimeString();
+        
+        // Show tooltip on hover
+        tooltip.removeAttribute('hidden');
+      }
+      
+      // Keep native tooltip as fallback
+      headerGasEl.title = `${chainName} Gas: ${gwei.toFixed(2)} gwei`;
     } else {
       headerGasEl.textContent = '... gwei';
-      headerGasEl.title = `Failed to refresh gas price. ${errorMsg || ''}. Last attempt: ${now.toLocaleTimeString()}`;
+      headerGasEl.title = `Failed to refresh ${chainName} gas price. ${errorMsg || ''}`;
       // Stop the countdown bar on failure
       headerGasEl.style.setProperty('--p', '0');
     }
@@ -6669,7 +6785,27 @@ updateDownloadButtonsVisibility();
     });
   }
 
-  startWatcher(); // Initial start
+  // Wait for chainManager to be ready before starting
+  function startWhenReady() {
+    if (window.chainManager && window.chainManager.initialized) {
+      startWatcher(); // Initial start after chain is properly loaded
+    } else {
+      // Try again in a moment
+      setTimeout(startWhenReady, 50);
+    }
+  }
+  startWhenReady();
+  
+  // Restart gas watcher when chain changes
+  if (window.chainManager) {
+    window.chainManager.onChainChange(() => {
+      console.log('Chain changed, restarting gas price watcher');
+      // Reset web3 instance to force new RPC
+      web3Gas = null;
+      currentRpcIndex = 0;
+      startWatcher();
+    });
+  }
 
 })();
 

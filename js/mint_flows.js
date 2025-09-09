@@ -70,7 +70,9 @@ async function setMaxTermFromXEN(){
       provider = new Web3(DEFAULT_RPC_READ);
     }
 
-    const xen = new provider.eth.Contract(window.xenAbi, XEN_MAIN);
+    // Get chain-specific XEN contract address
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+    const xen = new provider.eth.Contract(window.xenAbi, xenAddress);
     const secs = await xen.methods.getCurrentMaxTerm().call();
     const days = Math.max(1, Math.min(999, Math.floor(Number(secs)/86400)));
     document.getElementById('mintTermDays').value = String(days);
@@ -148,7 +150,9 @@ function parseBurnToWei(burnRaw){
 }
 
 async function ensureXenApprovalIfNeeded(spender, requiredWei){
-  const token = new web3Wallet.eth.Contract(window.xenAbi, XEN_MAIN);
+  // Get chain-specific XEN contract address
+  const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+  const token = new web3Wallet.eth.Contract(window.xenAbi, xenAddress);
   const current = await token.methods.allowance(connectedAccount, spender).call();
   if (Web3.utils.toBN(current).gte(Web3.utils.toBN(requiredWei))) return;
   await token.methods.approve(spender, requiredWei).send({ from: connectedAccount });
@@ -161,7 +165,8 @@ async function startCointoolMint(vmu, termDays){
   let est = await contract.methods.t(vmu, dataHex, saltHex).estimateGas({ from: connectedAccount });
   est = Math.ceil(est * 1.2);
   const receipt = await contract.methods.t(vmu, dataHex, saltHex).send({ from: connectedAccount, gas: est });
-  console.log(`[MINT/COINTOOL] https://etherscan.io/tx/${receipt?.transactionHash || '(pending)'}`);
+  const txUrl = window.chainManager?.getExplorerUrl('tx', receipt?.transactionHash) || `https://etherscan.io/tx/${receipt?.transactionHash}`;
+  console.log(`[MINT/COINTOOL] ${txUrl}`);
   if (typeof showToast === 'function') showToast(`Mint submitted: ${receipt.transactionHash}`, 'success');
   else alert(`Mint submitted: ${receipt.transactionHash}`);
   // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
@@ -188,7 +193,8 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
     let est = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
     const r = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).send({ from: connectedAccount, gas: est });
-    console.log(`[MINT/XENFT-APEX] https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`);
+    const apexTxUrl = window.chainManager?.getExplorerUrl('tx', r?.transactionHash) || `https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`;
+    console.log(`[MINT/XENFT-APEX] ${apexTxUrl}`);
     if (typeof showToast === 'function') showToast(`XENFT APEX mint submitted: ${r.transactionHash}`, 'success');
     else alert(`XENFT APEX mint submitted: ${r.transactionHash}`);
     // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
@@ -206,7 +212,8 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
   let est = await xenft.methods.bulkClaimRank(vmu, termDays).estimateGas({ from: connectedAccount });
   est = Math.ceil(est * 1.2);
   const r = await xenft.methods.bulkClaimRank(vmu, termDays).send({ from: connectedAccount, gas: est });
-  console.log(`[MINT/XENFT] https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`);
+  const xenftTxUrl = window.chainManager?.getExplorerUrl('tx', r?.transactionHash) || `https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`;
+  console.log(`[MINT/XENFT] ${xenftTxUrl}`);
   if (typeof showToast === 'function') showToast(`XENFT mint submitted: ${r.transactionHash}`, 'success');
   else alert(`XENFT mint submitted: ${r.transactionHash}`);
   // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
@@ -242,7 +249,9 @@ async function startStakeFlow(){
   } catch(_) { alert('Invalid amount.'); return; }
 
   try {
-    const xen = new web3Wallet.eth.Contract(window.xenAbi, XEN_MAIN);
+    // Get chain-specific XEN contract address
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+    const xen = new web3Wallet.eth.Contract(window.xenAbi, xenAddress);
     let est = await xen.methods.stake(amountWei, termDays).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
     const tx = await xen.methods.stake(amountWei, termDays).send({ from: connectedAccount, gas: est });
@@ -284,7 +293,9 @@ async function fetchXenBalanceWei(){
       provider = new Web3(DEFAULT_RPC_READ);
     }
 
-    const token = new provider.eth.Contract(window.xenAbi, XEN_MAIN);
+    // Get chain-specific XEN contract address
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+    const token = new provider.eth.Contract(window.xenAbi, xenAddress);
     const bal = await token.methods.balanceOf(acct).call();
     console.debug('[STAKE] XEN balance (wei):', bal);
     return bal; // wei string

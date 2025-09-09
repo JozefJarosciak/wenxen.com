@@ -1784,6 +1784,7 @@ body {
   font-weight: 500;
   position: relative;     /* needed so the ::after positions under the text */
   display: inline-block;  /* ensures a stable box for the underline */
+  cursor: help;
 }
 
 /* 1px countdown underline */
@@ -1799,6 +1800,80 @@ body {
   opacity: 0.7;
   transform-origin: left center;
   transform: scaleX(var(--p, 1));  /* --p = 1 (full) .. 0 (empty) */
+}
+
+/* Gas tooltip styles */
+.gas-tooltip {
+  position: absolute;
+  top: 2em;
+  left: auto;
+  right: 0;
+  margin-top: 8px;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  pointer-events: none;
+}
+
+.gas-sup:hover + .gas-tooltip,
+.gas-tooltip:hover {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.brand-suffix {
+  position: relative;
+}
+
+.gas-tooltip-content {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.gas-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.gas-tooltip-row:not(:last-child) {
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.gas-tooltip-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.gas-tooltip-value {
+  color: #1a1a1a;
+  font-weight: 600;
+  text-align: right;
+}
+
+.gas-tooltip-value.gas-price {
+  color: #059669;
+  font-size: 13px;
+}
+
+.gas-tooltip-value.gas-rpc {
+  font-size: 11px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field.required label::after {

@@ -794,3 +794,32 @@ body.matrix-mode .chain-switching-title {
 body.matrix-mode .chain-switching-message {
   color: #00aa00;
 }
+
+/* Gas tooltip matrix theme styles */
+body.matrix-mode .gas-tooltip-content {
+  background: #001100;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+  font-family: 'Courier New', monospace;
+}
+
+body.matrix-mode .gas-tooltip-row:not(:last-child) {
+  border-bottom: 1px solid #00aa00;
+}
+
+body.matrix-mode .gas-tooltip-label {
+  color: #00aa00;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+body.matrix-mode .gas-tooltip-value {
+  color: #00ff00;
+  text-shadow: 0 0 3px #00ff00;
+}
+
+body.matrix-mode .gas-tooltip-value.gas-price {
+  color: #00ffff;
+  text-shadow: 0 0 5px #00ffff;
+}

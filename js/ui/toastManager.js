@@ -74,9 +74,16 @@ export const toastManager = {
     if (txHashRegex.test(message)) {
       hasTransactionHash = true;
       processedContent = message.replace(txHashRegex, (match) => {
-        const etherscanUrl = `https://etherscan.io/tx/${match}`;
+        // Get the correct explorer URL based on current chain
+        let explorerUrl;
+        if (window.chainManager) {
+          explorerUrl = window.chainManager.getExplorerUrl('tx', match);
+        } else {
+          // Fallback to Etherscan if chainManager not available
+          explorerUrl = `https://etherscan.io/tx/${match}`;
+        }
         const shortHash = `${match.slice(0, 6)}...${match.slice(-4)}`;
-        return `<a href="${etherscanUrl}" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline; font-weight: bold;" title="${match}">${shortHash}</a>`;
+        return `<a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline; font-weight: bold;" title="${match}">${shortHash}</a>`;
       });
     }
     
