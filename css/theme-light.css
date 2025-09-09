@@ -242,3 +242,24 @@ body.light-mode .flatpickr-today-btn:hover {
   background: #f9fafb;
   border-color: #9ca3af;
 }
+
+/* Chain switching modal light theme styles */
+body.light-mode .chain-switching-modal {
+  background: #ffffff;
+  color: #111827;
+  border: 2px solid #e5e7eb;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+body.light-mode .chain-switching-spinner {
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+}
+
+body.light-mode .chain-switching-title {
+  color: #111827;
+}
+
+body.light-mode .chain-switching-message {
+  color: #6b7280;
+}

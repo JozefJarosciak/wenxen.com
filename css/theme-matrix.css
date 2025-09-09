@@ -771,3 +771,26 @@ body.matrix-mode ::-webkit-scrollbar-thumb:hover {
   background: #00ff00;
   box-shadow: 0 0 5px #00ff00;
 }
+
+/* Chain switching modal matrix theme styles */
+body.matrix-mode .chain-switching-modal {
+  background: #001100;
+  color: #00ff00;
+  border: 2px solid #00ff00;
+  box-shadow: 0 0 20px #00ff00, 0 20px 40px rgba(0, 255, 0, 0.3);
+}
+
+body.matrix-mode .chain-switching-spinner {
+  border: 3px solid #00aa00;
+  border-top-color: #00ff00;
+  box-shadow: 0 0 10px #00ff00;
+}
+
+body.matrix-mode .chain-switching-title {
+  color: #00ff00;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+body.matrix-mode .chain-switching-message {
+  color: #00aa00;
+}
