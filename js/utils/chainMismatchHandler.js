@@ -79,22 +79,12 @@ export class ChainMismatchHandler {
     showSwitchingOverlay(targetChain) {
         const chainName = this.chainNames[targetChain] || targetChain;
         const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 99999;
-        `;
+        overlay.className = 'chain-switching-overlay';
         overlay.innerHTML = `
-            <div style="background: white; padding: 24px; border-radius: 8px; text-align: center;">
-                <h3 style="margin: 0 0 8px 0;">Switching to ${chainName}</h3>
-                <p style="margin: 0; color: #666;">Please wait...</p>
+            <div class="chain-switching-modal">
+                <div class="chain-switching-spinner"></div>
+                <div class="chain-switching-title">Switching to ${chainName}</div>
+                <div class="chain-switching-message">Please wait...</div>
             </div>
         `;
         document.body.appendChild(overlay);

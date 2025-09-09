@@ -512,10 +512,15 @@ body.dark-mode .settings-card .button-row {
 }
 
 /* Chain switching modal dark theme styles */
+body.dark-mode .chain-switching-overlay {
+  background: rgba(0, 0, 0, 0.8);
+}
+
 body.dark-mode .chain-switching-modal {
   background: #1f2937;
   color: #e5e7eb;
   border: 2px solid #374151;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
 }
 
 body.dark-mode .chain-switching-spinner {
@@ -525,10 +530,14 @@ body.dark-mode .chain-switching-spinner {
 
 body.dark-mode .chain-switching-title {
   color: #e5e7eb;
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
 }
 
 body.dark-mode .chain-switching-message {
   color: #9ca3af;
+  font-size: 14px;
 }
 
 /* Gas tooltip dark theme styles */

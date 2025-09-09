@@ -490,6 +490,10 @@ body.retro-mode .flatpickr-today-btn:hover {
 }
 
 /* Chain switching modal retro theme styles */
+body.retro-mode .chain-switching-overlay {
+  background: rgba(3, 8, 58, 0.85);
+}
+
 body.retro-mode .chain-switching-modal {
   background: #0a1db8;
   color: #c7fff7;

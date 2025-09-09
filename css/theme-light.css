@@ -286,6 +286,10 @@ body.light-mode .flatpickr-today-btn:hover {
 }
 
 /* Chain switching modal light theme styles */
+body.light-mode .chain-switching-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
 body.light-mode .chain-switching-modal {
   background: #ffffff;
   color: #111827;

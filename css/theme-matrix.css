@@ -820,6 +820,10 @@ body.matrix-mode ::-webkit-scrollbar-thumb:hover {
 }
 
 /* Chain switching modal matrix theme styles */
+body.matrix-mode .chain-switching-overlay {
+  background: rgba(0, 0, 0, 0.9);
+}
+
 body.matrix-mode .chain-switching-modal {
   background: #001100;
   color: #00ff00;
