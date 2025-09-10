@@ -4650,6 +4650,19 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     chunkInput.value = String(getChunkSize());
   }
 
+  // Load Cointool Performance Settings
+  const cointoolBatchSizeInput = document.getElementById("cointoolBatchSize");
+  if (cointoolBatchSizeInput) {
+    const saved = localStorage.getItem("cointoolBatchSize");
+    if (saved) cointoolBatchSizeInput.value = saved;
+  }
+  
+  const cointoolBatchDelayInput = document.getElementById("cointoolBatchDelay");
+  if (cointoolBatchDelayInput) {
+    const saved = localStorage.getItem("cointoolBatchDelay");
+    if (saved) cointoolBatchDelayInput.value = saved;
+  }
+
   // Load Gas Refresh Interval
   const gasInput = document.getElementById("gasRefreshSeconds");
   if (gasInput) {
@@ -4721,6 +4734,50 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     chunkInput.addEventListener("blur",   () => persistChunkSize(chunkInput.value));
     chunkInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); persistChunkSize(chunkInput.value); }
+    });
+  }
+
+  // Cointool Batch Size (validated number 5-50)
+  const cointoolBatchSizeInput = document.getElementById("cointoolBatchSize");
+  if (cointoolBatchSizeInput) {
+    const persistCointoolBatchSize = (val) => {
+      const v = parseInt(val, 10);
+      if (Number.isFinite(v) && v >= 5 && v <= 50) {
+        localStorage.setItem("cointoolBatchSize", String(v));
+        if (typeof showToast === "function") showToast(`Cointool batch size saved (${v})`, "success");
+        markValidity("field-cointoolBatchSize", true);
+      } else {
+        if (typeof showToast === "function") showToast("Cointool batch size must be between 5 and 50.", "error");
+        cointoolBatchSizeInput.value = localStorage.getItem("cointoolBatchSize") || "15";
+        markValidity("field-cointoolBatchSize", false, "Batch size must be between 5 and 50.");
+      }
+    };
+    cointoolBatchSizeInput.addEventListener("change", () => persistCointoolBatchSize(cointoolBatchSizeInput.value));
+    cointoolBatchSizeInput.addEventListener("blur", () => persistCointoolBatchSize(cointoolBatchSizeInput.value));
+    cointoolBatchSizeInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); persistCointoolBatchSize(cointoolBatchSizeInput.value); }
+    });
+  }
+
+  // Cointool Batch Delay (validated number 0-500)
+  const cointoolBatchDelayInput = document.getElementById("cointoolBatchDelay");
+  if (cointoolBatchDelayInput) {
+    const persistCointoolBatchDelay = (val) => {
+      const v = parseInt(val, 10);
+      if (Number.isFinite(v) && v >= 0 && v <= 500) {
+        localStorage.setItem("cointoolBatchDelay", String(v));
+        if (typeof showToast === "function") showToast(`Cointool batch delay saved (${v}ms)`, "success");
+        markValidity("field-cointoolBatchDelay", true);
+      } else {
+        if (typeof showToast === "function") showToast("Cointool batch delay must be between 0 and 500ms.", "error");
+        cointoolBatchDelayInput.value = localStorage.getItem("cointoolBatchDelay") || "50";
+        markValidity("field-cointoolBatchDelay", false, "Batch delay must be between 0 and 500ms.");
+      }
+    };
+    cointoolBatchDelayInput.addEventListener("change", () => persistCointoolBatchDelay(cointoolBatchDelayInput.value));
+    cointoolBatchDelayInput.addEventListener("blur", () => persistCointoolBatchDelay(cointoolBatchDelayInput.value));
+    cointoolBatchDelayInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); persistCointoolBatchDelay(cointoolBatchDelayInput.value); }
     });
   }
 })();
@@ -5807,6 +5864,8 @@ function collectSettingsSnapshot() {
     })(),
     etherscanApiKey: (document.getElementById("etherscanApiKey")?.value ?? "").trim(),
     chunkSize: (document.getElementById("chunkSize")?.value ?? "").trim(),
+    cointoolBatchSize: (document.getElementById("cointoolBatchSize")?.value ?? "").trim(),
+    cointoolBatchDelay: (document.getElementById("cointoolBatchDelay")?.value ?? "").trim(),
     gasRefreshSeconds: (document.getElementById("gasRefreshSeconds")?.value ?? "").trim(),
     mintTermDays: (function(){
       const val = document.getElementById("mintTermDays")?.value;
@@ -5855,6 +5914,8 @@ function applySettingsSnapshot(settings) {
   setVal("customRPC", settings.customRPC);
   setVal("etherscanApiKey", settings.etherscanApiKey);
   setVal("chunkSize", settings.chunkSize);
+  setVal("cointoolBatchSize", settings.cointoolBatchSize);
+  setVal("cointoolBatchDelay", settings.cointoolBatchDelay);
   setVal("gasRefreshSeconds", settings.gasRefreshSeconds);
   setVal("mintTermDays", settings.mintTermDays);
 
@@ -5877,6 +5938,8 @@ function applySettingsSnapshot(settings) {
   }
   if (typeof settings.etherscanApiKey === "string") localStorage.setItem("etherscanApiKey", settings.etherscanApiKey);
   if (settings.chunkSize != null) localStorage.setItem("chunkSize", String(settings.chunkSize));
+  if (settings.cointoolBatchSize != null) localStorage.setItem("cointoolBatchSize", String(settings.cointoolBatchSize));
+  if (settings.cointoolBatchDelay != null) localStorage.setItem("cointoolBatchDelay", String(settings.cointoolBatchDelay));
   if (typeof settings.etherscanThrottleMs === "string") localStorage.setItem("etherscanThrottleMs", settings.etherscanThrottleMs);
   if (settings.gasRefreshSeconds != null) localStorage.setItem("gasRefreshSeconds", String(settings.gasRefreshSeconds));
   if (settings.mintTermDays != null) {

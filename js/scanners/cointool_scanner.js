@@ -140,17 +140,59 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
 
   console.log(`[COINTOOL] Found ${maxId} potential mints for ${address}`);
 
-  // Process each mint ID
-  for (let mintId = 1; mintId <= maxId; mintId++) {
-    await processMint(address, mintId, postMintActions, forceRescan);
+  // Initialize performance monitoring
+  startPerformanceMonitoring(parseInt(maxId));
+
+  // Process mints in parallel batches for better performance
+  // Configurable batch sizes - can be adjusted based on API performance
+  const BATCH_SIZE = parseInt(localStorage.getItem('cointoolBatchSize')) || 15; // Process 15 mints concurrently
+  const DELAY_BETWEEN_BATCHES = parseInt(localStorage.getItem('cointoolBatchDelay')) || 50; // 50ms delay between batches
+  
+  const startTime = Date.now();
+  
+  for (let startId = 1; startId <= maxId; startId += BATCH_SIZE) {
+    const endId = Math.min(startId + BATCH_SIZE - 1, maxId);
+    const batchStart = Date.now();
+    const batchPromises = [];
+    
+    // Create batch of concurrent mint processing
+    for (let mintId = startId; mintId <= endId; mintId++) {
+      batchPromises.push(processMint(address, mintId, postMintActions, forceRescan));
+    }
+    
+    // Wait for batch to complete
+    await Promise.all(batchPromises);
+    
+    // Record batch performance
+    const batchDuration = Date.now() - batchStart;
+    const actualBatchSize = endId - startId + 1;
+    recordBatchTime(actualBatchSize, batchDuration);
+    
+    // Add small delay between batches to avoid overwhelming APIs
+    if (endId < maxId) {
+      await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+    }
+    
+    // Update progress more frequently with performance metrics
+    if (window.progressUI && window.progressUI.setProgress) {
+      const progress = Math.floor((endId / maxId) * 100);
+      const elapsed = (Date.now() - startTime) / 1000;
+      const rate = endId / elapsed;
+      const remaining = (maxId - endId) / rate;
+      const eta = remaining > 0 ? `${Math.ceil(remaining)}s` : 'finishing...';
+      window.progressUI.setProgress(progress, `Processing mints ${endId}/${maxId} (${rate.toFixed(1)}/s, ETA: ${eta})`);
+    }
   }
+  
+  // Generate performance summary
+  finishPerformanceMonitoring();
 }
 
 // Process a single mint
 async function processMint(address, mintId, postMintActions, forceRescan) {
   const uniqueId = `${mintId}-${address.toLowerCase()}`;
   
-  // Check if already processed (unless force rescan)
+  // Check if already processed (unless force rescan) - fast path optimization
   if (!forceRescan) {
     const existing = await getMintFromDB(uniqueId);
     if (existing) {
@@ -160,14 +202,17 @@ async function processMint(address, mintId, postMintActions, forceRescan) {
       const newActionCount = (postMintActions[saltKey] || []).length;
       
       if (newActionCount <= existingActionCount) {
-        return; // Skip this mint
+        return null; // Return null to indicate skipped
       }
     }
   }
 
   try {
     // Get mint details from blockchain
+    const apiStart = Date.now();
     const mintData = await fetchMintDetails(address, mintId, etherscanApiKey);
+    recordApiCallTime(Date.now() - apiStart);
+    
     if (!mintData) return;
 
     // Combine with post-mint actions
@@ -178,7 +223,9 @@ async function processMint(address, mintId, postMintActions, forceRescan) {
     const mintRecord = createMintRecord(uniqueId, address, mintId, mintData, actions);
     
     // Save to database
+    const dbStart = Date.now();
     await saveMintToDB(mintRecord);
+    recordDbWriteTime(Date.now() - dbStart);
     
     console.log(`[COINTOOL] Processed mint ${mintId} for ${address}`);
     
@@ -319,6 +366,26 @@ async function saveMintToDB(mintRecord) {
   });
 }
 
+// Batch save multiple mints for better performance
+async function saveMintsBatchToDB(mintRecords) {
+  if (!mintRecords.length) return;
+  
+  return new Promise((resolve, reject) => {
+    const tx = dbInstance.transaction("mints", "readwrite");
+    const store = tx.objectStore("mints");
+    let completed = 0;
+    
+    mintRecords.forEach(record => {
+      const request = store.put(record);
+      request.onsuccess = () => {
+        completed++;
+        if (completed === mintRecords.length) resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
 // Utility functions
 function computeProxyAddress(mintId, salt, minter) {
   const constructorParams = web3Instance.eth.abi.encodeParameters(['address', 'uint256'], [minter, mintId]);
@@ -347,14 +414,147 @@ async function getBlockWithCache(blockNumber) {
   return blockTsCache.get(blockNumber);
 }
 
+// Rate limiting for API calls
+let lastApiCall = 0;
+const API_RATE_LIMIT_MS = 200; // 5 calls per second
+
 async function makeRpcCall(requestFn) {
-  // Simple RPC call - could add rotation logic like other scanners
-  try {
-    return await requestFn();
-  } catch (error) {
-    console.error('[COINTOOL] RPC call failed:', error);
-    throw error;
+  // Add rate limiting
+  const now = Date.now();
+  const timeSinceLastCall = now - lastApiCall;
+  if (timeSinceLastCall < API_RATE_LIMIT_MS) {
+    await new Promise(resolve => setTimeout(resolve, API_RATE_LIMIT_MS - timeSinceLastCall));
   }
+  lastApiCall = Date.now();
+  
+  // Add retry logic
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        console.warn(`[COINTOOL] RPC call failed (attempt ${attempt}/3), retrying...`, error.message);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+      }
+    }
+  }
+  
+  console.error('[COINTOOL] RPC call failed after 3 attempts:', lastError);
+  throw lastError;
+}
+
+// Performance monitoring
+let performanceStats = {
+  startTime: null,
+  processedMints: 0,
+  totalMints: 0,
+  batchTimes: [],
+  apiCallTimes: [],
+  dbWriteTimes: []
+};
+
+function startPerformanceMonitoring(totalMints) {
+  performanceStats = {
+    startTime: Date.now(),
+    processedMints: 0,
+    totalMints: totalMints,
+    batchTimes: [],
+    apiCallTimes: [],
+    dbWriteTimes: []
+  };
+  
+  console.log(`[COINTOOL] Performance monitoring started for ${totalMints} mints`);
+  logPerformanceSettings();
+}
+
+function logPerformanceSettings() {
+  const batchSize = parseInt(localStorage.getItem('cointoolBatchSize')) || 15;
+  const batchDelay = parseInt(localStorage.getItem('cointoolBatchDelay')) || 50;
+  const rateLimit = 200; // API_RATE_LIMIT_MS
+  
+  console.log(`[COINTOOL] Current Performance Settings:`);
+  console.log(`  • Batch Size: ${batchSize} mints processed in parallel`);
+  console.log(`  • Batch Delay: ${batchDelay}ms between batches`);
+  console.log(`  • API Rate Limit: ${rateLimit}ms between RPC calls`);
+  console.log(`  • Theoretical max rate: ${(1000/rateLimit).toFixed(1)} RPC calls/sec`);
+  console.log(``);
+  console.log(`[COINTOOL] To adjust performance settings, use:`);
+  console.log(`  localStorage.setItem('cointoolBatchSize', '20'); // 10-50 recommended`);
+  console.log(`  localStorage.setItem('cointoolBatchDelay', '100'); // 0-500ms`);
+  console.log(``);
+}
+
+function recordBatchTime(batchSize, duration) {
+  performanceStats.batchTimes.push({ batchSize, duration });
+  performanceStats.processedMints += batchSize;
+  
+  // Calculate ETA and current performance
+  const elapsed = Date.now() - performanceStats.startTime;
+  const rate = performanceStats.processedMints / (elapsed / 1000);
+  const remaining = performanceStats.totalMints - performanceStats.processedMints;
+  const eta = remaining / rate;
+  
+  if (performanceStats.batchTimes.length % 10 === 0) { // Log every 10 batches
+    console.log(`[COINTOOL] Progress: ${performanceStats.processedMints}/${performanceStats.totalMints} ` +
+               `(${(performanceStats.processedMints/performanceStats.totalMints*100).toFixed(1)}%) ` +
+               `Rate: ${rate.toFixed(1)} mints/sec ETA: ${formatDuration(eta)}`);
+  }
+}
+
+function recordApiCallTime(duration) {
+  performanceStats.apiCallTimes.push(duration);
+}
+
+function recordDbWriteTime(duration) {
+  performanceStats.dbWriteTimes.push(duration);
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds/60)}m ${Math.round(seconds%60)}s`;
+  return `${Math.round(seconds/3600)}h ${Math.round((seconds%3600)/60)}m`;
+}
+
+function finishPerformanceMonitoring() {
+  const elapsed = Date.now() - performanceStats.startTime;
+  const rate = performanceStats.processedMints / (elapsed / 1000);
+  
+  console.log(`[COINTOOL] === PERFORMANCE SUMMARY ===`);
+  console.log(`  • Total Time: ${formatDuration(elapsed/1000)}`);
+  console.log(`  • Mints Processed: ${performanceStats.processedMints}`);
+  console.log(`  • Average Rate: ${rate.toFixed(2)} mints/sec`);
+  
+  if (performanceStats.batchTimes.length > 0) {
+    const avgBatchTime = performanceStats.batchTimes.reduce((sum, b) => sum + b.duration, 0) / performanceStats.batchTimes.length;
+    console.log(`  • Average Batch Time: ${(avgBatchTime/1000).toFixed(2)}s`);
+  }
+  
+  if (performanceStats.apiCallTimes.length > 0) {
+    const avgApiTime = performanceStats.apiCallTimes.reduce((sum, t) => sum + t, 0) / performanceStats.apiCallTimes.length;
+    console.log(`  • Average API Call Time: ${avgApiTime.toFixed(0)}ms`);
+  }
+  
+  console.log(`[COINTOOL] === TUNING RECOMMENDATIONS ===`);
+  if (rate < 2) {
+    console.log(`  ⚠️  Low performance detected (${rate.toFixed(1)} mints/sec)`);
+    console.log(`  • Try increasing batch size: localStorage.setItem('cointoolBatchSize', '25')`);
+    console.log(`  • Try reducing batch delay: localStorage.setItem('cointoolBatchDelay', '25')`);
+  } else if (rate > 8) {
+    console.log(`  ✅ Excellent performance (${rate.toFixed(1)} mints/sec)`);
+    console.log(`  • Current settings are optimal for your network conditions`);
+  } else {
+    console.log(`  ✅ Good performance (${rate.toFixed(1)} mints/sec)`);
+    console.log(`  • Performance is within normal range`);
+  }
+  
+  const currentBatchSize = parseInt(localStorage.getItem('cointoolBatchSize')) || 15;
+  if (performanceStats.apiCallTimes.some(t => t > 2000)) {
+    console.log(`  • Network latency detected - consider reducing batch size to ${Math.max(5, currentBatchSize-5)}`);
+  }
+  
+  console.log(``);
 }
 
 // Post-mint actions fetching (simplified version)
