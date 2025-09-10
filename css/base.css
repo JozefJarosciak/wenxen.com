@@ -356,13 +356,13 @@ label {
 
 .dashboard-top {
   display: flex;
-  gap: 5px;
+  gap: 2px;
   align-items: flex-start;
   margin: 4px 0 8px
 }
 
 .calendar-wrap {
-  width: 400px;
+  width: 330px;
   min-height: 320px;
   position: relative
 }
@@ -1447,29 +1447,29 @@ button.linklike:hover {
 .split-scan {
   position: relative;
   display: inline-flex;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border, #ddd);
 }
 .split-scan .btn {
- padding: 8px 12px; background: var(--btn-bg, #fff); border: 0; cursor: pointer; 
+ padding: 6px 8px; background: var(--btn-bg, #fff); border: 0; cursor: pointer; font-size: 0.85em;
 }
 .split-scan .split-caret {
- width: 36px; border-left: 1px solid var(--border, #ddd); 
+ width: 25px; border-left: 1px solid var(--border, #ddd); 
 }
 .split-scan .btn[disabled] {
  opacity: .6; cursor: not-allowed; 
 }
 .split-scan .scan-badge {
- margin-left: 8px; padding: 2px 6px; border-radius: 999px; font-size: 12px; opacity: .85; background: var(--chip-bg, #f1f3f5); 
+ margin-left: 6px; padding: 1px 4px; border-radius: 999px; font-size: 8px; opacity: .85; background: var(--chip-bg, #f1f3f5); 
 }
 .split-scan .menu {
- position: absolute; top: 100%; right: 0; min-width: 160px; margin: 4px 0 0; padding: 6px 0; list-style: none; background: #fff; border: 1px solid var(--border, #ddd); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); z-index: 1000; 
+ position: absolute; top: 100%; right: 0; min-width: 110px; margin: 3px 0 0; padding: 4px 0; list-style: none; background: #fff; border: 1px solid var(--border, #ddd); border-radius: 6px; box-shadow: 0 6px 14px rgba(0,0,0,0.08); z-index: 1000; 
 }
 .split-scan .menu[hidden] {
  display: none; 
 }
 .split-scan .menu li {
- padding: 8px 12px; cursor: pointer; 
+ padding: 6px 8px; cursor: pointer; font-size: 0.85em;
 }
 .split-scan .menu li[aria-selected="true"] {
  font-weight: 600; 
@@ -1486,9 +1486,9 @@ button.linklike:hover {
 .split-scan #scanBtn {
   background-color: #df4545; /* A prominent blue to match other action buttons */
   color: #fff;              /* White text for better contrast */
-  font-size: 1.1em;         /* Make the font slightly larger */
+  font-size: 0.9em;         /* Make the font slightly larger */
   font-weight: 600;          /* Make the text bolder */
-  border-radius: 8px;
+  border-radius: 6px;
   margin-right: 4px;
   margin-left: 4px;
 }
@@ -1496,7 +1496,7 @@ button.linklike:hover {
 
 .split-scan #scanModeToggle {
   font-weight: 700;          /* Make the text bolder */
-  font-size: 1.1em;
+  font-size: 0.9em;
 }
 /* Add a hover effect for when the button is not disabled */
 .split-scan #scanBtn:not(:disabled):hover {
@@ -1543,7 +1543,7 @@ body {
  flex-wrap: wrap; 
 }
 .calendar-wrap {
- width: min(100%, 400px); 
+ width: min(100%, 330px); 
 }
 .mint-term-row {
  /* keep desktop behavior */ 
@@ -1668,23 +1668,23 @@ body {
   }
   
   .split-scan .btn {
-    padding: 4px 6px !important;
-    font-size: 12px !important;
-    min-height: 32px;
+    padding: 3px 4px !important;
+    font-size: 10px !important;
+    min-height: 22px;
     white-space: nowrap;
   }
   
   .split-scan .split-caret {
-    width: 24px !important;
-    padding: 4px !important;
-    font-size: 10px !important;
-    min-height: 32px;
+    width: 17px !important;
+    padding: 3px !important;
+    font-size: 7px !important;
+    min-height: 22px;
   }
   
   .split-scan .scan-badge {
-    margin-left: 4px !important;
-    padding: 1px 3px !important;
-    font-size: 9px !important;
+    margin-left: 3px !important;
+    padding: 1px 2px !important;
+    font-size: 6px !important;
   }
   
   /* Checkbox group mobile scaling */
@@ -1749,7 +1749,7 @@ body {
     flex-shrink: 0;
   }
 
-  .dashboard-top { flex-direction: column; gap: 10px; }
+  .dashboard-top { flex-direction: column; gap: 5px; }
   .calendar-wrap { 
     width: 100%; 
     min-height: 0;
@@ -2136,8 +2136,8 @@ body {
   }
   
   .split-scan .btn { 
-    padding: 2px 6px; 
-    font-size: 0.75em; 
+    padding: 1px 4px; 
+    font-size: 0.6em; 
     min-height: auto;
   }
   
@@ -2713,18 +2713,18 @@ body.matrix-mode .summary-toggle:hover {
 
 /* Table cells */
 .summary-table td {
-  padding: 6px;
+  padding: 4px;
   vertical-align: middle;
   border-right: 1px solid #f8f9fa;
 }
 
 .summary-table td:first-child {
-  padding-left: 6px;
-  border-left: 4px solid transparent;
+  padding-left: 4px;
+  border-left: 3px solid transparent;
 }
 
 .summary-table td:last-child {
-  padding-right: 6px;
+  padding-right: 4px;
   border-right: none;
 }
 
@@ -2960,7 +2960,7 @@ body.matrix-mode .type-icon {
   
   .summary-table th,
   .summary-table td {
-    padding: 6px;
+    padding: 4px;
   }
   
   .type-cell {
@@ -3010,17 +3010,17 @@ body.matrix-mode .type-icon {
 
 .summary-table tbody tr.detail-row {
   background: rgba(248, 249, 250, 0.8) !important;
-  border-left: 3px solid #e9ecef;
-  font-size: 10px;
+  border-left: 2px solid #e9ecef;
+  font-size: 7px;
 }
 
 .summary-table tbody tr.detail-row td {
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-top: none;
 }
 
 .summary-table tbody tr.detail-row .type-cell {
-  padding-left: 20px;
+  padding-left: 14px;
   font-weight: 500;
   color: #6c757d;
 }
@@ -3031,33 +3031,33 @@ body.matrix-mode .type-icon {
 }
 
 .xen-amount {
-  font-size: 14px;
+  font-size: 10px;
   font-weight: 700;
   color: #28a745;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 /* Smaller font for XEN amounts in detail rows */
 .summary-table tbody tr.detail-row .xen-amount {
-  font-size: 11px;
+  font-size: 8px;
 }
 
 .summary-table tbody tr.detail-row .xen-usd {
-  font-size: 9px;
+  font-size: 6px;
 }
 
 /* Smaller metrics in detail rows */
 .summary-table tbody tr.detail-row .metric-primary {
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 600;
 }
 
 .summary-table tbody tr.detail-row .metric-secondary {
-  font-size: 8px;
+  font-size: 6px;
 }
 
 .xen-usd {
-  font-size: 10px;
+  font-size: 7px;
   color: #6c757d;
   font-weight: normal;
 }

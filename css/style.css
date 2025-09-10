@@ -184,13 +184,13 @@ body.dark-mode .claim-button {
 
 .dashboard-top {
   display: flex;
-  gap: 5px;
+  gap: 2px;
   align-items: flex-start;
   margin: 4px 0 8px
 }
 
 .calendar-wrap {
-  width: 400px;
+  width: 330px;
   min-height: 320px;
   position: relative
 }
@@ -1418,16 +1418,16 @@ button.linklike:hover { text-decoration: underline; }
 .split-scan {
   position: relative;
   display: inline-flex;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border, #ddd);
 }
-.split-scan .btn { padding: 8px 12px; background: var(--btn-bg, #fff); border: 0; cursor: pointer; }
-.split-scan .split-caret { width: 36px; border-left: 1px solid var(--border, #ddd); }
+.split-scan .btn { padding: 6px 8px; background: var(--btn-bg, #fff); border: 0; cursor: pointer; font-size: 0.85em; }
+.split-scan .split-caret { width: 25px; border-left: 1px solid var(--border, #ddd); }
 .split-scan .btn[disabled] { opacity: .6; cursor: not-allowed; }
-.split-scan .scan-badge { margin-left: 8px; padding: 2px 6px; border-radius: 999px; font-size: 12px; opacity: .85; background: var(--chip-bg, #f1f3f5); }
-.split-scan .menu { position: absolute; top: 100%; right: 0; min-width: 160px; margin: 4px 0 0; padding: 6px 0; list-style: none; background: #fff; border: 1px solid var(--border, #ddd); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); z-index: 1000; }
+.split-scan .scan-badge { margin-left: 6px; padding: 1px 4px; border-radius: 999px; font-size: 8px; opacity: .85; background: var(--chip-bg, #f1f3f5); }
+.split-scan .menu { position: absolute; top: 100%; right: 0; min-width: 110px; margin: 3px 0 0; padding: 4px 0; list-style: none; background: #fff; border: 1px solid var(--border, #ddd); border-radius: 6px; box-shadow: 0 6px 14px rgba(0,0,0,0.08); z-index: 1000; }
 .split-scan .menu[hidden] { display: none; }
-.split-scan .menu li { padding: 8px 12px; cursor: pointer; }
+.split-scan .menu li { padding: 6px 8px; cursor: pointer; font-size: 0.85em; }
 .split-scan .menu li[aria-selected="true"] { font-weight: 600; }
 .split-scan .menu li:hover { background: rgba(0,0,0,.04); }
 
@@ -1473,9 +1473,9 @@ body.retro-mode .split-scan .menu li:hover { background: rgba(255,255,255,.08); 
 .split-scan #scanBtn {
   background-color: #df4545; /* A prominent blue to match other action buttons */
   color: #fff;              /* White text for better contrast */
-  font-size: 1.1em;         /* Make the font slightly larger */
+  font-size: 0.9em;         /* Make the font slightly larger */
   font-weight: 600;          /* Make the text bolder */
-  border-radius: 8px;
+  border-radius: 6px;
   margin-right: 4px;
   margin-left: 4px;
 }
@@ -1483,7 +1483,7 @@ body.retro-mode .split-scan .menu li:hover { background: rgba(255,255,255,.08); 
 
 .split-scan #scanModeToggle {
   font-weight: 700;          /* Make the text bolder */
-  font-size: 1.1em;
+  font-size: 0.9em;
 }
 /* Add a hover effect for when the button is not disabled */
 .split-scan #scanBtn:not(:disabled):hover {
@@ -1523,7 +1523,7 @@ body { line-height: 1.5; }
 /* Make core containers fluid */
 #cointool-table { display: block; width: 100%; }
 .dashboard-top { flex-wrap: wrap; }
-.calendar-wrap { width: min(100%, 400px); }
+.calendar-wrap { width: min(100%, 330px); }
 .mint-term-row { /* keep desktop behavior */ }
 #summaryContainer { /* desktop keeps original width */ }
 
@@ -1643,23 +1643,23 @@ body { line-height: 1.5; }
   }
   
   .split-scan .btn {
-    padding: 4px 6px !important;
-    font-size: 12px !important;
-    min-height: 32px;
+    padding: 3px 4px !important;
+    font-size: 10px !important;
+    min-height: 22px;
     white-space: nowrap;
   }
   
   .split-scan .split-caret {
-    width: 24px !important;
-    padding: 4px !important;
-    font-size: 10px !important;
-    min-height: 32px;
+    width: 17px !important;
+    padding: 3px !important;
+    font-size: 7px !important;
+    min-height: 22px;
   }
   
   .split-scan .scan-badge {
-    margin-left: 4px !important;
-    padding: 1px 3px !important;
-    font-size: 9px !important;
+    margin-left: 3px !important;
+    padding: 1px 2px !important;
+    font-size: 6px !important;
   }
   
   /* Checkbox group mobile scaling */
@@ -1724,7 +1724,7 @@ body { line-height: 1.5; }
     flex-shrink: 0;
   }
 
-  .dashboard-top { flex-direction: column; gap: 10px; }
+  .dashboard-top { flex-direction: column; gap: 5px; }
   .calendar-wrap { 
     width: 100%; 
     min-height: 0;
