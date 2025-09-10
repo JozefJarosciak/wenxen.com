@@ -205,6 +205,12 @@ body.dark-mode .claim-button {
   min-width: 420px
 }
 
+@media (max-width: 768px) {
+  .details-wrap {
+    min-width: 0;
+  }
+}
+
 .details-title {
   margin: 0 0 8px
 }
@@ -901,6 +907,16 @@ body.retro-mode #summaryContainer {
 }
 
 /* Fix button hovers in dark mode (Mint/Stake + Settings) */
+body.dark-mode .btn-secondary {
+  background: #374151; /* slate-700 */
+  border: 1px solid #4b5563; /* slate-600 */
+  color: #e5e7eb;
+}
+body.dark-mode .btn-secondary:hover {
+  background: #4b5563; /* slate-600 */
+  border-color: #6b7280; /* slate-500 */
+  color: #f9fafb;
+}
 body.dark-mode #tab-mint .btn-secondary:hover {
   background: #374151; /* slate-700 */
   border-color: #4b5563; /* slate-600 */
@@ -1513,7 +1529,23 @@ body { line-height: 1.5; }
 
 /* Mobile-first refinements (keep desktop look intact) */
 @media (max-width: 768px) {
-  body { margin: 12px; }
+  /* Ensure full mobile width usage */
+  * {
+    box-sizing: border-box;
+  }
+  
+  html {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body { 
+    margin: 4px;
+    width: calc(100% - 8px);
+    max-width: calc(100% - 8px);
+    overflow-x: hidden;
+  }
 
   /* Avoid overlay; let header flow normally */
   .header-controls {
@@ -1521,8 +1553,59 @@ body { line-height: 1.5; }
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     margin-bottom: 8px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Make wallet container more compact on mobile */
+  .wallet-container {
+    gap: 4px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  
+  /* Network selector mobile optimization */
+  .network-selector {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  
+  .network-selector-btn {
+    padding: 6px 8px;
+    font-size: 14px;
+    min-width: 0;
+    max-width: 100px;
+  }
+  
+  .network-name {
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /* Connect wallet button mobile optimization */
+  #connectWalletBtn {
+    padding: 6px 8px;
+    font-size: 14px;
+    min-width: 0;
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* Make other header buttons smaller */
+  .wallet-reveal-btn,
+  .menu-toggle,
+  .github-btn {
+    padding: 4px;
+    min-width: 32px;
+    min-height: 32px;
   }
 
   h1 { font-size: 1.25rem; margin-top: 8px; }
@@ -1533,15 +1616,169 @@ body { line-height: 1.5; }
     font-size: 16px; /* prevents iOS zoom */
     min-height: 44px;
   }
+  
+  /* Header buttons should be more compact on mobile */
+  .network-selector-btn,
+  #connectWalletBtn,
+  .wallet-reveal-btn,
+  .menu-toggle,
+  .github-btn,
+  .tab-button {
+    min-height: 36px; /* Smaller than standard touch target */
+  }
+  
+  /* Button group mobile optimization - single row scaling */
+  .button-group {
+    gap: 4px !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Split scan button mobile scaling */
+  .split-scan {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  
+  .split-scan .btn {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    min-height: 32px;
+    white-space: nowrap;
+  }
+  
+  .split-scan .split-caret {
+    width: 24px !important;
+    padding: 4px !important;
+    font-size: 10px !important;
+    min-height: 32px;
+  }
+  
+  .split-scan .scan-badge {
+    margin-left: 4px !important;
+    padding: 1px 3px !important;
+    font-size: 9px !important;
+  }
+  
+  /* Checkbox group mobile scaling */
+  .checkbox-group {
+    flex-shrink: 1;
+    font-size: 12px !important;
+    min-width: 0;
+  }
+  
+  .checkbox-group label {
+    font-size: 12px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+  
+  .checkbox-group input[type="checkbox"] {
+    transform: scale(0.8);
+    margin-right: 2px !important;
+  }
+  
+  /* Summary toggle mobile scaling */
+  .summary-toggle {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    min-height: 32px !important;
+    flex-shrink: 1;
+    white-space: nowrap;
+    min-width: 0;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .chip { padding: 8px 14px; }
 
-  .tabs { margin-top: 6px; }
-  .tab-buttons { overflow-x: auto; white-space: nowrap; padding-bottom: 4px; }
+  .tabs { 
+    margin-top: 6px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .tab-buttons { 
+    overflow-x: auto; 
+    white-space: nowrap; 
+    padding-bottom: 4px;
+    gap: 4px;
+    width: 100%;
+    max-width: 100%;
+    scrollbar-width: none; /* Hide scrollbar on Firefox */
+    -ms-overflow-style: none; /* Hide scrollbar on IE/Edge */
+  }
+  
+  .tab-buttons::-webkit-scrollbar {
+    display: none; /* Hide scrollbar on Webkit browsers */
+  }
+  
+  .tab-button {
+    padding: 8px 10px;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
 
   .dashboard-top { flex-direction: column; gap: 10px; }
-  .calendar-wrap { width: 100%; min-height: 0; }
-  .calendar-wrap #calendar { transform: none; }
+  .calendar-wrap { 
+    width: 100%; 
+    min-height: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  
+  .calendar-wrap #calendar { 
+    transform: none;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Force Flatpickr calendar to be full width on mobile */
+  .flatpickr-calendar {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: auto !important;
+    box-sizing: border-box !important;
+  }
+  
+  .flatpickr-calendar.animate {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .flatpickr-calendar.inline {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+  }
+  
+  /* Fix flatpickr container elements */
+  .flatpickr-rContainer,
+  .dayContainer {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: auto !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Ensure calendar days container is responsive */
+  .flatpickr-days,
+  .flatpickr-weeks {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Make individual day cells responsive */
+  .flatpickr-day {
+    width: calc(100% / 7 - 2px) !important;
+    max-width: calc(100% / 7 - 2px) !important;
+    box-sizing: border-box !important;
+  }
   .details-wrap { min-width: 0; width: 100%; }
 
   .mint-controls {
@@ -1551,14 +1788,352 @@ body { line-height: 1.5; }
   .mint-input { width: 100%; }
   .mint-term-row { width: auto; }
 
-  .filter-chips { flex-wrap: wrap; row-gap: 6px; }
+  /* Mobile filter dropdown solution */
+  .filter-chips {
+    display: block;
+    position: relative;
+  }
+  
+  .filter-chips > span:first-child {
+    display: none;
+  }
+  
+  .filter-chips .chip {
+    display: none;
+  }
+  
+  /* Mobile dropdown styling for visible chip */
+  .filter-chips .chip.mobile-visible,
+  .filter-chips .chip.active {
+    display: block !important;
+    width: 80%;
+    margin: 0 auto 8px auto;
+    text-align: center;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    position: relative;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    color: #111827;
+    cursor: pointer;
+  }
+  
+  .filter-chips .chip.mobile-visible::after,
+  .filter-chips .chip.active::after {
+    content: '▼';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    opacity: 0.7;
+  }
+  
+  .filter-chips.expanded .chip.active::after {
+    content: '▲';
+  }
+  
+  .filter-chips.expanded .chip {
+    display: block;
+    width: 80%;
+    margin: 0 auto 2px auto;
+    text-align: center;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+  }
+  
+  .filter-chips.expanded .chip:hover {
+    background: #e5e7eb;
+  }
+  
+  .filter-chips.expanded .chip.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+  }
+  
+  .filter-chips.expanded .chip.active:hover {
+    background: #0056b3;
+  }
+  
+  /* Hide inline separator in mobile */
+  .filter-chips .inline-sep {
+    display: none;
+  }
+  
+  /* Hide table-actions in mobile from filter-chips */
+  .filter-chips .table-actions {
+    display: none;
+  }
+  
+  /* Move table-actions below the table in mobile */
+  .filter-chips .table-actions.mobile-below-table {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex !important;
+    gap: 8px;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+  }
+  
+  .filter-chips .table-actions.mobile-below-table button {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  
+  /* Dark mode support for floating buttons */
+  body.dark-mode .filter-chips .table-actions.mobile-below-table {
+    background: rgba(55, 65, 81, 0.95);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Dark mode styling for mobile filter dropdown */
+  body.dark-mode .filter-chips .chip.mobile-visible,
+  body.dark-mode .filter-chips .chip.active {
+    background: #374151;
+    border-color: #4b5563;
+    color: #e5e7eb;
+  }
+  
+  body.dark-mode .filter-chips.expanded .chip {
+    background: #1f2937;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+  
+  body.dark-mode .filter-chips.expanded .chip:hover {
+    background: #374151;
+  }
+  
+  body.dark-mode .filter-chips.expanded .chip.active {
+    background: #4da3ff;
+    color: #111827;
+    border-color: #4da3ff;
+  }
+  
+  body.dark-mode .filter-chips.expanded .chip.active:hover {
+    background: #3b82f6;
+  }
+  
+  /* Retro mode styling for mobile filter dropdown */
+  body.retro-mode .filter-chips .chip.mobile-visible,
+  body.retro-mode .filter-chips .chip.active {
+    background: #07169f;
+    border-color: #2749dc;
+    color: #c7fff7;
+    font-family: 'Courier New', monospace;
+  }
+  
+  body.retro-mode .filter-chips.expanded .chip {
+    background: #06138a;
+    border-color: #2749dc;
+    color: #c7fff7;
+    font-family: 'Courier New', monospace;
+  }
+  
+  body.retro-mode .filter-chips.expanded .chip:hover {
+    background: #0a1db8;
+    box-shadow: 0 0 8px rgba(199, 255, 247, 0.3);
+  }
+  
+  body.retro-mode .filter-chips.expanded .chip.active {
+    background: #00ffff;
+    color: #06138a;
+    border-color: #00ffff;
+  }
+  
+  body.retro-mode .filter-chips.expanded .chip.active:hover {
+    background: #00e6e6;
+  }
+  
+  /* Matrix mode styling for mobile filter dropdown */
+  body.matrix-mode .filter-chips .chip.mobile-visible,
+  body.matrix-mode .filter-chips .chip.active {
+    background: transparent;
+    border-color: #00aa00;
+    color: #00aa00;
+    text-shadow: 0 0 3px #00aa00;
+    border-radius: 0;
+  }
+  
+  body.matrix-mode .filter-chips.expanded .chip {
+    background: transparent;
+    border-color: #00aa00;
+    color: #00aa00;
+    text-shadow: 0 0 3px #00aa00;
+    border-radius: 0;
+  }
+  
+  body.matrix-mode .filter-chips.expanded .chip:hover {
+    background: rgba(0, 170, 0, 0.1);
+    color: #00ff00;
+    border-color: #00ff00;
+    text-shadow: 0 0 5px #00ff00;
+  }
+  
+  body.matrix-mode .filter-chips.expanded .chip.active {
+    background: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+    border-color: #00ff00;
+    text-shadow: 0 0 8px #00ff00;
+  }
+  
+  body.matrix-mode .filter-chips.expanded .chip.active:hover {
+    background: rgba(0, 255, 0, 0.3);
+  }
 
-  #summaryContainer { display:block; width: 95%; max-width: 95%; margin-inline:auto; }
-  #progressContainer { width: 95%; max-width: 95%; margin-inline:auto; }
+  #summaryContainer { display:block; width: 100%; max-width: 100%; margin-inline: 0; }
+  #progressContainer { width: 100%; max-width: 100%; margin-inline: 0; }
   #progressContainer.visible { display:block; }
 
   /* Chart height responsive */
   #vmuChart { height: clamp(220px, 35vh, 320px) !important; }
+  
+  /* Mobile tabulator header styling - comprehensive mobile improvements */
+  .tabulator .tabulator-header .tabulator-col {
+    font-size: 10px !important;
+    min-height: 20px !important;
+    height: auto !important;
+    padding: 2px 4px !important;
+  }
+  
+  .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    line-height: 1.1 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+  
+  /* Enhanced header filter containers */
+  .tabulator .tabulator-header-filter {
+    padding: 1px !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    width: 21px !important;
+    max-width: 21px !important;
+  }
+  
+  .tabulator .tabulator-header-filter input,
+  .tabulator .tabulator-header-filter select {
+    font-size: 8px !important;
+    padding: 0px 1px !important;
+    min-height: 10px !important;
+    height: 10px !important;
+    line-height: 1 !important;
+    border-width: 1px !important;
+    margin: 0 !important;
+    width: 19px !important;
+    max-width: 19px !important;
+    box-sizing: border-box !important;
+  }
+  
+  .tabulator .tabulator-header-filter input::placeholder {
+    font-size: 7px !important;
+    opacity: 0.6 !important;
+  }
+  
+  /* Override inline styles for search inputs with specific styling */
+  .tabulator .tabulator-header-filter input[type="search"] {
+    font-size: 8px !important;
+    padding: 0px 1px !important;
+    line-height: 1 !important;
+    height: 10px !important;
+    min-height: 10px !important;
+    width: 19px !important;
+    max-width: 19px !important;
+  }
+  
+  /* Target dropdown menu options in select filters */
+  .tabulator .tabulator-header-filter select option {
+    font-size: 8px !important;
+    padding: 0px 1px !important;
+    line-height: 1 !important;
+  }
+  
+  /* Target the select element itself more specifically */
+  .tabulator .tabulator-header-filter select {
+    font-size: 8px !important;
+    padding: 0px 1px !important;
+    line-height: 1 !important;
+    height: 10px !important;
+    min-height: 10px !important;
+    width: 19px !important;
+    max-width: 19px !important;
+  }
+  
+  /* Compact sort arrows */
+  .tabulator .tabulator-header .tabulator-col .tabulator-sorter {
+    width: 8px !important;
+    height: 8px !important;
+    margin-left: 2px !important;
+  }
+  
+  .tabulator .tabulator-header .tabulator-col .tabulator-sorter .tabulator-sorter-element {
+    border-width: 2px !important;
+    margin: 1px !important;
+  }
+  
+  /* Reduce overall header height */
+  .tabulator .tabulator-header {
+    min-height: auto !important;
+    height: auto !important;
+  }
+  
+  .tabulator .tabulator-header .tabulator-headers {
+    min-height: 22px !important;
+    height: auto !important;
+  }
+  
+  /* Better spacing for column content */
+  .tabulator .tabulator-header .tabulator-col-content {
+    padding: 1px 2px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 2px !important;
+    min-height: 18px !important;
+  }
+  
+  /* Ensure consistent column widths - very compact for mobile */
+  .tabulator .tabulator-header .tabulator-col {
+    min-width: 35px !important;
+    max-width: 50px !important;
+    width: auto !important;
+    vertical-align: top !important;
+    overflow: hidden !important;
+  }
+  
+  /* Also reduce cell content font size for better mobile experience */
+  .tabulator .tabulator-cell {
+    font-size: 11px !important;
+    padding: 3px 2px !important;
+  }
+  
+  /* Compact buttons and elements within cells */
+  .tabulator .tabulator-cell button {
+    font-size: 9px !important;
+    padding: 1px 4px !important;
+  }
+  
+  .tabulator .tabulator-cell .status-badge,
+  .tabulator .tabulator-cell .claim-button {
+    font-size: 8px !important;
+    padding: 1px 4px !important;
+  }
 }
 
 /* (Reverted to library defaults above) */

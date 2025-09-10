@@ -6711,8 +6711,27 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
     const btn = e.target.closest('.chip');
     if (!btn) return;
 
+    // Check if mobile view and handle dropdown
+    if (window.innerWidth <= 768) {
+      const currentActive = container.querySelector('.chip.active');
+      if (btn === currentActive) {
+        // Toggle dropdown
+        container.classList.toggle('expanded');
+        return;
+      } else if (container.classList.contains('expanded')) {
+        // Select option and close dropdown
+        container.classList.remove('expanded');
+      }
+    }
+
     // Toggle active highlight
-    container.querySelectorAll('.chip').forEach(chip => chip.classList.toggle('active', chip === btn));
+    container.querySelectorAll('.chip').forEach(chip => {
+      chip.classList.toggle('active', chip === btn);
+      // Remove mobile-visible class since we now have an active chip
+      if (chip !== btn) {
+        chip.classList.remove('mobile-visible');
+      }
+    });
 
     const action = btn.dataset.filter || '';
 
@@ -6776,6 +6795,52 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
     
     try { window.cointoolTable?.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
   });
+  
+  // Handle window resize to close mobile dropdown when switching to desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+      container.classList.remove('expanded');
+    }
+    initMobileState();
+  });
+  
+  // Initialize mobile state
+  function initMobileState() {
+    const tableActions = container.querySelector('.table-actions');
+    
+    if (window.innerWidth <= 768) {
+      const activeChip = container.querySelector('.chip.active');
+      const firstChip = container.querySelector('.chip');
+      
+      // Remove any existing mobile-visible class
+      container.querySelectorAll('.chip.mobile-visible').forEach(chip => {
+        chip.classList.remove('mobile-visible');
+      });
+      
+      // If no active chip exists, make the first chip visible for mobile
+      if (!activeChip && firstChip) {
+        firstChip.classList.add('mobile-visible');
+      }
+      
+      // Move table-actions to bottom in mobile
+      if (tableActions) {
+        tableActions.classList.add('mobile-below-table');
+      }
+    } else {
+      // Remove mobile-visible class for desktop
+      container.querySelectorAll('.chip.mobile-visible').forEach(chip => {
+        chip.classList.remove('mobile-visible');
+      });
+      
+      // Remove mobile positioning for desktop
+      if (tableActions) {
+        tableActions.classList.remove('mobile-below-table');
+      }
+    }
+  }
+  
+  // Initialize mobile state on load
+  initMobileState();
 })();
 
 /* === AUTO-CONNECT WALLET ON PAGE LOAD (added by optimizer) === */
