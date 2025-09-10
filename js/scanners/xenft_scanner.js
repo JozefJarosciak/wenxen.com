@@ -124,6 +124,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   }
 
 
+
   // --- LOG SCAN (bulkClaimMintReward -> EndTorrent) ---
   async function fetchEndTorrentActions(w3OrRpcList, addr, fromBlock) {
     // If we get an array, try each RPC until one works
@@ -303,6 +304,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
   // --- public scan() ---
   async function scan() {
+    
     // Show shared progress UI
     if (window.progressUI) { window.progressUI.show(true); window.progressUI.setType('XENFTs'); }
     const addressProgressText = document.getElementById("addressProgressText");
@@ -659,5 +661,24 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     getAll,
     scan,
   };
+  
+  // Initialize fast scan setting on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    const fastScanCheckbox = document.getElementById('useFastXenftScan');
+    if (fastScanCheckbox) {
+      // Load saved setting (default to true for fast scan)
+      const savedSetting = localStorage.getItem('useFastXenftScan');
+      if (savedSetting !== null) {
+        fastScanCheckbox.checked = savedSetting === 'true';
+      } else {
+        fastScanCheckbox.checked = true; // Default to fast scan
+      }
+      
+      // Save setting when changed
+      fastScanCheckbox.addEventListener('change', () => {
+        localStorage.setItem('useFastXenftScan', fastScanCheckbox.checked.toString());
+      });
+    }
+  });
 })();
 

@@ -87,6 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
+  
   // Check for dashboard hash and activate Dashboard tab
   if (window.location.hash === '#dashboard') {
     // Clear the hash from URL
