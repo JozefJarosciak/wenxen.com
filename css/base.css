@@ -2713,18 +2713,18 @@ body.matrix-mode .summary-toggle:hover {
 
 /* Table cells */
 .summary-table td {
-  padding: 16px;
+  padding: 6px;
   vertical-align: middle;
   border-right: 1px solid #f8f9fa;
 }
 
 .summary-table td:first-child {
-  padding-left: 20px;
+  padding-left: 6px;
   border-left: 4px solid transparent;
 }
 
 .summary-table td:last-child {
-  padding-right: 20px;
+  padding-right: 6px;
   border-right: none;
 }
 
@@ -2960,7 +2960,7 @@ body.matrix-mode .type-icon {
   
   .summary-table th,
   .summary-table td {
-    padding: 10px 8px;
+    padding: 6px;
   }
   
   .type-cell {
@@ -3011,11 +3011,11 @@ body.matrix-mode .type-icon {
 .summary-table tbody tr.detail-row {
   background: rgba(248, 249, 250, 0.8) !important;
   border-left: 3px solid #e9ecef;
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .summary-table tbody tr.detail-row td {
-  padding: 8px 16px;
+  padding: 2px 8px;
   border-top: none;
 }
 
@@ -3027,7 +3027,7 @@ body.matrix-mode .type-icon {
 
 /* XEN reward styling */
 .xen-reward {
-  text-align: center;
+  text-align: right;
 }
 
 .xen-amount {
@@ -3035,6 +3035,25 @@ body.matrix-mode .type-icon {
   font-weight: 700;
   color: #28a745;
   margin-bottom: 2px;
+}
+
+/* Smaller font for XEN amounts in detail rows */
+.summary-table tbody tr.detail-row .xen-amount {
+  font-size: 11px;
+}
+
+.summary-table tbody tr.detail-row .xen-usd {
+  font-size: 9px;
+}
+
+/* Smaller metrics in detail rows */
+.summary-table tbody tr.detail-row .metric-primary {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.summary-table tbody tr.detail-row .metric-secondary {
+  font-size: 8px;
 }
 
 .xen-usd {
