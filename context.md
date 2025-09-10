@@ -21,6 +21,8 @@ The application solves the problem of manually tracking XEN token mints, stakes,
 - **Tabulator** - Data tables and grids
 - **Chart.js & ECharts** - Data visualization
 - **Flatpickr** - Date picker components
+- **Luxon** - Date/time manipulation library
+- **Marked** - Markdown parsing for documentation
 - **IndexedDB** - Local browser storage
 - **MetaMask/Rabby** - Wallet connectivity
 
@@ -81,7 +83,18 @@ The application solves the problem of manually tracking XEN token mints, stakes,
 - `mathUtils.js` - Mathematical calculations for XEN economics
 - `storageUtils.js` - LocalStorage management
 - `chainStorageUtils.js` - Chain-specific data storage
-- `web3Utils.js` - Blockchain interaction utilities
+- `stringUtils.js` - String manipulation utilities
+- `domUtils.js` - DOM manipulation helpers
+- `rateLimiter.js` - API rate limiting utilities
+- `migrationUtils.js` - Database migration utilities
+- `dangerZoneHandler.js` - Database management and cleanup
+- `dangerZoneDropdown.js` - Database management UI components
+- `chainMismatchHandler.js` - Network switching utilities
+- `databaseInitializer.js` - Database initialization
+- `databaseMigration*.js` - Various migration safety levels
+
+#### Blockchain Utilities (`/js/blockchain/`)
+- `web3Utils.js` - Web3 and blockchain interaction utilities
 
 #### UI Components (`/js/ui/`)
 - `themeManager.js` - Theme switching and persistence
@@ -89,7 +102,7 @@ The application solves the problem of manually tracking XEN token mints, stakes,
 - `tabManager.js` - Tab navigation system
 - `tooltipManager.js` - Tooltip system for mobile/desktop
 - `toastManager.js` - Notification system
-- `networkSelectorWorking.js` - Network switching interface
+- `networkSelector*.js` - Network switching interface variants (Fixed, Simple, Working)
 
 #### Data Layer (`/js/data/`)
 - `indexedDbUtils.js` - Database operations and migrations
@@ -106,6 +119,7 @@ The application solves the problem of manually tracking XEN token mints, stakes,
 - `mint_flows.js` - Minting and staking workflows
 - `unified_view.js` - Data presentation and tables
 - `xen-breakdown.js` - XEN economics calculations
+- `analytics.js` - Privacy-compliant analytics and tracking
 
 ### Smart Contract ABIs (`/ABI/`)
 - `xen-ABI.js` - XEN token contract interface
@@ -254,3 +268,17 @@ The application solves the problem of manually tracking XEN token mints, stakes,
 - **Mobile Support**: Responsive design with touch optimizations
 
 This application represents a comprehensive solution for XEN ecosystem participation, combining user sovereignty with powerful tracking and interaction capabilities across multiple blockchain networks.
+
+## Recent Changes & Architecture Updates
+
+### Scanner Implementation (Updated: September 2024)
+- **Reverted to Block-Based Scanning**: All scanners now use proven block enumeration methods for maximum reliability
+- **Removed Fast Scanning**: Transaction history-based scanning was removed due to reliability concerns
+- **Simplified Architecture**: Focus on stable, thoroughly tested legacy scanning implementations
+- **Enhanced Database Migrations**: Multiple safety levels for database operations (Ultra Safe, Super Safe, Safe, Standard)
+
+### File Structure Changes
+- **Removed**: `fast_token_scanner.js` - Fast scanning implementation removed
+- **Enhanced**: Multiple utility files added for better modularity
+- **Added**: Network selector variants for improved chain switching
+- **Improved**: Database migration system with multiple safety levels

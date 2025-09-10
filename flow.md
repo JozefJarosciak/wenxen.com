@@ -27,12 +27,11 @@ graph TB
     
     subgraph "Data Processing Layer"
         Q[Scanner Orchestrator]
-        R[Fast Token Scanner]
-        S[Legacy Block Scanner]
-        T[Cointool Scanner]
-        U[XENFT Scanner]
-        V[XEN Stake Scanner]
-        W[XENFT Stake Scanner]
+        R[Block-Based Scanners]
+        S[Cointool Scanner]
+        T[XENFT Scanner]
+        U[XEN Stake Scanner]
+        V[XENFT Stake Scanner]
     end
     
     subgraph "Storage Layer"
@@ -52,26 +51,22 @@ graph TB
     
     B --> Q
     Q --> R
-    Q --> S
-    Q --> T
-    Q --> U
-    Q --> V
-    Q --> W
+    R --> S
+    R --> T
+    R --> U
+    R --> V
     
-    R --> BB
-    R --> CC
+    S --> BB
+    S --> CC
     S --> DD
     T --> DD
     U --> DD
     V --> DD
-    W --> DD
     
-    R --> X
     S --> X
     T --> X
     U --> X
     V --> X
-    W --> X
     
     X --> Y
     X --> AA
@@ -171,84 +166,71 @@ graph TB
     
     C -->|All| D[Multi-Scanner Orchestration]
     C -->|Cointool| E[Cointool Scanner]
-    C -->|XENFT| F[XENFT Scanner Router]
-    C -->|Stakes| G[Stake Scanner]
+    C -->|XENFT| F[XENFT Scanner]
+    C -->|XEN Stakes| G[XEN Stake Scanner]
     C -->|XENFT Stakes| H[XENFT Stake Scanner]
     
-    F --> I{Fast Scan Enabled?}
-    I -->|Yes| J[Fast XENFT Scanner]
-    I -->|No| K[Legacy XENFT Scanner]
-    
     D --> E
-    D --> J
+    D --> F
     D --> G
     D --> H
     
-    subgraph "Fast Scanning Pipeline"
-        J --> L[Transaction History API]
-        L --> M[Token Discovery]
-        M --> N[Detail Fetcher]
-        N --> O[Blockchain RPC Calls]
-        O --> P[Metadata Extraction]
-        P --> Q[Database Update]
-    end
-    
-    subgraph "Legacy Scanning Pipeline"
-        K --> R[Block Enumeration]
-        R --> S[Event Filtering]
-        S --> T[Token Validation]
-        T --> Q
+    subgraph "Block-Based Scanning Pipeline"
+        F --> I[Block Enumeration]
+        G --> I
+        H --> I
+        I --> J[Event Filtering]
+        J --> K[Contract Interaction Detection]
+        K --> L[Event Log Parsing]
+        L --> M[Data Extraction]
+        M --> N[Database Update]
     end
     
     subgraph "Cointool Pipeline"
-        E --> U[Contract Event Logs]
-        U --> V[Mint Record Parsing]
-        V --> Q
+        E --> O[Contract Event Logs]
+        O --> P[Mint Record Parsing]
+        P --> N
     end
     
-    Q --> W[UI Refresh]
-    W --> X[Table Update]
-    W --> Y[Calendar Update]
-    W --> Z[Summary Stats Update]
+    N --> Q[UI Refresh]
+    Q --> R[Table Update]
+    Q --> S[Calendar Update]
+    Q --> T[Summary Stats Update]
 ```
 
-## Fast XENFT Scanning Detail Flow
+## XENFT Scanning Detail Flow
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Scanner as Fast Scanner
-    participant API as Explorer API
-    participant Fetcher as Detail Fetcher
+    participant Scanner as XENFT Scanner
     participant RPC as Blockchain RPC
+    participant Contract as XENFT Contract
     participant DB as Database
     participant UI as User Interface
     
     User->>Scanner: Initiate XENFT Scan
+    Scanner->>RPC: Connect to blockchain
     
     loop For each address
-        Scanner->>API: Get NFT transfers
-        API-->>Scanner: Return transfer history
-        Scanner->>Scanner: Extract token IDs
-        Scanner->>DB: Store placeholders
-    end
-    
-    Scanner->>Fetcher: Fetch details for discovered tokens
-    
-    loop For each token
-        Fetcher->>RPC: Get vmuCount(tokenId)
-        Fetcher->>RPC: Get tokenURI(tokenId)
-        Fetcher->>RPC: Get mintInfo(tokenId)
-        Fetcher->>RPC: Get xenBurned(tokenId)
+        Scanner->>RPC: Enumerate blocks
+        Scanner->>Contract: Get contract events
+        Contract-->>Scanner: Return XENFT creation events
+        Scanner->>Scanner: Extract token IDs from events
         
-        Fetcher->>Fetcher: Decode mint info
-        Fetcher->>Fetcher: Extract metadata
-        Fetcher->>DB: Update with full details
+        loop For each discovered token
+            Scanner->>Contract: Get vmuCount(tokenId)
+            Scanner->>Contract: Get tokenURI(tokenId)
+            Scanner->>Contract: Get mintInfo(tokenId)
+            Scanner->>Contract: Get xenBurned(tokenId)
+            Scanner->>Scanner: Parse and validate data
+            Scanner->>DB: Store complete token record
+        end
     end
     
     Scanner->>UI: Refresh unified view
-    UI->>DB: Fetch complete records
-    UI->>User: Display full token details
+    UI->>DB: Fetch all XENFT records
+    UI->>User: Display complete token listing
 ```
 
 ## Database Architecture & Migration System
@@ -263,12 +245,12 @@ graph TB
     D --> F[ETH_DB_Cointool]
     D --> G[ETH_DB_Xenft]
     D --> H[ETH_DB_XenftStake]
-    D --> I[ETH_DB_Xen]
+    D --> I[ETH_DB_XenStake]
     
     E --> J[BASE_DB_Cointool]
     E --> K[BASE_DB_Xenft]
     E --> L[BASE_DB_XenftStake]
-    E --> M[BASE_DB_Xen]
+    E --> M[BASE_DB_XenStake]
     
     B --> N[Version Control]
     N --> O[Schema Migrations]

@@ -2,10 +2,13 @@
 // Wrapped in IIFE to avoid global variable conflicts with main_app.js
 
 (function() {
-  // Use centralized configuration (loaded globally via configuration.js module)  
-  const COINTOOL_COINTOOL_CONTRACT_ADDRESS = window.appConfig?.contracts?.COINTOOL_SCANNER || '0x2Ab31426d94496B4C80C60A0e2E4E9B70EB32f18';
-  const COINTOOL_SALT_BYTES = window.appConfig?.constants?.COINTOOL_SALT_BYTES || '0x29A2241A010000000000';
-  const COINTOOL_COINTOOL_EVENT_TOPIC = window.appConfig?.events?.COINTOOL_MINT_TOPIC_SCANNER || '0x0f6798a560793a54c3bcfe86a93cde1e73087d944c0ea20544137d4121396885';
+  // Get chain-specific contract address like other scanners
+  const CONTRACT_ADDRESS = window.chainManager?.getContractAddress('COINTOOL') || 
+    window.appConfig?.contracts?.COINTOOL || 
+    "0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628"; // Ethereum fallback
+  // Get chain-specific constants
+  const COINTOOL_SALT_BYTES = window.chainManager?.getCurrentConfig()?.constants?.COINTOOL_SALT_BYTES || '0x29A2241A010000000000';
+  const COINTOOL_EVENT_TOPIC = window.chainManager?.getCurrentConfig()?.events?.COINTOOL_MINT_TOPIC || '0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37';
   const COINTOOL_PROXY_CODE = window.appConfig?.bytecode?.COINTOOL_COINTOOL_PROXY_CODE || '60806040523480156200001157600080fd5b5060405162000b5f38038062000b5f8339818101604052810190620000379190620001a3565b81600160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555080600281905550620000936200009960201b60201c565b50620002ac565b600160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1663313ce5676040518163ffffffff1660e01b8152600401602060405180830381865afa15801562000108573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906200012e919062000214565b600060146101000a81548160ff021916908360ff1602179055565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b60006200017c8262000151565b9050919050565b6200018e816200016f565b81146200019a57600080fd5b50565b600081519050620001ae8162000183565b92915050565b6000819050919050565b620001c981620001b4565b8114620001d557600080fd5b50565b600081519050620001e981620001be565b92915050565b6000604082840312156200020857620002076200014c565b5b81019150620002188262000199565b92915050620002298262000209565b92915050620002388262000209565b92915050620002478262000209565b92915050620002568262000209565b92915050620002658262000209565b92915050620002748262000209565b92915050620002838262000209565b92915050620002928262000209565b92915050620002a18262000209565b92915050620002b08262000209565b92915050'; 
 
   // Local state for this scanner
@@ -24,7 +27,7 @@
       name: 'Cointool',
       type: 'cointool',
       description: 'Scans for Cointool mints and post-mint actions',
-      contractAddress: COINTOOL_COINTOOL_CONTRACT_ADDRESS
+      contractAddress: CONTRACT_ADDRESS
     };
   },
 
@@ -92,7 +95,7 @@ async function scanCointoolMints() {
   const chainId = await web3Instance.eth.getChainId();
 
   // Create contract instance 
-  contractInstance = new web3Instance.eth.Contract(window.cointoolAbi, COINTOOL_CONTRACT_ADDRESS);
+  contractInstance = new web3Instance.eth.Contract(window.cointoolAbi, CONTRACT_ADDRESS);
 
   // Open database
   dbInstance = await openCointoolDB();
@@ -322,7 +325,7 @@ function computeProxyAddress(mintId, salt, minter) {
   const creationCode = COINTOOL_PROXY_CODE + constructorParams.slice(2);
   const saltBytes32 = web3Instance.utils.padLeft('0x' + normalizeSaltForHash(salt), 64);
   const creationCodeHash = web3Instance.utils.keccak256('0x' + creationCode);
-  const concatenated = '0xff' + COINTOOL_CONTRACT_ADDRESS.slice(2) + saltBytes32.slice(2) + creationCodeHash.slice(2);
+  const concatenated = '0xff' + CONTRACT_ADDRESS.slice(2) + saltBytes32.slice(2) + creationCodeHash.slice(2);
   const fullHash = web3Instance.utils.keccak256(concatenated);
   return '0x' + fullHash.slice(-40);
 }
