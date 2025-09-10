@@ -3466,6 +3466,11 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
   cointoolTable.on("dataProcessed", function(){
     updateSummaryStats();
     document.getElementById("downloadBtn").style.display = (cointoolTable.getDataCount("active") > 0) ? "inline-block" : "none";
+    
+    // Update mobile dropdown content when data changes
+    if (window.innerWidth <= 768 && document.querySelector('.filter-chips.expanded')) {
+      window.updateMobileDropdownContent();
+    }
   });
 
   cointoolTable.on("tableBuilt",     updateXENTotalBadge);
@@ -6709,6 +6714,20 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
 
   container.addEventListener('click', (e) => {
     const btn = e.target.closest('.chip');
+    const downloadOption = e.target.closest('.download-option');
+    
+    // Handle download option clicks
+    if (downloadOption && window.innerWidth <= 768) {
+      const action = downloadOption.dataset.action;
+      if (action === 'csv' && window.cointoolTable) {
+        window.cointoolTable.download("csv", "cointool-mints-detailed.csv");
+      } else if (action === 'json' && window.cointoolTable) {
+        window.cointoolTable.download("json", "cointool-mints-detailed.json");
+      }
+      container.classList.remove('expanded');
+      return;
+    }
+    
     if (!btn) return;
 
     // Check if mobile view and handle dropdown
@@ -6717,6 +6736,10 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
       if (btn === currentActive) {
         // Toggle dropdown
         container.classList.toggle('expanded');
+        
+        if (container.classList.contains('expanded')) {
+          updateMobileDropdownContent();
+        }
         return;
       } else if (container.classList.contains('expanded')) {
         // Select option and close dropdown
@@ -6800,6 +6823,8 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768) {
       container.classList.remove('expanded');
+      // Remove download options when switching to desktop
+      container.querySelectorAll('.download-option').forEach(option => option.remove());
     }
     initMobileState();
   });
@@ -6841,6 +6866,45 @@ document.getElementById('connectWalletBtn')?.addEventListener('click', handleWal
   
   // Initialize mobile state on load
   initMobileState();
+  
+  // Function to update mobile dropdown content with download options
+  function updateMobileDropdownContent() {
+    if (window.innerWidth > 768) return;
+    
+    // Check if download options already exist
+    const existingCsv = container.querySelector('.download-option[data-action="csv"]');
+    const existingJson = container.querySelector('.download-option[data-action="json"]');
+    
+    const hasData = window.cointoolTable && window.cointoolTable.getDataCount("active") > 0;
+    
+    if (hasData && !existingCsv && !existingJson) {
+      // Create download options if they don't exist and we have data
+      const csvOption = document.createElement('div');
+      csvOption.className = 'download-option';
+      csvOption.dataset.action = 'csv';
+      csvOption.textContent = '📊 Download CSV';
+      
+      const jsonOption = document.createElement('div');
+      jsonOption.className = 'download-option';
+      jsonOption.dataset.action = 'json';
+      jsonOption.textContent = '📄 Download JSON';
+      
+      // Find where to insert (after the last visible chip)
+      const chips = Array.from(container.querySelectorAll('.chip'));
+      const lastChip = chips[chips.length - 1];
+      
+      if (lastChip) {
+        lastChip.insertAdjacentElement('afterend', csvOption);
+        csvOption.insertAdjacentElement('afterend', jsonOption);
+      }
+    } else if (!hasData) {
+      // Remove download options if no data
+      container.querySelectorAll('.download-option').forEach(option => option.remove());
+    }
+  }
+  
+  // Make function globally accessible
+  window.updateMobileDropdownContent = updateMobileDropdownContent;
 })();
 
 /* === AUTO-CONNECT WALLET ON PAGE LOAD (added by optimizer) === */

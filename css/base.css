@@ -1810,7 +1810,10 @@ body {
     grid-template-columns: 1fr;
     max-width: 100%;
   }
-  .mint-input { width: 100%; }
+  .mint-input { 
+    width: 100%; 
+    font-size: 1.3em; /* 30% bigger font size in mobile view */
+  }
   .mint-term-row { width: auto; }
   .mint-actions { flex-wrap: wrap; }
 
@@ -1818,6 +1821,8 @@ body {
   .filter-chips {
     display: block;
     position: relative;
+    width: 90%;
+    margin: 0 auto 8px auto;
   }
   
   .filter-chips > span:first-child {
@@ -1832,7 +1837,7 @@ body {
   .filter-chips .chip.mobile-visible,
   .filter-chips .chip.active {
     display: block !important;
-    width: 80%;
+    width: 100%;
     margin: 0 auto 8px auto;
     text-align: center;
     padding: 7px 12px;
@@ -1877,6 +1882,32 @@ body {
     background: #e5e7eb;
   }
   
+  /* Hide download options by default */
+  .filter-chips .download-option {
+    display: none;
+  }
+  
+  /* Add download options to expanded dropdown */
+  .filter-chips.expanded .download-option {
+    display: block;
+    width: 80%;
+    margin: 0 auto 2px auto;
+    text-align: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #e0f2fe;
+    border: 1px solid #0ea5e9;
+    color: #0c4a6e;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  
+  .filter-chips.expanded .download-option:hover {
+    background: #bae6fd;
+    border-color: #0284c7;
+  }
+  
   .filter-chips.expanded .chip.active {
     background: #007bff;
     color: white;
@@ -1892,37 +1923,13 @@ body {
     display: none;
   }
   
-  /* Hide table-actions in mobile from filter-chips */
-  .filter-chips .table-actions {
-    display: none;
-  }
-  
-  /* Move table-actions below the table in mobile */
+  /* Hide table-actions completely in mobile view */
+  .filter-chips .table-actions,
   .filter-chips .table-actions.mobile-below-table {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex !important;
-    gap: 8px;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 8px 16px;
-    border-radius: 8px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
+    display: none !important;
   }
   
-  .filter-chips .table-actions.mobile-below-table button {
-    padding: 6px 12px;
-    font-size: 13px;
-  }
-  
-  /* Dark mode support for floating buttons */
-  body.dark-mode .filter-chips .table-actions.mobile-below-table {
-    background: rgba(55, 65, 81, 0.95);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  }
+  /* Table actions are hidden in mobile, no styling needed */
   
   /* Dark mode styling for mobile filter dropdown */
   body.dark-mode .filter-chips .chip.mobile-visible,
@@ -1950,6 +1957,23 @@ body {
   
   body.dark-mode .filter-chips.expanded .chip.active:hover {
     background: #3b82f6;
+  }
+  
+  /* Dark mode styling for download options */
+  body.dark-mode .filter-chips .download-option {
+    display: none;
+  }
+  
+  body.dark-mode .filter-chips.expanded .download-option {
+    display: block;
+    background: #1e3a8a;
+    border-color: #3b82f6;
+    color: #dbeafe;
+  }
+  
+  body.dark-mode .filter-chips.expanded .download-option:hover {
+    background: #1d4ed8;
+    border-color: #2563eb;
   }
   
   /* Retro mode styling for mobile filter dropdown */
@@ -2032,37 +2056,40 @@ body {
   
   .tabulator .tabulator-header-filter input,
   .tabulator .tabulator-header-filter select {
-    font-size: 7px !important;
+    font-size: 9px !important; /* 30% bigger (was 7px) */
     padding: 2px 3px !important;
     min-height: auto !important;
     line-height: 1.2 !important;
+    box-sizing: border-box !important;
   }
   
   .tabulator .tabulator-header-filter input::placeholder {
-    font-size: 7px !important;
+    font-size: 9px !important; /* 30% bigger (was 7px) */
   }
   
   /* Override inline styles for search inputs with specific styling */
   .tabulator .tabulator-header-filter input[type="search"] {
-    font-size: 7px !important;
+    font-size: 9px !important; /* 30% bigger (was 7px) */
     padding: 2px 3px !important;
     line-height: 1.2 !important;
     height: auto !important;
+    box-sizing: border-box !important;
   }
   
   /* Target dropdown menu options in select filters */
   .tabulator .tabulator-header-filter select option {
-    font-size: 7px !important;
+    font-size: 9px !important; /* 30% bigger (was 7px) */
     padding: 1px 2px !important;
   }
   
   /* Target the select element itself more specifically */
   .tabulator .tabulator-header-filter select {
-    font-size: 7px !important;
+    font-size: 9px !important; /* 30% bigger (was 7px) */
     padding: 2px 3px !important;
     line-height: 1.2 !important;
     height: auto !important;
     max-width: 60px !important;
+    box-sizing: border-box !important;
   }
   
   /* Also reduce cell content font size for better mobile experience */
@@ -2151,10 +2178,11 @@ body {
   /* Only fix header filter inputs - the main issue */
   .tabulator-header .tabulator-header-filter input,
   .tabulator-header .tabulator-header-filter select {
-    font-size: 14px !important; /* Use absolute size to prevent iOS zoom */
+    font-size: 18px !important; /* 30% bigger (was 14px) to prevent iOS zoom and improve readability */
     padding: 6px 8px !important;
     min-height: 32px !important; /* Touch-friendly size */
     border-radius: 4px !important;
+    box-sizing: border-box !important;
   }
   
   /* Enable horizontal scrolling for tables that don't fit */

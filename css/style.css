@@ -1792,6 +1792,8 @@ body { line-height: 1.5; }
   .filter-chips {
     display: block;
     position: relative;
+    width: 90%;
+    margin: 0 auto 8px auto;
   }
   
   .filter-chips > span:first-child {
@@ -1806,7 +1808,7 @@ body { line-height: 1.5; }
   .filter-chips .chip.mobile-visible,
   .filter-chips .chip.active {
     display: block !important;
-    width: 80%;
+    width: 100%;
     margin: 0 auto 8px auto;
     text-align: center;
     padding: 7px 12px;
@@ -1851,6 +1853,32 @@ body { line-height: 1.5; }
     background: #e5e7eb;
   }
   
+  /* Hide download options by default */
+  .filter-chips .download-option {
+    display: none;
+  }
+  
+  /* Add download options to expanded dropdown */
+  .filter-chips.expanded .download-option {
+    display: block;
+    width: 80%;
+    margin: 0 auto 2px auto;
+    text-align: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #e0f2fe;
+    border: 1px solid #0ea5e9;
+    color: #0c4a6e;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  
+  .filter-chips.expanded .download-option:hover {
+    background: #bae6fd;
+    border-color: #0284c7;
+  }
+  
   .filter-chips.expanded .chip.active {
     background: #007bff;
     color: white;
@@ -1866,37 +1894,13 @@ body { line-height: 1.5; }
     display: none;
   }
   
-  /* Hide table-actions in mobile from filter-chips */
-  .filter-chips .table-actions {
-    display: none;
-  }
-  
-  /* Move table-actions below the table in mobile */
+  /* Hide table-actions completely in mobile view */
+  .filter-chips .table-actions,
   .filter-chips .table-actions.mobile-below-table {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex !important;
-    gap: 8px;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 8px 16px;
-    border-radius: 8px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
+    display: none !important;
   }
   
-  .filter-chips .table-actions.mobile-below-table button {
-    padding: 6px 12px;
-    font-size: 13px;
-  }
-  
-  /* Dark mode support for floating buttons */
-  body.dark-mode .filter-chips .table-actions.mobile-below-table {
-    background: rgba(55, 65, 81, 0.95);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  }
+  /* Table actions are hidden in mobile, no styling needed */
   
   /* Dark mode styling for mobile filter dropdown */
   body.dark-mode .filter-chips .chip.mobile-visible,
@@ -1924,6 +1928,23 @@ body { line-height: 1.5; }
   
   body.dark-mode .filter-chips.expanded .chip.active:hover {
     background: #3b82f6;
+  }
+  
+  /* Dark mode styling for download options */
+  body.dark-mode .filter-chips .download-option {
+    display: none;
+  }
+  
+  body.dark-mode .filter-chips.expanded .download-option {
+    display: block;
+    background: #1e3a8a;
+    border-color: #3b82f6;
+    color: #dbeafe;
+  }
+  
+  body.dark-mode .filter-chips.expanded .download-option:hover {
+    background: #1d4ed8;
+    border-color: #2563eb;
   }
   
   /* Retro mode styling for mobile filter dropdown */
@@ -2028,7 +2049,25 @@ body { line-height: 1.5; }
     max-width: 21px !important;
   }
   
-  .tabulator .tabulator-header-filter input,
+  /* Special sizing for select dropdowns to be even smaller */
+  .tabulator .tabulator-header-filter:has(select) {
+    width: 18px !important;
+    max-width: 18px !important;
+  }
+  
+  .tabulator .tabulator-header-filter input {
+    font-size: 16px !important;
+    padding: 0px 1px !important;
+    min-height: 10px !important;
+    height: 10px !important;
+    line-height: 1 !important;
+    border-width: 1px !important;
+    margin: 0 !important;
+    width: 19px !important;
+    max-width: 19px !important;
+    box-sizing: border-box !important;
+  }
+  
   .tabulator .tabulator-header-filter select {
     font-size: 8px !important;
     padding: 0px 1px !important;
@@ -2060,20 +2099,56 @@ body { line-height: 1.5; }
   
   /* Target dropdown menu options in select filters */
   .tabulator .tabulator-header-filter select option {
-    font-size: 8px !important;
-    padding: 0px 1px !important;
+    font-size: 6px !important;
+    padding: 1px 2px !important;
     line-height: 1 !important;
+    max-width: 120px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  /* Target the actual dropdown menu that appears when select is opened */
+  .tabulator .tabulator-header-filter select:focus option,
+  .tabulator .tabulator-header-filter select:active option {
+    font-size: 6px !important;
+    padding: 1px 2px !important;
+    line-height: 1 !important;
+  }
+  
+  /* More specific targeting for mobile select dropdowns */
+  @media (max-width: 768px) {
+    select[size] option,
+    select[multiple] option,
+    select option {
+      font-size: 6px !important;
+      padding: 1px 2px !important;
+      line-height: 1 !important;
+    }
+    
+    /* Target any select within tabulator headers specifically */
+    .tabulator .tabulator-header select option {
+      font-size: 6px !important;
+      padding: 1px 2px !important;
+      line-height: 1 !important;
+    }
   }
   
   /* Target the select element itself more specifically */
   .tabulator .tabulator-header-filter select {
-    font-size: 8px !important;
-    padding: 0px 1px !important;
-    line-height: 1 !important;
-    height: 10px !important;
-    min-height: 10px !important;
-    width: 19px !important;
-    max-width: 19px !important;
+    font-size: 7px !important;
+    padding: 0px !important;
+    line-height: 0.9 !important;
+    height: 12px !important;
+    min-height: 12px !important;
+    width: 16px !important;
+    max-width: 16px !important;
+    border-radius: 2px !important;
+    background-size: 8px 8px !important;
+    background-position: right 1px center !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
   }
   
   /* Compact sort arrows */
