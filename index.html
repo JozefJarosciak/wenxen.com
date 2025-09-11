@@ -43,11 +43,7 @@
   <link rel="stylesheet" href="./css/base.css?v=20250908173121">
   <link rel="stylesheet" href="./css/theme-light.css?v=20250908173121">
   <link rel="stylesheet" href="./css/theme-dark.css?v=20250908173121">
-  <link rel="stylesheet" href="./css/theme-retro.css?v=20250908173121">
-  <link rel="stylesheet" href="./css/theme-matrix.css?v=20250908173121">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-  <!-- Retro theme font (C64-like monospace) -->
-  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/npm/simple-icons@7/icons/ethereum.svg">
 
 
@@ -107,14 +103,6 @@
           <button class="menu-item" role="menuitemradio" aria-checked="true" data-theme="dark">
             <span class="menu-icon" aria-hidden="true">🌙</span>
             <span>Dark</span>
-          </button>
-          <button class="menu-item" role="menuitemradio" aria-checked="false" data-theme="retro">
-            <span class="menu-icon" aria-hidden="true">🕹️</span>
-            <span>Retro</span>
-          </button>
-          <button class="menu-item" role="menuitemradio" aria-checked="false" data-theme="matrix">
-            <span class="menu-icon" aria-hidden="true">💚</span>
-            <span>Matrix</span>
           </button>
         </div>
       </div>
@@ -849,7 +837,7 @@
         const versionEl = document.getElementById('deployVersion');
         if (versionEl) {
           versionEl.textContent = 'v' + timestamp;
-          versionEl.title = 'Last Deployed: ' + humanDate;
+          // Remove simple tooltip - deployVersionManager handles tooltips
         }
       } catch (e) {
         console.warn('Could not parse deployment timestamp:', timestamp);

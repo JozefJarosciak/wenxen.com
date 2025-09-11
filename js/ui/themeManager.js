@@ -10,8 +10,6 @@ export const themeManager = {
   // Get effective theme (resolve system preference)
   effectiveTheme(mode) {
     if (mode === 'system') return this.isSystemDark() ? 'dark' : 'light';
-    if (mode === 'retro') return 'retro';
-    if (mode === 'matrix') return 'matrix';
     return (mode === 'dark') ? 'dark' : 'light';
   },
 
@@ -20,14 +18,14 @@ export const themeManager = {
     const effectiveMode = this.effectiveTheme(mode);
     
     // Update body classes
-    document.body.classList.remove('light-mode', 'dark-mode', 'retro-mode', 'matrix-mode');
+    document.body.classList.remove('light-mode', 'dark-mode');
     document.body.classList.add(effectiveMode + '-mode');
     
     // Toggle Tabulator dark CSS
     try {
       const tabulatorLink = document.getElementById('tabulatorMidnightCss');
       if (tabulatorLink) {
-        tabulatorLink.disabled = !(effectiveMode === 'dark' || effectiveMode === 'retro' || effectiveMode === 'matrix');
+        tabulatorLink.disabled = !(effectiveMode === 'dark');
       }
     } catch (error) {
       console.warn('Failed to toggle Tabulator CSS:', error);
@@ -37,7 +35,7 @@ export const themeManager = {
     try {
       const flatpickrLink = document.getElementById('flatpickrDarkCss');
       if (flatpickrLink) {
-        flatpickrLink.disabled = !(effectiveMode === 'dark' || effectiveMode === 'retro' || effectiveMode === 'matrix');
+        flatpickrLink.disabled = !(effectiveMode === 'dark');
       }
     } catch (error) {
       console.warn('Failed to toggle Flatpickr CSS:', error);
@@ -102,9 +100,7 @@ export const themeManager = {
   getThemeDisplayName(theme) {
     const names = {
       light: 'Light',
-      dark: 'Dark',
-      retro: 'Retro',
-      matrix: 'Matrix'
+      dark: 'Dark'
     };
     return names[theme] || 'Dark';
   },

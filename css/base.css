@@ -971,32 +971,6 @@ button:focus, a:focus, input:focus, .claim-button:focus, .chip:focus {
 }
 
 
-/* === Retro Theme (Commodore 64‑inspired) === */
-
-body.retro-mode input,
-body.retro-mode textarea,
-body.retro-mode button,
-
-/* Header controls */
-
-/* Chips */
-
-/* Progress container */
-body.retro-mode #progressContainer #addressProgressText,
-body.retro-mode #progressContainer #tokenProgressText,
-body.retro-mode #progressContainer #rpcStatus,
-
-/* Modal */
-
-/* Footer & markdown */
-body.retro-mode .markdown-body code,
-
-/* Tabulator (table) */
-body.retro-mode .tabulator .tabulator-header .tabulator-header-filter input,
-
-/* Misc */
-
-
 /* Dark mode: make estXenUsd a light green */
 /* Hint browsers for native form control theming */
 
@@ -1036,23 +1010,23 @@ body.dark-mode #tab-settings .field input[type="number"],
 body.dark-mode #tab-settings .field textarea,
 
 /* Retro: unify Settings tab to retro input background */
-body.retro-mode #tab-settings .settings-card,
-body.retro-mode #tab-settings button,
-body.retro-mode #tab-settings .button-like,
-body.retro-mode #tab-settings .field input[type="text"],
-body.retro-mode #tab-settings .field input[type="password"],
-body.retro-mode #tab-settings .field input[type="number"],
-body.retro-mode #tab-settings .field textarea,
+/* REMOVED */ #tab-settings .settings-card,
+/* REMOVED */ #tab-settings button,
+/* REMOVED */ #tab-settings .button-like,
+/* REMOVED */ #tab-settings .field input[type="text"],
+/* REMOVED */ #tab-settings .field input[type="password"],
+/* REMOVED */ #tab-settings .field input[type="number"],
+/* REMOVED */ #tab-settings .field textarea,
 
 /* Explicit key fields to ensure adherence even if overridden elsewhere */
-body.retro-mode #etherscanApiKey,
-body.retro-mode #chunkSize,
-body.retro-mode #gasRefreshSeconds,
-body.retro-mode #mintAction,
+/* REMOVED */ #etherscanApiKey,
+/* REMOVED */ #chunkSize,
+/* REMOVED */ #gasRefreshSeconds,
+/* REMOVED */ #mintAction,
 /* Mint/Stake specific numeric fields */
-body.retro-mode #mintVmus,
-body.retro-mode #mintTermDays,
-body.retro-mode #stakeAmount,
+/* REMOVED */ #mintVmus,
+/* REMOVED */ #mintTermDays,
+/* REMOVED */ #stakeAmount,
 
 
 
@@ -1977,71 +1951,36 @@ body {
   }
   
   /* Retro mode styling for mobile filter dropdown */
-  body.retro-mode .filter-chips .chip.mobile-visible,
-  body.retro-mode .filter-chips .chip.active {
+  /* REMOVED */ .filter-chips .chip.mobile-visible,
+  /* REMOVED */ .filter-chips .chip.active {
     background: #07169f;
     border-color: #2749dc;
     color: #c7fff7;
     font-family: 'Courier New', monospace;
   }
   
-  body.retro-mode .filter-chips.expanded .chip {
+  /* REMOVED */ .filter-chips.expanded .chip {
     background: #06138a;
     border-color: #2749dc;
     color: #c7fff7;
     font-family: 'Courier New', monospace;
   }
   
-  body.retro-mode .filter-chips.expanded .chip:hover {
+  /* REMOVED */ .filter-chips.expanded .chip:hover {
     background: #0a1db8;
     box-shadow: 0 0 8px rgba(199, 255, 247, 0.3);
   }
   
-  body.retro-mode .filter-chips.expanded .chip.active {
+  /* REMOVED */ .filter-chips.expanded .chip.active {
     background: #00ffff;
     color: #06138a;
     border-color: #00ffff;
   }
   
-  body.retro-mode .filter-chips.expanded .chip.active:hover {
+  /* REMOVED */ .filter-chips.expanded .chip.active:hover {
     background: #00e6e6;
   }
   
-  /* Matrix mode styling for mobile filter dropdown */
-  body.matrix-mode .filter-chips .chip.mobile-visible,
-  body.matrix-mode .filter-chips .chip.active {
-    background: transparent;
-    border-color: #00aa00;
-    color: #00aa00;
-    text-shadow: 0 0 3px #00aa00;
-    border-radius: 0;
-  }
-  
-  body.matrix-mode .filter-chips.expanded .chip {
-    background: transparent;
-    border-color: #00aa00;
-    color: #00aa00;
-    text-shadow: 0 0 3px #00aa00;
-    border-radius: 0;
-  }
-  
-  body.matrix-mode .filter-chips.expanded .chip:hover {
-    background: rgba(0, 170, 0, 0.1);
-    color: #00ff00;
-    border-color: #00ff00;
-    text-shadow: 0 0 5px #00ff00;
-  }
-  
-  body.matrix-mode .filter-chips.expanded .chip.active {
-    background: rgba(0, 255, 0, 0.2);
-    color: #00ff00;
-    border-color: #00ff00;
-    text-shadow: 0 0 8px #00ff00;
-  }
-  
-  body.matrix-mode .filter-chips.expanded .chip.active:hover {
-    background: rgba(0, 255, 0, 0.3);
-  }
   
   .details-title { display: none; }
   
@@ -2578,6 +2517,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.2);
   max-height: 50vh;
   position: relative;
+  z-index: 1;
 }
 
 /* Base commit table styles */
@@ -2639,8 +2579,8 @@ body {
 }
 
 /* Enhanced tooltips for commit messages - Base styles */
-.commit-message[title]:hover::after {
-  content: attr(title);
+.commit-message[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -2653,7 +2593,7 @@ body {
   line-height: 1.4;
   max-width: 400px;
   width: max-content;
-  z-index: 1000;
+  z-index: 10001;
   white-space: pre-wrap;
   word-wrap: break-word;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -2664,7 +2604,7 @@ body {
   backdrop-filter: blur(10px);
 }
 
-.commit-message[title]:hover::before {
+.commit-message[data-tooltip]:hover::before {
   content: '';
   position: absolute;
   bottom: calc(100% - 4px);
@@ -2672,12 +2612,12 @@ body {
   transform: translateX(-50%);
   border: 6px solid transparent;
   border-top-color: rgba(40, 44, 52, 0.98);
-  z-index: 1000;
+  z-index: 10001;
   pointer-events: none;
 }
 
 /* Light theme tooltip styling */
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-message[title]:hover::after {
+body:not(.dark-mode) .commit-message[data-tooltip]:hover::after {
   background: rgba(255, 255, 255, 0.98);
   color: #333;
   border-color: rgba(0, 0, 0, 0.2);
@@ -2685,12 +2625,12 @@ body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-message[title]:h
   backdrop-filter: blur(10px);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-message[title]:hover::before {
+body:not(.dark-mode) .commit-message[data-tooltip]:hover::before {
   border-top-color: rgba(255, 255, 255, 0.98);
 }
 
 /* Dark theme tooltip styling */
-body.dark-mode .commit-message[title]:hover::after {
+body.dark-mode .commit-message[data-tooltip]:hover::after {
   background: rgba(20, 20, 30, 0.98);
   color: #e0e0e0;
   border-color: rgba(255, 255, 255, 0.3);
@@ -2698,12 +2638,12 @@ body.dark-mode .commit-message[title]:hover::after {
   backdrop-filter: blur(10px);
 }
 
-body.dark-mode .commit-message[title]:hover::before {
+body.dark-mode .commit-message[data-tooltip]:hover::before {
   border-top-color: rgba(20, 20, 30, 0.98);
 }
 
 /* Retro theme tooltip styling */
-body.retro-mode .commit-message[title]:hover::after {
+/* REMOVED */ .commit-message[title]:hover::after {
   background: linear-gradient(135deg, #06138a 0%, #0a1a9e 100%);
   border: 2px solid #2749dc;
   color: #c7fff7;
@@ -2713,30 +2653,13 @@ body.retro-mode .commit-message[title]:hover::after {
   backdrop-filter: none;
 }
 
-body.retro-mode .commit-message[title]:hover::before {
+/* REMOVED */ .commit-message[data-tooltip]:hover::before {
   border-top-color: #06138a;
   border-top-width: 8px;
   border-left-width: 8px;
   border-right-width: 8px;
 }
 
-/* Matrix theme tooltip styling */
-body.matrix-mode .commit-message[title]:hover::after {
-  background: linear-gradient(135deg, #001100 0%, #002200 100%);
-  border: 2px solid #00aa00;
-  color: #00ff00;
-  font-family: 'Courier New', monospace;
-  text-shadow: 0 0 3px #00ff00;
-  box-shadow: 0 0 15px rgba(0, 170, 0, 0.4), inset 0 1px 0 rgba(0, 255, 0, 0.2);
-  backdrop-filter: none;
-}
-
-body.matrix-mode .commit-message[title]:hover::before {
-  border-top-color: #001100;
-  border-top-width: 8px;
-  border-left-width: 8px;
-  border-right-width: 8px;
-}
 
 .commit-author {
   font-weight: 500;
@@ -2748,6 +2671,150 @@ body.matrix-mode .commit-message[title]:hover::before {
   font-size: 12px;
   opacity: 0.8;
   white-space: nowrap;
+}
+
+/* Expandable commit row styles */
+.commit-row {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.commit-row:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.commit-row.expanded {
+  border-bottom: none;
+}
+
+.message-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expand-indicator {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 0.2s ease;
+  user-select: none;
+  min-width: 12px;
+}
+
+.commit-row.expanded .expand-indicator {
+  transform: rotate(90deg);
+}
+
+.message-text {
+  flex: 1;
+}
+
+/* Commit details row */
+.commit-details-row {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.commit-details-row:hover {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.commit-details {
+  padding: 16px 12px !important;
+}
+
+.details-container {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+  max-width: 100%;
+}
+
+.details-section h4 {
+  margin: 0 0 12px 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 6px;
+}
+
+.detail-item {
+  display: flex;
+  margin-bottom: 8px;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 80px;
+  font-size: 12px;
+}
+
+.detail-value {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.detail-value code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.detail-link {
+  color: #4da3ff !important;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.detail-link:hover {
+  text-decoration: underline;
+}
+
+.commit-title {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.commit-body {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Mobile responsive adjustments for details */
+@media (max-width: 768px) {
+  .details-container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .detail-label {
+    min-width: 60px;
+    font-size: 11px;
+  }
+  
+  .detail-value {
+    font-size: 11px;
+  }
+  
+  .commit-title {
+    font-size: 12px;
+  }
+  
+  .commit-body {
+    font-size: 11px;
+  }
 }
 
 /* Current deployment row styling */
@@ -2831,7 +2898,7 @@ body.matrix-mode .commit-message[title]:hover::before {
 }
 
 /* Light theme overrides */
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-toast {
+body:not(.dark-mode) .commit-toast {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(0, 0, 0, 0.2);
   color: #333;
@@ -2839,50 +2906,86 @@ body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-toast {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table {
+body:not(.dark-mode) .commit-table {
   background: rgba(255, 255, 255, 0.9);
   color: #333;
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table th {
+body:not(.dark-mode) .commit-table th {
   background: rgba(0, 0, 0, 0.05);
   color: #333;
   border-bottom-color: rgba(0, 0, 0, 0.1);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table td {
+body:not(.dark-mode) .commit-table td {
   color: #333;
   border-bottom-color: rgba(0, 0, 0, 0.05);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table-container {
+body:not(.dark-mode) .commit-table-container {
   border-color: rgba(0, 0, 0, 0.15);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-history-toast .toast-header h3 {
+body:not(.dark-mode) .commit-history-toast .toast-header h3 {
   color: #333;
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .deployment-status {
+body:not(.dark-mode) .deployment-status {
   background: rgba(0, 0, 0, 0.05);
   border-color: rgba(0, 0, 0, 0.1);
   color: #333;
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-history-toast .repo-link a {
+body:not(.dark-mode) .commit-history-toast .repo-link a {
   color: #333;
   border-color: rgba(0, 0, 0, 0.2);
   background: rgba(0, 0, 0, 0.05);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-history-toast .repo-link a:hover {
+body:not(.dark-mode) .commit-history-toast .repo-link a:hover {
   background: rgba(0, 0, 0, 0.1);
 }
 
-body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .loading-indicator {
+body:not(.dark-mode) .loading-indicator {
   background: rgba(0, 0, 0, 0.05);
   color: #666;
   border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Light theme expandable row overrides */
+body:not(.dark-mode) .expand-indicator {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+body:not(.dark-mode) .commit-details-row {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+body:not(.dark-mode) .details-section h4 {
+  color: #333;
+  border-bottom-color: rgba(0, 0, 0, 0.15);
+}
+
+body:not(.dark-mode) .detail-label {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+body:not(.dark-mode) .detail-value {
+  color: #333;
+}
+
+body:not(.dark-mode) .detail-value code {
+  background: rgba(0, 0, 0, 0.08);
+  color: #333;
+}
+
+body:not(.dark-mode) .commit-title {
+  color: #333;
+}
+
+body:not(.dark-mode) .commit-body {
+  color: rgba(0, 0, 0, 0.7);
 }
 
 /* Dark theme overrides */
@@ -2915,7 +3018,7 @@ body.dark-mode .deployment-status {
 }
 
 /* Retro theme overrides */
-body.retro-mode .commit-toast {
+/* REMOVED */ .commit-toast {
   background: linear-gradient(135deg, #06138a 0%, #0a1a9e 100%);
   border: 2px solid #2749dc;
   color: #c7fff7;
@@ -2924,218 +3027,99 @@ body.retro-mode .commit-toast {
   backdrop-filter: none;
 }
 
-body.retro-mode .commit-table {
+/* REMOVED */ .commit-table {
   background: rgba(6, 19, 138, 0.3);
   border: 1px solid #2749dc;
 }
 
-body.retro-mode .commit-table th {
+/* REMOVED */ .commit-table th {
   background: #2749dc;
   color: #c7fff7;
   border-bottom-color: #c7fff7;
 }
 
-body.retro-mode .commit-table td {
+/* REMOVED */ .commit-table td {
   color: #c7fff7;
   border-bottom-color: rgba(199, 255, 247, 0.2);
 }
 
-body.retro-mode .commit-table tr.current-deploy {
+/* REMOVED */ .commit-table tr.current-deploy {
   background: rgba(0, 255, 255, 0.2) !important;
   border-color: #00ffff;
 }
 
-body.retro-mode .commit-table tr.current-deploy:hover {
+/* REMOVED */ .commit-table tr.current-deploy:hover {
   background: rgba(0, 255, 255, 0.3) !important;
 }
 
-body.retro-mode .deployment-status.status-current {
+/* REMOVED */ .deployment-status.status-current {
   background: rgba(0, 255, 255, 0.3);
   border-color: #00ffff;
   color: #00ffff;
 }
 
-body.retro-mode .deployment-status.status-behind {
+/* REMOVED */ .deployment-status.status-behind {
   background: rgba(255, 204, 2, 0.3);
   border-color: #ffcc02;
   color: #ffcc02;
 }
 
-body.retro-mode .deployment-status.status-ahead {
+/* REMOVED */ .deployment-status.status-ahead {
   background: rgba(39, 73, 220, 0.3);
   border-color: #2749dc;
   color: #c7fff7;
 }
 
-body.retro-mode .commit-link {
+/* REMOVED */ .commit-link {
   color: #00ffff !important;
   background: rgba(0, 255, 255, 0.2);
 }
 
-body.retro-mode .commit-link:hover {
+/* REMOVED */ .commit-link:hover {
   background: rgba(0, 255, 255, 0.3);
   box-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
 }
 
-body.retro-mode .toast-ok-button {
+/* REMOVED */ .toast-ok-button {
   background: #2749dc;
   border-color: #c7fff7;
   color: #c7fff7;
 }
 
-body.retro-mode .toast-ok-button:hover {
+/* REMOVED */ .toast-ok-button:hover {
   background: #00ffff;
   color: #06138a;
 }
 
-body.retro-mode .loading-indicator {
+/* REMOVED */ .loading-indicator {
   background: rgba(39, 73, 220, 0.2);
   color: #c7fff7;
   border-top-color: rgba(199, 255, 247, 0.3);
 }
 
-body.retro-mode .commit-table-container {
+/* REMOVED */ .commit-table-container {
   border-color: #2749dc;
   box-shadow: inset 0 0 10px rgba(39, 73, 220, 0.3);
 }
 
-body.retro-mode .commit-history-toast .toast-header h3 {
+/* REMOVED */ .commit-history-toast .toast-header h3 {
   color: #c7fff7;
   text-shadow: 0 0 10px rgba(199, 255, 247, 0.5);
 }
 
-body.retro-mode .commit-history-toast .repo-link a {
+/* REMOVED */ .commit-history-toast .repo-link a {
   color: #c7fff7;
   border-color: #2749dc;
   background: rgba(39, 73, 220, 0.3);
 }
 
-body.retro-mode .commit-history-toast .repo-link a:hover {
+/* REMOVED */ .commit-history-toast .repo-link a:hover {
   background: rgba(0, 255, 255, 0.2);
   color: #00ffff;
   border-color: #00ffff;
   box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
 }
 
-/* Matrix theme overrides */
-body.matrix-mode .commit-toast {
-  background: linear-gradient(135deg, #001100 0%, #002200 100%);
-  border: 2px solid #00aa00;
-  color: #00ff00;
-  font-family: 'Courier New', monospace;
-  text-shadow: 0 0 2px #00ff00;
-  box-shadow: 0 0 20px rgba(0, 170, 0, 0.3), inset 0 1px 0 rgba(0, 255, 0, 0.2);
-  backdrop-filter: none;
-}
-
-body.matrix-mode .commit-table {
-  background: rgba(0, 17, 0, 0.8);
-  border: 1px solid #00aa00;
-}
-
-body.matrix-mode .commit-table th {
-  background: #00aa00;
-  color: #001100;
-  border-bottom-color: #00ff00;
-  text-shadow: none;
-}
-
-body.matrix-mode .commit-table td {
-  color: #00ff00;
-  border-bottom-color: rgba(0, 170, 0, 0.3);
-  text-shadow: 0 0 2px #00ff00;
-}
-
-body.matrix-mode .commit-table tr:hover {
-  background: rgba(0, 255, 0, 0.1);
-  box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
-}
-
-body.matrix-mode .commit-link {
-  color: #00ffff !important;
-  background: rgba(0, 255, 255, 0.2);
-  text-shadow: 0 0 3px #00ffff;
-}
-
-body.matrix-mode .commit-link:hover {
-  background: rgba(0, 255, 255, 0.3);
-  box-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
-}
-
-body.matrix-mode .toast-ok-button {
-  background: rgba(0, 170, 0, 0.3);
-  border-color: #00ff00;
-  color: #00ff00;
-  text-shadow: 0 0 2px #00ff00;
-}
-
-body.matrix-mode .toast-ok-button:hover {
-  background: rgba(0, 255, 0, 0.3);
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-}
-
-body.matrix-mode .commit-table tr.current-deploy {
-  background: rgba(0, 255, 0, 0.2) !important;
-  border-color: #00ff00;
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
-}
-
-body.matrix-mode .commit-table tr.current-deploy:hover {
-  background: rgba(0, 255, 0, 0.3) !important;
-  box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
-}
-
-body.matrix-mode .deployment-status.status-current {
-  background: rgba(0, 255, 0, 0.3);
-  border-color: #00ff00;
-  color: #00ff00;
-  text-shadow: 0 0 3px #00ff00;
-}
-
-body.matrix-mode .deployment-status.status-behind {
-  background: rgba(255, 165, 0, 0.3);
-  border-color: #ffa500;
-  color: #ffa500;
-  text-shadow: 0 0 3px #ffa500;
-}
-
-body.matrix-mode .deployment-status.status-ahead {
-  background: rgba(0, 170, 0, 0.3);
-  border-color: #00aa00;
-  color: #00aa00;
-  text-shadow: 0 0 3px #00aa00;
-}
-
-body.matrix-mode .loading-indicator {
-  background: rgba(0, 170, 0, 0.2);
-  color: #00ff00;
-  border-top-color: rgba(0, 170, 0, 0.3);
-  text-shadow: 0 0 2px #00ff00;
-}
-
-body.matrix-mode .commit-table-container {
-  border-color: #00aa00;
-  box-shadow: inset 0 0 10px rgba(0, 170, 0, 0.3);
-}
-
-body.matrix-mode .commit-history-toast .toast-header h3 {
-  color: #00ff00;
-  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-}
-
-body.matrix-mode .commit-history-toast .repo-link a {
-  color: #00ff00;
-  border-color: #00aa00;
-  background: rgba(0, 170, 0, 0.2);
-  text-shadow: 0 0 2px #00ff00;
-}
-
-body.matrix-mode .commit-history-toast .repo-link a:hover {
-  background: rgba(0, 255, 0, 0.3);
-  color: #00ff00;
-  border-color: #00ff00;
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-}
 
 /* Mobile responsiveness for commit toast */
 @media (max-width: 768px) {
@@ -3278,13 +3262,10 @@ body.light-mode .github-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-body.retro-mode .github-btn:hover {
+/* REMOVED */ .github-btn:hover {
   background: rgba(199, 255, 247, 0.2);
 }
 
-body.matrix-mode .github-btn:hover {
-  background: rgba(0, 255, 0, 0.1);
-}
 
 /* Summary toggle button */
 
@@ -3331,28 +3312,18 @@ body.dark-mode .summary-toggle:hover {
 }
 
 
-body.retro-mode .summary-toggle {
+/* REMOVED */ .summary-toggle {
   background: rgba(6, 19, 138, 0.9);
   color: #c7fff7;
   border-color: rgba(199, 255, 247, 0.3);
   font-family: 'VT323', monospace;
 }
 
-body.retro-mode .summary-toggle:hover {
+/* REMOVED */ .summary-toggle:hover {
   background: rgba(6, 19, 138, 1);
 }
 
 
-body.matrix-mode .summary-toggle {
-  background: rgba(0, 17, 0, 0.9);
-  color: #00ff00;
-  border-color: rgba(0, 255, 0, 0.3);
-  font-family: 'Courier New', Monaco, 'Lucida Console', monospace;
-}
-
-body.matrix-mode .summary-toggle:hover {
-  background: rgba(0, 17, 0, 1);
-}
 
 /* ===== OPTION 2: Professional Table Layout with Visual Indicators ===== */
 
@@ -3579,75 +3550,37 @@ body.dark-mode .progress-indicator {
 }
 
 /* Retro mode theming */
-body.retro-mode #summaryContainer.option2 {
+/* REMOVED */ #summaryContainer.option2 {
   background: #fffde7;
   border-color: #ff8f00;
 }
 
-body.retro-mode .summary-table thead {
+/* REMOVED */ .summary-table thead {
   background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
   border-bottom-color: #ff8f00;
 }
 
-body.retro-mode .summary-table th {
+/* REMOVED */ .summary-table th {
   color: #e65100;
 }
 
-body.retro-mode .summary-table tbody tr {
+/* REMOVED */ .summary-table tbody tr {
   border-bottom-color: #ffcc02;
 }
 
-body.retro-mode .summary-table tbody tr:nth-child(even) {
+/* REMOVED */ .summary-table tbody tr:nth-child(even) {
   background: rgba(255, 235, 59, 0.1);
 }
 
-body.retro-mode .type-cell,
-body.retro-mode .metric-primary {
+/* REMOVED */ .type-cell,
+/* REMOVED */ .metric-primary {
   color: #bf360c;
 }
 
-body.retro-mode .metric-secondary {
+/* REMOVED */ .metric-secondary {
   color: #e65100;
 }
 
-/* Matrix mode theming */
-body.matrix-mode #summaryContainer.option2 {
-  background: #0d1117;
-  border-color: #00ff00;
-}
-
-body.matrix-mode .summary-table thead {
-  background: linear-gradient(135deg, #161b22 0%, #21262d 100%);
-  border-bottom-color: #00ff00;
-}
-
-body.matrix-mode .summary-table th,
-body.matrix-mode .type-cell,
-body.matrix-mode .metric-primary {
-  color: #00ff00;
-}
-
-body.matrix-mode .metric-secondary {
-  color: #39d353;
-}
-
-body.matrix-mode .summary-table tbody tr {
-  border-bottom-color: #30363d;
-}
-
-body.matrix-mode .summary-table tbody tr:hover {
-  background: rgba(0, 255, 0, 0.05);
-}
-
-body.matrix-mode .summary-table td {
-  color: #00ff00;
-  border-right-color: #30363d;
-}
-
-body.matrix-mode .type-icon {
-  background: #00ff00 !important;
-  color: #0d1117 !important;
-}
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {

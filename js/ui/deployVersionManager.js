@@ -758,6 +758,7 @@ export const deployVersionManager = {
   // Create a single commit row element
   createCommitRow(commit) {
     const row = document.createElement('tr');
+    row.classList.add('commit-row');
     if (commit.isCurrentDeploy) {
       row.classList.add('current-deploy');
     }
@@ -769,17 +770,104 @@ export const deployVersionManager = {
       minute: '2-digit'
     });
 
+    // Add click handler for toggling expanded view
+    row.addEventListener('click', (e) => {
+      // Don't toggle if clicking on the commit link
+      if (e.target.closest('.commit-link')) return;
+      
+      this.toggleCommitDetails(row, commit);
+    });
+
     row.innerHTML = `
       <td>
         <a href="${commit.url}" target="_blank" rel="noopener noreferrer" class="commit-link">${commit.shortSha}</a>
         ${commit.isCurrentDeploy ? '<span class="deploy-indicator">🚀</span>' : ''}
       </td>
-      <td class="commit-message" title="${this.escapeHtml(commit.message)}">${this.truncateMessage(commit.shortMessage || commit.message)}</td>
+      <td class="commit-message">
+        <div class="message-content">
+          <span class="expand-indicator">▶</span>
+          <span class="message-text">${this.truncateMessage(commit.shortMessage || commit.message)}</span>
+        </div>
+      </td>
       <td class="commit-author">${commit.author}</td>
       <td class="commit-date">${formattedDate}</td>
     `;
 
     return row;
+  },
+
+  // Toggle commit details expansion
+  toggleCommitDetails(row, commit) {
+    const expandIndicator = row.querySelector('.expand-indicator');
+    const existingDetails = row.nextElementSibling;
+    
+    // Check if details row already exists
+    if (existingDetails && existingDetails.classList.contains('commit-details-row')) {
+      // Collapse - remove details row
+      existingDetails.remove();
+      expandIndicator.textContent = '▶';
+      row.classList.remove('expanded');
+    } else {
+      // Expand - create and insert details row
+      const detailsRow = this.createCommitDetailsRow(commit);
+      row.parentNode.insertBefore(detailsRow, row.nextSibling);
+      expandIndicator.textContent = '▼';
+      row.classList.add('expanded');
+    }
+  },
+
+  // Create detailed commit information row
+  createCommitDetailsRow(commit) {
+    const detailsRow = document.createElement('tr');
+    detailsRow.classList.add('commit-details-row');
+    
+    const fullDate = commit.date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short'
+    });
+
+    // Parse commit message for better display
+    const messageParts = (commit.message || '').split('\n');
+    const title = messageParts[0] || 'No commit message';
+    const body = messageParts.slice(1).join('\n').trim();
+
+    detailsRow.innerHTML = `
+      <td colspan="4" class="commit-details">
+        <div class="details-container">
+          <div class="details-section">
+            <h4>Commit Details</h4>
+            <div class="detail-item">
+              <span class="detail-label">Full SHA:</span>
+              <code class="detail-value">${commit.sha}</code>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Author:</span>
+              <span class="detail-value">${commit.author}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Date:</span>
+              <span class="detail-value">${fullDate}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Link:</span>
+              <a href="${commit.url}" target="_blank" rel="noopener noreferrer" class="detail-link">View on GitHub →</a>
+            </div>
+          </div>
+          <div class="details-section">
+            <h4>Commit Message</h4>
+            <div class="commit-title">${this.escapeHtml(title)}</div>
+            ${body ? `<div class="commit-body">${this.escapeHtml(body).replace(/\n/g, '<br>')}</div>` : ''}
+          </div>
+        </div>
+      </td>
+    `;
+
+    return detailsRow;
   },
 
   // Fallback commits if GitHub API is unavailable
@@ -847,10 +935,7 @@ export const deployVersionManager = {
       return '<p>Error: Invalid commit data</p>';
     }
 
-    const currentTheme = document.body.className.includes('dark-mode') ? 'dark' : 
-                        document.body.className.includes('retro-mode') ? 'retro' :
-                        document.body.className.includes('matrix-mode') ? 'matrix' : 'light';
-
+    const currentTheme = document.body.className.includes('dark-mode') ? 'dark' : 'light';
     const tableClass = `commit-table ${currentTheme}`;
     
     let tableHTML = `<table class="${tableClass}">`;
@@ -879,12 +964,17 @@ export const deployVersionManager = {
       const isCurrentDeploy = commit.isCurrentDeploy || false;
       const rowClass = isCurrentDeploy ? ' class="current-deploy"' : '';
 
-      tableHTML += `<tr${rowClass}>`;
+      tableHTML += `<tr class="commit-row${isCurrentDeploy ? ' current-deploy' : ''}">`;
       tableHTML += `<td>
         <a href="${commit.url || '#'}" target="_blank" rel="noopener noreferrer" class="commit-link">${commit.shortSha || 'Unknown'}</a>
         ${isCurrentDeploy ? '<span class="deploy-indicator">🚀</span>' : ''}
       </td>`;
-      tableHTML += `<td class="commit-message" title="${this.escapeHtml(commit.message || '')}">${this.truncateMessage(commit.shortMessage || commit.message || 'No message')}</td>`;
+      tableHTML += `<td class="commit-message">
+        <div class="message-content">
+          <span class="expand-indicator">▶</span>
+          <span class="message-text">${this.truncateMessage(commit.shortMessage || commit.message || 'No message')}</span>
+        </div>
+      </td>`;
       tableHTML += `<td class="commit-author">${commit.author || 'Unknown'}</td>`;
       tableHTML += `<td class="commit-date">${formattedDate}</td>`;
       tableHTML += '</tr>';
@@ -961,6 +1051,9 @@ export const deployVersionManager = {
     // Set up infinite scroll
     this.setupInfiniteScroll(toast);
     
+    // Add click handlers to commit rows
+    this.setupCommitRowHandlers(toast);
+    
     // Add OK button
     const okButton = document.createElement('button');
     okButton.textContent = 'OK';
@@ -992,6 +1085,23 @@ export const deployVersionManager = {
       }
     };
     document.addEventListener('keydown', handleEscape);
+  },
+
+  // Setup click handlers for commit rows
+  setupCommitRowHandlers(toast) {
+    const rows = toast.querySelectorAll('.commit-row');
+    rows.forEach((row, index) => {
+      row.addEventListener('click', (e) => {
+        // Don't toggle if clicking on the commit link
+        if (e.target.closest('.commit-link')) return;
+        
+        // Find the corresponding commit data
+        const commit = this.allCommits[index];
+        if (commit) {
+          this.toggleCommitDetails(row, commit);
+        }
+      });
+    });
   },
 
   // Setup infinite scroll for the commit table

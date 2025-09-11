@@ -52,7 +52,7 @@ function updateChainSpecificLabels() {
 // Keep header theme menu UI in sync with current setting
 function updateThemeMenuUI(){
   const cur = getStoredTheme();
-  const txt = (cur === 'light') ? 'Light' : (cur === 'retro') ? 'Retro' : (cur === 'matrix') ? 'Matrix' : 'Dark';
+  const txt = (cur === 'light') ? 'Light' : 'Dark';
   const curEl = document.getElementById('themeMenuCurrent');
   if (curEl) curEl.textContent = txt;
   const items = document.querySelectorAll('#headerMenu .menu-item[data-theme]');
@@ -1104,25 +1104,8 @@ function initializeXenTotalTooltip() {
       
       // Apply theme-specific styling
       const isDark = document.body.classList.contains('dark-mode');
-      const isRetro = document.body.classList.contains('retro-mode');
-      const isMatrix = document.body.classList.contains('matrix-mode');
       
-      if (isMatrix) {
-        tooltip.style.background = 'rgba(0, 20, 0, 0.98)';
-        tooltip.style.border = '1px solid #00ff00';
-        tooltip.style.color = '#00ff00';
-        tooltip.querySelectorAll('td').forEach(td => {
-          if (td.style.color === '#9ca3af') td.style.color = '#00aa00';
-          if (td.style.color === '#e5e7eb') td.style.color = '#00ff00';
-          if (td.style.color === '#86efac') td.style.color = '#00ffff';
-        });
-      } else if (isRetro) {
-        tooltip.style.background = 'rgba(4, 20, 138, 0.98)';
-        tooltip.style.border = '1px solid #00ffff';
-        tooltip.style.color = '#c7fff7';
-        tooltip.style.fontFamily = '"VT323", monospace';
-        tooltip.style.fontSize = '14px';
-      } else if (!isDark) {
+      if (!isDark) {
         tooltip.style.background = 'rgba(255, 255, 255, 0.98)';
         tooltip.style.border = '1px solid #e5e7eb';
         tooltip.style.color = '#111827';
@@ -2183,35 +2166,9 @@ function updateVmuChart() {
   
   // Create stacked series with theme-dependent colors
   const isDark = document.body.classList.contains('dark-mode');
-  const isRetro = document.body.classList.contains('retro-mode');
-  const isMatrix = document.body.classList.contains('matrix-mode');
   
   let typeColors;
-  if (isMatrix) {
-    typeColors = {
-      'Cointool': '#00ff00',    // bright green
-      'XENFT': '#ff0080',       // magenta
-      'Stake XENFT': '#ffff00', // yellow  
-      'Stake': '#00ffff',       // cyan
-      // Mobile abbreviations
-      'CT': '#00ff00',          // bright green (same as Cointool)
-      'XNFT': '#ff0080',        // magenta (same as XENFT)
-      'S.XNFT': '#ffff00',      // yellow (same as Stake XENFT)
-      'Stk': '#00ffff'          // cyan (same as Stake)
-    };
-  } else if (isRetro) {
-    typeColors = {
-      'Cointool': '#4e5bd4',    // retro blue
-      'XENFT': '#ff6b9d',       // retro pink
-      'Stake XENFT': '#ffd93d', // retro yellow
-      'Stake': '#6bcf7f',       // retro green
-      // Mobile abbreviations
-      'CT': '#4e5bd4',          // retro blue (same as Cointool)
-      'XNFT': '#ff6b9d',        // retro pink (same as XENFT)
-      'S.XNFT': '#ffd93d',      // retro yellow (same as Stake XENFT)
-      'Stk': '#6bcf7f'          // retro green (same as Stake)
-    };
-  } else if (isDark) {
+  if (isDark) {
     typeColors = {
       'Cointool': '#60a5fa',    // soft blue
       'XENFT': '#f472b6',       // pastel pink
@@ -2344,60 +2301,56 @@ function updateVmuChart() {
     }
   };
 
-  // Apply light/dark/retro theming to chart, including metric-sensitive colors
+  // Apply light/dark theming to chart, including metric-sensitive colors
   try {
     const isDark = document.body.classList.contains('dark-mode');
-    const isRetro = document.body.classList.contains('retro-mode');
-    const isMatrix = document.body.classList.contains('matrix-mode');
-    const textColor = isDark ? '#e5e7eb' : isRetro ? '#c7fff7' : isMatrix ? '#00ff00' : '#111827';
-    const axisColor = isDark ? '#9aa4b2' : isRetro ? '#bfe9ff' : isMatrix ? '#00aa00' : '#6b7280';
-    const splitColor = isDark ? '#2a3341' : isRetro ? 'rgba(255,255,255,0.18)' : isMatrix ? '#003300' : '#e5e7eb';
+    const textColor = isDark ? '#e5e7eb' : '#111827';
+    const axisColor = isDark ? '#9aa4b2' : '#6b7280';
+    const splitColor = isDark ? '#2a3341' : '#e5e7eb';
     // Subtle dark gradient background
-    if ((isDark || isRetro || isMatrix) && window.echarts && window.echarts.graphic) {
-      const topC = isRetro ? '#061aa9' : isMatrix ? '#001100' : '#0b1220';
-      const botC = isRetro ? '#04148a' : isMatrix ? '#000000' : '#0a0f1a';
+    if (isDark && window.echarts && window.echarts.graphic) {
+      const topC = '#0b1220';
+      const botC = '#0a0f1a';
       opts.backgroundColor = new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [
         { offset: 0, color: topC },
         { offset: 1, color: botC },
       ]);
     } else {
-      opts.backgroundColor = isDark ? '#111827' : isMatrix ? '#000000' : '#ffffff';
+      opts.backgroundColor = isDark ? '#111827' : '#ffffff';
     }
-    const retroFont = 'VT323, monospace';
-    const matrixFont = 'Courier New, Monaco, Lucida Console, monospace';
     opts.textStyle = Object.assign({}, opts.textStyle || {}, {
       color: textColor,
-      fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : (opts.textStyle && opts.textStyle.fontFamily) || undefined,
+      fontFamily: (opts.textStyle && opts.textStyle.fontFamily) || undefined,
     });
     opts.title.textStyle = Object.assign({}, opts.title.textStyle || {}, {
       color: textColor,
-      fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : (opts.title.textStyle && opts.title.textStyle.fontFamily) || undefined,
+      fontFamily: (opts.title.textStyle && opts.title.textStyle.fontFamily) || undefined,
     });
     opts.legend = Object.assign({}, opts.legend || {}, {
       textStyle: {
         color: textColor,
-        fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : undefined
+        fontFamily: undefined
       }
     });
     opts.xAxis = Object.assign({}, opts.xAxis, {
-      axisLabel: Object.assign({}, opts.xAxis.axisLabel || {}, { color: axisColor, fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : undefined }),
+      axisLabel: Object.assign({}, opts.xAxis.axisLabel || {}, { color: axisColor, fontFamily: undefined }),
       axisLine: { lineStyle: { color: axisColor } },
       splitLine: { show: true, lineStyle: { color: splitColor } }
     });
     opts.yAxis = Object.assign({}, opts.yAxis, {
-      axisLabel: Object.assign({}, (opts.yAxis && opts.yAxis.axisLabel) || {}, { color: axisColor, fontFamily: isRetro ? retroFont : isMatrix ? matrixFont : undefined }),
+      axisLabel: Object.assign({}, (opts.yAxis && opts.yAxis.axisLabel) || {}, { color: axisColor, fontFamily: undefined }),
       axisLine: { lineStyle: { color: axisColor } },
       splitLine: { show: true, lineStyle: { color: splitColor } }
     });
 
-    // Tooltip styling for themed modes
-    if ((isDark || isRetro || isMatrix) && opts.tooltip) {
-      opts.tooltip.backgroundColor = isRetro ? 'rgba(6, 19, 138, 0.96)' : isMatrix ? 'rgba(0, 17, 0, 0.96)' : 'rgba(47, 54, 66, 0.96)';
-      opts.tooltip.borderColor = isRetro ? '#4e5bd4' : isMatrix ? '#00ff00' : '#4b5563';
+    // Tooltip styling for dark mode
+    if (isDark && opts.tooltip) {
+      opts.tooltip.backgroundColor = 'rgba(47, 54, 66, 0.96)';
+      opts.tooltip.borderColor = '#4b5563';
       opts.tooltip.textStyle = { color: textColor };
       opts.tooltip.borderWidth = 1;
-      opts.tooltip.borderRadius = isMatrix ? 0 : 10;
-      opts.tooltip.extraCssText = isMatrix ? 'box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); padding:8px 10px;' : 'box-shadow: 0 8px 20px rgba(0,0,0,.45); padding:8px 10px;';
+      opts.tooltip.borderRadius = 10;
+      opts.tooltip.extraCssText = 'box-shadow: 0 8px 20px rgba(0,0,0,.45); padding:8px 10px;';
       opts.axisPointer = {
         lineStyle: { color: axisColor, type: 'dashed', width: 1 }
       };
@@ -2405,18 +2358,14 @@ function updateVmuChart() {
 
     // Series colors by theme and metric
     const metric = (_vmuChartMetric === 'usd') ? 'usd' : 'vmus';
-    if (isDark || isRetro || isMatrix) {
+    if (isDark) {
       const series = { type: currentSeriesType, data: values };
       if (currentSeriesType === 'bar') {
         // VMUs keep existing; USD uses distinct, theme-appropriate color
-        const barColor = metric === 'vmus'
-          ? (isRetro ? '#c2a1ff' : isMatrix ? '#00ff00' : '#e8cd0f')
-          : (isRetro ? '#00ff9c' : isMatrix ? '#00ffff' : '#86efac');
+        const barColor = metric === 'vmus' ? '#e8cd0f' : '#86efac';
         series.itemStyle = { color: barColor };
       } else {
-        const lineColor = metric === 'vmus'
-          ? (isRetro ? '#00ffff' : isMatrix ? '#00ff00' : '#e8cd0f')
-          : (isRetro ? '#ffef5a' : isMatrix ? '#00ffff' : '#86efac');
+        const lineColor = metric === 'vmus' ? '#e8cd0f' : '#86efac';
         series.itemStyle = { color: lineColor };
         series.lineStyle = { color: lineColor, width: 2 };
         series.symbol = 'none';

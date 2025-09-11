@@ -121,12 +121,13 @@ export const tooltipManager = {
           padding: 8px 12px;
           border-radius: 4px;
           font-size: 14px;
-          z-index: 10000;
+          z-index: 2147483647;
           max-width: 250px;
           word-wrap: break-word;
           display: none;
           pointer-events: none;
         `;
+        // Append to body as the last element to ensure it's on top
         document.body.appendChild(tooltip);
       }
       
@@ -226,12 +227,13 @@ export const tooltipManager = {
           padding: 8px 12px;
           border-radius: 4px;
           font-size: 12px;
-          z-index: 10000;
+          z-index: 2147483647;
           max-width: 300px;
           word-wrap: break-word;
           display: none;
           pointer-events: none;
         `;
+        // Append to body as the last element to ensure it's on top
         document.body.appendChild(tooltip);
       }
       
