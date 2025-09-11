@@ -2468,6 +2468,708 @@ body {
   white-space: pre-wrap; /* Respects newlines in the tooltip text */
 }
 
+/* Commit History Toast Styles */
+.commit-toast {
+  min-width: 600px;
+  max-width: 800px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 20px;
+  background: rgba(40, 44, 52, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+
+.commit-history-toast {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.commit-history-toast .toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 12px;
+  gap: 16px;
+}
+
+.commit-history-toast .header-left {
+  flex: 1;
+}
+
+.commit-history-toast .toast-header h3 {
+  margin: 0 0 8px 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.deployment-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.deployment-status.status-current {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.deployment-status.status-behind {
+  background: rgba(251, 146, 60, 0.2);
+  border-color: rgba(251, 146, 60, 0.3);
+  color: #fdba74;
+}
+
+.deployment-status.status-ahead {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.deployment-status.status-unknown {
+  background: rgba(156, 163, 175, 0.2);
+  border-color: rgba(156, 163, 175, 0.3);
+  color: #d1d5db;
+}
+
+.status-icon {
+  font-size: 14px;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+.commit-history-toast .repo-link {
+  flex-shrink: 0;
+}
+
+.commit-history-toast .repo-link a {
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  opacity: 0.9;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.commit-history-toast .repo-link a:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.commit-table-container {
+  overflow-y: auto;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-height: 50vh;
+  position: relative;
+}
+
+/* Base commit table styles */
+.commit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.commit-table th {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.commit-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  text-align: left;
+  vertical-align: top;
+}
+
+.commit-table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.commit-table tr:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.commit-link {
+  color: #4da3ff !important;
+  text-decoration: none;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(77, 163, 255, 0.1);
+}
+
+.commit-link:hover {
+  background: rgba(77, 163, 255, 0.2);
+  text-decoration: underline;
+}
+
+.commit-message {
+  max-width: 250px;
+  word-wrap: break-word;
+  position: relative;
+}
+
+.commit-message:hover {
+  overflow: visible;
+}
+
+/* Enhanced tooltips for commit messages - Base styles */
+.commit-message[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(40, 44, 52, 0.98);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  max-width: 400px;
+  width: max-content;
+  z-index: 1000;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  margin-bottom: 8px;
+  text-align: left;
+  backdrop-filter: blur(10px);
+}
+
+.commit-message[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% - 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(40, 44, 52, 0.98);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* Light theme tooltip styling */
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-message[title]:hover::after {
+  background: rgba(255, 255, 255, 0.98);
+  color: #333;
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-message[title]:hover::before {
+  border-top-color: rgba(255, 255, 255, 0.98);
+}
+
+/* Dark theme tooltip styling */
+body.dark-mode .commit-message[title]:hover::after {
+  background: rgba(20, 20, 30, 0.98);
+  color: #e0e0e0;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+body.dark-mode .commit-message[title]:hover::before {
+  border-top-color: rgba(20, 20, 30, 0.98);
+}
+
+/* Retro theme tooltip styling */
+body.retro-mode .commit-message[title]:hover::after {
+  background: linear-gradient(135deg, #06138a 0%, #0a1a9e 100%);
+  border: 2px solid #2749dc;
+  color: #c7fff7;
+  font-family: 'VT323', monospace;
+  text-shadow: 0 0 3px #c7fff7;
+  box-shadow: 0 0 15px rgba(39, 73, 220, 0.4), inset 0 1px 0 rgba(199, 255, 247, 0.2);
+  backdrop-filter: none;
+}
+
+body.retro-mode .commit-message[title]:hover::before {
+  border-top-color: #06138a;
+  border-top-width: 8px;
+  border-left-width: 8px;
+  border-right-width: 8px;
+}
+
+/* Matrix theme tooltip styling */
+body.matrix-mode .commit-message[title]:hover::after {
+  background: linear-gradient(135deg, #001100 0%, #002200 100%);
+  border: 2px solid #00aa00;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 3px #00ff00;
+  box-shadow: 0 0 15px rgba(0, 170, 0, 0.4), inset 0 1px 0 rgba(0, 255, 0, 0.2);
+  backdrop-filter: none;
+}
+
+body.matrix-mode .commit-message[title]:hover::before {
+  border-top-color: #001100;
+  border-top-width: 8px;
+  border-left-width: 8px;
+  border-right-width: 8px;
+}
+
+.commit-author {
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.commit-date {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* Current deployment row styling */
+.commit-table tr.current-deploy {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  position: relative;
+}
+
+.commit-table tr.current-deploy:hover {
+  background: rgba(34, 197, 94, 0.25) !important;
+}
+
+.deploy-indicator {
+  margin-left: 8px;
+  font-size: 12px;
+  animation: deployPulse 2s infinite;
+}
+
+@keyframes deployPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Loading indicator */
+.loading-indicator {
+  text-align: center;
+  padding: 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.1);
+  animation: loadingPulse 1.5s infinite;
+}
+
+@keyframes loadingPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* Smooth scrolling for commit table */
+.commit-table-container {
+  scroll-behavior: smooth;
+}
+
+.commit-table-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.commit-table-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.commit-table-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.commit-table-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.toast-ok-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 16px;
+  align-self: center;
+  transition: all 0.2s ease;
+}
+
+.toast-ok-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Light theme overrides */
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-toast {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #333;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table th {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table td {
+  color: #333;
+  border-bottom-color: rgba(0, 0, 0, 0.05);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-table-container {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-history-toast .toast-header h3 {
+  color: #333;
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .deployment-status {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #333;
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-history-toast .repo-link a {
+  color: #333;
+  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .commit-history-toast .repo-link a:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode):not(.retro-mode):not(.matrix-mode) .loading-indicator {
+  background: rgba(0, 0, 0, 0.05);
+  color: #666;
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme overrides */
+body.dark-mode .commit-toast {
+  background: rgba(20, 20, 30, 0.98);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #e0e0e0;
+}
+
+body.dark-mode .commit-table {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+body.dark-mode .commit-table th {
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-mode .commit-table td {
+  border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+
+body.dark-mode .commit-table-container {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-mode .deployment-status {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Retro theme overrides */
+body.retro-mode .commit-toast {
+  background: linear-gradient(135deg, #06138a 0%, #0a1a9e 100%);
+  border: 2px solid #2749dc;
+  color: #c7fff7;
+  font-family: 'VT323', monospace;
+  box-shadow: 0 0 20px rgba(39, 73, 220, 0.3), inset 0 1px 0 rgba(199, 255, 247, 0.2);
+  backdrop-filter: none;
+}
+
+body.retro-mode .commit-table {
+  background: rgba(6, 19, 138, 0.3);
+  border: 1px solid #2749dc;
+}
+
+body.retro-mode .commit-table th {
+  background: #2749dc;
+  color: #c7fff7;
+  border-bottom-color: #c7fff7;
+}
+
+body.retro-mode .commit-table td {
+  color: #c7fff7;
+  border-bottom-color: rgba(199, 255, 247, 0.2);
+}
+
+body.retro-mode .commit-table tr.current-deploy {
+  background: rgba(0, 255, 255, 0.2) !important;
+  border-color: #00ffff;
+}
+
+body.retro-mode .commit-table tr.current-deploy:hover {
+  background: rgba(0, 255, 255, 0.3) !important;
+}
+
+body.retro-mode .deployment-status.status-current {
+  background: rgba(0, 255, 255, 0.3);
+  border-color: #00ffff;
+  color: #00ffff;
+}
+
+body.retro-mode .deployment-status.status-behind {
+  background: rgba(255, 204, 2, 0.3);
+  border-color: #ffcc02;
+  color: #ffcc02;
+}
+
+body.retro-mode .deployment-status.status-ahead {
+  background: rgba(39, 73, 220, 0.3);
+  border-color: #2749dc;
+  color: #c7fff7;
+}
+
+body.retro-mode .commit-link {
+  color: #00ffff !important;
+  background: rgba(0, 255, 255, 0.2);
+}
+
+body.retro-mode .commit-link:hover {
+  background: rgba(0, 255, 255, 0.3);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+}
+
+body.retro-mode .toast-ok-button {
+  background: #2749dc;
+  border-color: #c7fff7;
+  color: #c7fff7;
+}
+
+body.retro-mode .toast-ok-button:hover {
+  background: #00ffff;
+  color: #06138a;
+}
+
+body.retro-mode .loading-indicator {
+  background: rgba(39, 73, 220, 0.2);
+  color: #c7fff7;
+  border-top-color: rgba(199, 255, 247, 0.3);
+}
+
+body.retro-mode .commit-table-container {
+  border-color: #2749dc;
+  box-shadow: inset 0 0 10px rgba(39, 73, 220, 0.3);
+}
+
+body.retro-mode .commit-history-toast .toast-header h3 {
+  color: #c7fff7;
+  text-shadow: 0 0 10px rgba(199, 255, 247, 0.5);
+}
+
+body.retro-mode .commit-history-toast .repo-link a {
+  color: #c7fff7;
+  border-color: #2749dc;
+  background: rgba(39, 73, 220, 0.3);
+}
+
+body.retro-mode .commit-history-toast .repo-link a:hover {
+  background: rgba(0, 255, 255, 0.2);
+  color: #00ffff;
+  border-color: #00ffff;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+/* Matrix theme overrides */
+body.matrix-mode .commit-toast {
+  background: linear-gradient(135deg, #001100 0%, #002200 100%);
+  border: 2px solid #00aa00;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 2px #00ff00;
+  box-shadow: 0 0 20px rgba(0, 170, 0, 0.3), inset 0 1px 0 rgba(0, 255, 0, 0.2);
+  backdrop-filter: none;
+}
+
+body.matrix-mode .commit-table {
+  background: rgba(0, 17, 0, 0.8);
+  border: 1px solid #00aa00;
+}
+
+body.matrix-mode .commit-table th {
+  background: #00aa00;
+  color: #001100;
+  border-bottom-color: #00ff00;
+  text-shadow: none;
+}
+
+body.matrix-mode .commit-table td {
+  color: #00ff00;
+  border-bottom-color: rgba(0, 170, 0, 0.3);
+  text-shadow: 0 0 2px #00ff00;
+}
+
+body.matrix-mode .commit-table tr:hover {
+  background: rgba(0, 255, 0, 0.1);
+  box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+}
+
+body.matrix-mode .commit-link {
+  color: #00ffff !important;
+  background: rgba(0, 255, 255, 0.2);
+  text-shadow: 0 0 3px #00ffff;
+}
+
+body.matrix-mode .commit-link:hover {
+  background: rgba(0, 255, 255, 0.3);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+}
+
+body.matrix-mode .toast-ok-button {
+  background: rgba(0, 170, 0, 0.3);
+  border-color: #00ff00;
+  color: #00ff00;
+  text-shadow: 0 0 2px #00ff00;
+}
+
+body.matrix-mode .toast-ok-button:hover {
+  background: rgba(0, 255, 0, 0.3);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+body.matrix-mode .commit-table tr.current-deploy {
+  background: rgba(0, 255, 0, 0.2) !important;
+  border-color: #00ff00;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+body.matrix-mode .commit-table tr.current-deploy:hover {
+  background: rgba(0, 255, 0, 0.3) !important;
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+}
+
+body.matrix-mode .deployment-status.status-current {
+  background: rgba(0, 255, 0, 0.3);
+  border-color: #00ff00;
+  color: #00ff00;
+  text-shadow: 0 0 3px #00ff00;
+}
+
+body.matrix-mode .deployment-status.status-behind {
+  background: rgba(255, 165, 0, 0.3);
+  border-color: #ffa500;
+  color: #ffa500;
+  text-shadow: 0 0 3px #ffa500;
+}
+
+body.matrix-mode .deployment-status.status-ahead {
+  background: rgba(0, 170, 0, 0.3);
+  border-color: #00aa00;
+  color: #00aa00;
+  text-shadow: 0 0 3px #00aa00;
+}
+
+body.matrix-mode .loading-indicator {
+  background: rgba(0, 170, 0, 0.2);
+  color: #00ff00;
+  border-top-color: rgba(0, 170, 0, 0.3);
+  text-shadow: 0 0 2px #00ff00;
+}
+
+body.matrix-mode .commit-table-container {
+  border-color: #00aa00;
+  box-shadow: inset 0 0 10px rgba(0, 170, 0, 0.3);
+}
+
+body.matrix-mode .commit-history-toast .toast-header h3 {
+  color: #00ff00;
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+body.matrix-mode .commit-history-toast .repo-link a {
+  color: #00ff00;
+  border-color: #00aa00;
+  background: rgba(0, 170, 0, 0.2);
+  text-shadow: 0 0 2px #00ff00;
+}
+
+body.matrix-mode .commit-history-toast .repo-link a:hover {
+  background: rgba(0, 255, 0, 0.3);
+  color: #00ff00;
+  border-color: #00ff00;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+/* Mobile responsiveness for commit toast */
+@media (max-width: 768px) {
+  .commit-toast {
+    min-width: 90vw;
+    max-width: 95vw;
+    max-height: 80vh;
+    font-size: 12px;
+  }
+  
+  .commit-table {
+    font-size: 11px;
+  }
+  
+  .commit-table th,
+  .commit-table td {
+    padding: 6px 8px;
+  }
+  
+  .commit-message {
+    max-width: 150px;
+  }
+  
+  .commit-history-toast .toast-header {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+  
+  .commit-history-toast .toast-header h3 {
+    font-size: 16px;
+  }
+}
+
 /* Refresh button styling */
 .refresh-btn {
   background: none;
