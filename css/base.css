@@ -2988,6 +2988,60 @@ body:not(.dark-mode) .commit-body {
   color: rgba(0, 0, 0, 0.7);
 }
 
+body:not(.dark-mode) .commit-link {
+  color: #1565c0 !important;
+  background: rgba(21, 101, 192, 0.08);
+}
+
+body:not(.dark-mode) .commit-link:hover {
+  background: rgba(21, 101, 192, 0.15);
+  color: #0d47a1 !important;
+}
+
+/* Light theme summary container improvements */
+body:not(.dark-mode) #summaryContainer {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+body:not(.dark-mode) #summaryContainer.option2 {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode) .summary-table thead {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom-color: rgba(0, 0, 0, 0.12);
+}
+
+body:not(.dark-mode) .summary-table th {
+  color: #495057;
+}
+
+body:not(.dark-mode) .summary-table tbody tr {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+body:not(.dark-mode) .summary-table tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+body:not(.dark-mode) .summary-table td {
+  color: #333;
+}
+
+body:not(.dark-mode) .type-cell,
+body:not(.dark-mode) .metric-primary {
+  color: #212529;
+}
+
+body:not(.dark-mode) .metric-secondary {
+  color: #6c757d;
+}
+
 /* Dark theme overrides */
 body.dark-mode .commit-toast {
   background: rgba(20, 20, 30, 0.98);
