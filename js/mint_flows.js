@@ -49,26 +49,74 @@ function updateStakeXenftTermPreview() {
   if (el) el.textContent = formatTermDate(termDays);
 }
 
-function updateStakeXenftBurnPreview() {
-  const burnEl = document.getElementById('stakeXenftBurn');
-  const hr = document.getElementById('stakeXenftBurnHuman');
-  if (!burnEl || !hr) return;
-  const val = burnEl.value || '0';
-  hr.textContent = formatShortNumber(val);
+// Stake XENFT helper functions
+window._stakeXenftBalanceWei = null;
+
+async function prefillStakeXenftAmountFromBalance(force = false) {
+  if (!window.connectedAccount) {
+    if (force) alert('Connect wallet first to get balance.');
+    return;
+  }
+  
+  try {
+    const balWei = await fetchXenBalanceWei();
+    if (!balWei) {
+      if (force) alert('Could not fetch XEN balance. Try again.');
+      return;
+    }
+    
+    window._stakeXenftBalanceWei = balWei;
+    const balStr = Web3.utils.fromWei(balWei, 'ether');
+    const rounded = Math.floor(Number(balStr));
+    
+    document.getElementById('stakeXenftAmount').value = String(rounded);
+    document.getElementById('stakeXenftPercentOptions').style.display = '';
+    
+    updateStakeXenftStartEnabled();
+    console.debug('[STAKE-XENFT] Balance filled:', rounded, 'XEN');
+  } catch (e) {
+    console.error('[STAKE-XENFT] Failed to fill balance:', e);
+    if (force) alert('Error fetching balance.');
+  }
 }
 
-function presetStakeXenftBurnForSelection() {
-  const kind = (document.getElementById('stakeXenftKind')?.value || 'regular');
-  const burnEl = document.getElementById('stakeXenftBurn');
-  if (!burnEl) return;
+function updateStakeXenftStartEnabled() {
+  const btn = document.getElementById('startStakeXenftBtn');
+  const amtStr = String(document.getElementById('stakeXenftAmount')?.value || '').trim();
+  const ok = amtStr !== '' && Number(amtStr) > 0;
+  if (btn) btn.disabled = !ok;
+}
 
-  if (kind === 'apex') {
-    const tier = (document.getElementById('stakeXenftApexTier')?.value || 'rare');
-    burnEl.value = String(APEX_PRESETS[tier] || APEX_PRESETS.rare);
-  } else {
-    burnEl.value = '0';
-  }
-  updateStakeXenftBurnPreview();
+function roundStakeXenftAmountFieldToWhole() {
+  const el = document.getElementById('stakeXenftAmount');
+  if (!el) return;
+  const v = String(el.value || '').trim();
+  if (!v) return;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return;
+  const rounded = Math.floor(n);
+  el.value = String(Math.max(0, rounded));
+}
+
+function attachStakeXenftPercentHandlers() {
+  const opts = document.getElementById('stakeXenftPercentOptions');
+  if (!opts) return;
+  
+  opts.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!(t && t.matches && t.matches('button[data-pct]'))) return;
+    const pct = parseInt(t.getAttribute('data-pct'), 10);
+    if (!window._stakeXenftBalanceWei || !Number.isFinite(pct)) return;
+    const BN = Web3.utils.toBN;
+    const ONE = BN('1000000000000000000');
+    const wei = BN(window._stakeXenftBalanceWei);
+    const val = wei.mul(BN(String(pct))).div(BN('100'));
+    const rounded = val.div(ONE).toString(); // round down to whole token
+    const amountEl = document.getElementById('stakeXenftAmount');
+    if (amountEl) amountEl.value = rounded;
+    console.debug('[STAKE-XENFT] Percent click set amount to', pct + '% =', rounded, 'XEN');
+    updateStakeXenftStartEnabled();
+  });
 }
 
 // formatShortNumber function now provided by js/utils/stringUtils.js module
@@ -324,52 +372,41 @@ async function startStakeXenftFlow(){
   }
   try { await requireWalletMainnet(); } catch { return; }
   
-  const vmu = Math.max(1, parseInt(document.getElementById('stakeXenftVmus')?.value || '1', 10));
+  const amtStr = String(document.getElementById('stakeXenftAmount')?.value || '').trim();
   const termDays = Math.max(1, Math.min(1000, parseInt(document.getElementById('stakeXenftTermDays')?.value || '1', 10)));
-  const kind = (document.getElementById('stakeXenftKind')?.value || 'regular');
-  const burnRaw = String(document.getElementById('stakeXenftBurn')?.value || '').trim();
+  
+  if (!amtStr || isNaN(Number(amtStr)) || Number(amtStr) <= 0) { 
+    alert('Enter XEN amount to stake.'); 
+    return; 
+  }
+  
+  let amountWei;
+  try {
+    amountWei = Web3.utils.toWei(amtStr, 'ether');
+  } catch(_) { 
+    alert('Invalid amount.'); 
+    return; 
+  }
   
   try {
     // Get chain-specific Stake XENFT contract address
     const stakeXenftAddress = window.chainManager?.getContractAddress('XENFT_STAKE') || '0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC';
     const stakeXenft = new web3Wallet.eth.Contract(window.xenftStakeAbi, stakeXenftAddress);
     
-    if (kind === 'apex' && burnRaw) {
-      // Apex/Limited minting with burn
-      const burnWei = parseBurnToWei(burnRaw);
-      if (Web3.utils.toBN(burnWei).lte(Web3.utils.toBN('0'))) { 
-        alert("Enter XEN amount to burn."); 
-        throw new Error('no-burn'); 
-      }
-      await ensureXenApprovalIfNeeded(stakeXenftAddress, burnWei);
-      let est = await stakeXenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).estimateGas({ from: connectedAccount });
-      est = Math.ceil(est * 1.2);
-      const r = await executeWithAutoRescan(
-        stakeXenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).send({ from: connectedAccount, gas: est }),
-        `Stake XENFT mint limited (${vmu} VMUs)`
-      );
-      const txUrl = window.chainManager?.getExplorerUrl('tx', r?.transactionHash) || `https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`;
-      console.log(`[MINT/STAKE-XENFT-APEX] ${txUrl}`);
-      // Use centralized auto-rescan
-      await window.autoRescanManager?.monitorTransaction(
-        Promise.resolve(r),
-        'Stake XENFT APEX mint'
-      ) || (() => {
-        if (typeof showToast === 'function') showToast(`Stake XENFT APEX mint submitted: ${r.transactionHash}`, 'success');
-        else alert(`Stake XENFT APEX mint submitted: ${r.transactionHash}`);
-      })();
-      return;
-    }
+    // Approve XEN transfer to Stake XENFT contract
+    await ensureXenApprovalIfNeeded(stakeXenftAddress, amountWei);
     
-    // Regular Stake XENFT
-    let est = await stakeXenft.methods.bulkClaimRank(vmu, termDays).estimateGas({ from: connectedAccount });
+    // Call createStake method
+    let est = await stakeXenft.methods.createStake(amountWei, termDays).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
     const r = await executeWithAutoRescan(
-      stakeXenft.methods.bulkClaimRank(vmu, termDays).send({ from: connectedAccount, gas: est }),
-      `Stake XENFT mint (${vmu} VMUs)`
+      stakeXenft.methods.createStake(amountWei, termDays).send({ from: connectedAccount, gas: est }),
+      `Stake XENFT mint (${amtStr} XEN for ${termDays} days)`
     );
+    
     const txUrl = window.chainManager?.getExplorerUrl('tx', r?.transactionHash) || `https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`;
     console.log(`[MINT/STAKE-XENFT] ${txUrl}`);
+    
     // Use centralized auto-rescan
     await window.autoRescanManager?.monitorTransaction(
       Promise.resolve(r),
@@ -568,18 +605,14 @@ async function startMintingFlow(){
   });
   
   document.getElementById('stakeXenftTermDays')?.addEventListener('input', updateStakeXenftTermPreview);
-  document.getElementById('stakeXenftBurn')?.addEventListener('input', updateStakeXenftBurnPreview);
+  document.getElementById('stakeXenftAmount')?.addEventListener('input', updateStakeXenftStartEnabled);
+  document.getElementById('stakeXenftAmount')?.addEventListener('blur', roundStakeXenftAmountFieldToWhole);
   
-  // Stake XENFT kind selector
-  document.getElementById('stakeXenftKind')?.addEventListener('change', () => {
-    const kind = document.getElementById('stakeXenftKind')?.value || 'regular';
-    const apexRow = document.getElementById('stakeXenftApexTierRow');
-    if (apexRow) apexRow.style.display = (kind === 'apex') ? '' : 'none';
-    if (kind === 'apex') presetStakeXenftBurnForSelection();
-  });
+  // Stake XENFT balance button
+  document.getElementById('btnStakeXenftGetBalance')?.addEventListener('click', () => prefillStakeXenftAmountFromBalance(true));
   
-  // Stake XENFT apex tier selector
-  document.getElementById('stakeXenftApexTier')?.addEventListener('change', presetStakeXenftBurnForSelection);
+  // Attach percent handlers for Stake XENFT
+  attachStakeXenftPercentHandlers();
 
 
 // NEW: toggle XENFT UI

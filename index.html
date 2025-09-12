@@ -389,8 +389,19 @@
     <!-- Stake XENFT controls (hidden by default; shown when Action=Stake XENFT) -->
     <div id="stakeXenftControls" class="mint-controls" style="display:none; margin-top:10px;">
       <div class="mint-field">
-        <label for="stakeXenftVmus">VMUs (Virtual Mining Units)</label>
-        <input type="number" id="stakeXenftVmus" placeholder="e.g. 10" min="1" max="5000" step="1" class="mint-input" value="1" />
+        <label for="stakeXenftAmount">Amount (XEN)</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="number" id="stakeXenftAmount" placeholder="e.g. 1000000" min="0" step="1" class="mint-input" />
+          <button id="btnStakeXenftGetBalance" type="button" class="btn-secondary">Get Balance</button>
+        </div>
+        <div id="stakeXenftPercentOptions" class="muted" style="margin-top:6px; display:none;">
+          Use:
+          <button type="button" class="linklike" data-pct="10">10%</button>
+          <button type="button" class="linklike" data-pct="25">25%</button>
+          <button type="button" class="linklike" data-pct="50">50%</button>
+          <button type="button" class="linklike" data-pct="75">75%</button>
+          <button type="button" class="linklike" data-pct="100">100%</button>
+        </div>
       </div>
 
       <div class="mint-field">
@@ -414,31 +425,6 @@
           <button id="btnStakeXenftSetMaxTerm" type="button" class="btn-secondary">Set Max Term</button>
         </div>
         <div id="stakeXenftDatePreview" class="muted"></div>
-      </div>
-
-      <div class="mint-field">
-        <label for="stakeXenftBurn">XEN to Burn (for Limited/Apex)</label>
-        <input type="text" id="stakeXenftBurn" placeholder="e.g. 0 for regular, or 500000000 for Apex" class="mint-input" value="0" />
-        <div id="stakeXenftBurnHuman" class="muted" style="margin-top:4px;"></div>
-      </div>
-
-      <div class="mint-field">
-        <label for="stakeXenftKind">Type</label>
-        <select id="stakeXenftKind" class="mint-input">
-          <option value="regular" selected>Regular</option>
-          <option value="apex">Apex (Limited)</option>
-        </select>
-      </div>
-
-      <div id="stakeXenftApexTierRow" class="mint-field" style="display:none;">
-        <label for="stakeXenftApexTier">Apex Tier</label>
-        <select id="stakeXenftApexTier" class="mint-input">
-          <option value="rare">Rare (500M XEN)</option>
-          <option value="epic">Epic (1B XEN)</option>
-          <option value="legendary">Legendary (2.5B XEN)</option>
-          <option value="exotic">Exotic (5B XEN)</option>
-          <option value="xunicorn">Xunicorn (10B XEN)</option>
-        </select>
       </div>
     </div>
 
@@ -864,7 +850,7 @@
 <!-- ABI files (order matters) -->
 <script src="./ABI/xen-ABI.js?v=20250908173121"></script>
 <script src="./ABI/xenft-ABI.js?v=20250908173121"></script>
-<script src="./ABI/xenft-stake-ABI.js?v=20250908173121"></script>
+<script src="./ABI/xenft-stake-correct-ABI.js?v=20250908173121"></script>
 <script src="./ABI/cointool-ABI.js?v=20250908173121"></script>
 
 <!-- Configuration modules -->
