@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Database Diagnostic Tool</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .database {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            border-radius: 5px;
+        }
+        .database h3 {
+            color: #4CAF50;
+            margin-top: 0;
+        }
+        .store {
+            margin-left: 20px;
+            padding: 10px;
+            background: #333;
+            border-left: 3px solid #4CAF50;
+            margin-top: 10px;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+        .info {
+            color: #64b5f6;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #output {
+            white-space: pre-wrap;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>IndexedDB Database Diagnostic Tool</h1>
+    
+    <div>
+        <button onclick="scanDatabases()">Scan All Databases</button>
+        <button onclick="findStakeData()">Find All Stake Data</button>
+        <button onclick="checkBackupFormat()">Check Last Backup Format</button>
+        <button onclick="validateDatabaseSchemas()">Validate DB Schemas</button>
+        <button onclick="exportDiagnosticReport()">Export Diagnostic Report</button>
+        <button onclick="clearOutput()">Clear Output</button>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 15px; border: 1px solid #444; background: #2a2a2a; border-radius: 5px;">
+        <h2 style="color: #4CAF50; margin-top: 0;">Import File Analyzer</h2>
+        <input type="file" id="fileInput" accept=".json" style="margin: 10px 0; padding: 5px;">
+        <button onclick="analyzeImportFile()">Analyze Import File</button>
+        <div style="margin-top: 10px;">
+            <label style="cursor: pointer;">
+                <input type="checkbox" id="showSampleData" checked> Show sample data (first record of each store)
+            </label>
+        </div>
+    </div>
+    
+    <div id="output"></div>
+
+    <script>
+        const output = document.getElementById('output');
+        
+        // Expected database schemas based on current migration scripts
+        const EXPECTED_SCHEMAS = {
+            // Ethereum databases
+            'ETH_DB_Cointool': {
+                version: 3,
+                stores: {
+                    'mints': { keyPath: 'ID', indices: [] },
+                    'scanState': { keyPath: 'address', indices: [] },
+                    'actionsCache': { keyPath: 'address', indices: [] }
+                }
+            },
+            'ETH_DB_Xenft': {
+                version: 1,
+                stores: {
+                    'xenfts': { keyPath: 'Xenft_id', indices: [] }
+                }
+            },
+            'ETH_DB_XenStake': {
+                version: 1,
+                stores: {
+                    'stakes': { keyPath: 'tokenId', indices: [] },
+                    'scanState': { keyPath: 'address', indices: [] }
+                }
+            },
+            'ETH_DB_XenftStake': {
+                version: 2,
+                stores: {
+                    'stakes': { keyPath: 'id', indices: ['tokenId'] },
+                    'scanState': { keyPath: 'address', indices: [] }
+                }
+            },
+            'ETH_DB_Xen': {
+                version: 1,
+                stores: {
+                    'mints': { keyPath: 'id', indices: ['byOwner'] },
+                    'scanState': { keyPath: 'address', indices: [] }
+                }
+            },
+            // Base databases
+            'BASE_DB_Cointool': {
+                version: 3,
+                stores: {
+                    'mints': { keyPath: 'ID', indices: [] },
+                    'scanState': { keyPath: 'address', indices: [] },
+                    'actionsCache': { keyPath: 'address', indices: [] }
+                }
+            },
+            'BASE_DB_Xenft': {
+                version: 1,
+                stores: {
+                    'mints': { keyPath: 'ID', indices: [] },
+                    'scanState': { keyPath: 'address', indices: [] }
+                }
+            },
+            'BASE_DB_XenStake': {
+                version: 1,
+                stores: {
+                    'stakes': { keyPath: 'tokenId', indices: [] },
+                    'scanState': { keyPath: 'address', indices: [] }
+                }
+            },
+            'BASE_DB_XenftStake': {
+                version: 1,
+                stores: {
+                    'stakes': { keyPath: 'tokenId', indices: [] },
+                    'scanState': { keyPath: 'address', indices: [] }
+                }
+            }
+        };
+        
+        // Legacy database names that should be migrated
+        const LEGACY_DB_NAMES = {
+            'DB_Cointool': 'ETH_DB_Cointool',
+            'DB_Xenft': 'ETH_DB_Xenft',
+            'DB-Xen-Stake': 'ETH_DB_XenStake',
+            'DB_XenStake': 'ETH_DB_XenStake',
+            'DB-Xenft-Stake': 'ETH_DB_XenftStake',
+            'DB_XenftStake': 'ETH_DB_XenftStake'
+        };
+        
+        function log(message, type = '') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = message;
+            output.appendChild(div);
+        }
+        
+        function clearOutput() {
+            output.innerHTML = '';
+        }
+        
+        async function scanDatabases() {
+            clearOutput();
+            log('=== Scanning All IndexedDB Databases ===\n');
+            
+            try {
+                const databases = await indexedDB.databases();
+                log(`Found ${databases.length} databases:\n`);
+                
+                for (const dbInfo of databases) {
+                    const dbName = dbInfo.name;
+                    const dbVersion = dbInfo.version;
+                    
+                    log(`\nDatabase: ${dbName} (version ${dbVersion})`, 'info');
+                    
+                    try {
+                        const db = await openDatabase(dbName);
+                        const stores = Array.from(db.objectStoreNames);
+                        
+                        log(`  Stores: ${stores.join(', ')}`);
+                        
+                        // Get record counts for each store
+                        for (const storeName of stores) {
+                            try {
+                                const tx = db.transaction([storeName], 'readonly');
+                                const store = tx.objectStore(storeName);
+                                const countReq = store.count();
+                                
+                                await new Promise((resolve, reject) => {
+                                    countReq.onsuccess = () => {
+                                        log(`    ${storeName}: ${countReq.result} records`);
+                                        resolve();
+                                    };
+                                    countReq.onerror = reject;
+                                });
+                            } catch (e) {
+                                log(`    ${storeName}: Error counting - ${e.message}`, 'error');
+                            }
+                        }
+                        
+                        db.close();
+                    } catch (e) {
+                        log(`  Error opening database: ${e.message}`, 'error');
+                    }
+                }
+            } catch (e) {
+                log(`Error listing databases: ${e.message}`, 'error');
+                log('Note: Your browser might not support indexedDB.databases()', 'error');
+            }
+        }
+        
+        async function findStakeData() {
+            clearOutput();
+            log('=== Searching for Stake Data ===\n');
+            
+            const stakePatterns = [
+                'Stake', 'stake', 'STAKE',
+                'Xen-Stake', 'XenStake', 'XEN_STAKE',
+                'Xenft-Stake', 'XenftStake', 'XENFT_STAKE'
+            ];
+            
+            try {
+                const databases = await indexedDB.databases();
+                let foundStakeData = false;
+                
+                for (const dbInfo of databases) {
+                    const dbName = dbInfo.name;
+                    
+                    // Check if database name contains stake
+                    const isStakeDb = stakePatterns.some(pattern => 
+                        dbName.toLowerCase().includes(pattern.toLowerCase())
+                    );
+                    
+                    if (isStakeDb) {
+                        log(`\nFound stake database: ${dbName}`, 'info');
+                        
+                        try {
+                            const db = await openDatabase(dbName);
+                            const stores = Array.from(db.objectStoreNames);
+                            
+                            for (const storeName of stores) {
+                                const tx = db.transaction([storeName], 'readonly');
+                                const store = tx.objectStore(storeName);
+                                const countReq = store.count();
+                                
+                                await new Promise((resolve) => {
+                                    countReq.onsuccess = () => {
+                                        const count = countReq.result;
+                                        log(`  ${storeName}: ${count} records`);
+                                        
+                                        if (count > 0) {
+                                            foundStakeData = true;
+                                            
+                                            // Get a sample record
+                                            const getAllReq = store.getAll(undefined, 1);
+                                            getAllReq.onsuccess = () => {
+                                                if (getAllReq.result && getAllReq.result[0]) {
+                                                    log(`    Sample: ${JSON.stringify(getAllReq.result[0], null, 2).substring(0, 200)}...`);
+                                                }
+                                            };
+                                        }
+                                        resolve();
+                                    };
+                                });
+                            }
+                            
+                            db.close();
+                        } catch (e) {
+                            log(`  Error: ${e.message}`, 'error');
+                        }
+                    }
+                }
+                
+                if (!foundStakeData) {
+                    log('\nNo stake data found in any database!', 'error');
+                    log('This explains why stake data is missing after import.', 'error');
+                }
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+        }
+        
+        async function checkBackupFormat() {
+            clearOutput();
+            log('=== Checking Last Backup Format ===\n');
+            
+            // Check localStorage for backup-related data
+            log('LocalStorage keys related to backup:\n');
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.toLowerCase().includes('backup') || 
+                    key.toLowerCase().includes('import') ||
+                    key.toLowerCase().includes('export')) {
+                    const value = localStorage.getItem(key);
+                    log(`  ${key}: ${value.substring(0, 100)}${value.length > 100 ? '...' : ''}`);
+                }
+            }
+            
+            // Check for migration flags
+            log('\nMigration flags:\n');
+            const migrationKeys = [
+                'dbMigrationCompleted',
+                'ETH_dbMigrationCompleted',
+                'BASE_dbMigrationCompleted',
+                'localStorageMigrated',
+                'ETH_localStorageMigrated',
+                'BASE_localStorageMigrated'
+            ];
+            
+            for (const key of migrationKeys) {
+                const value = localStorage.getItem(key);
+                log(`  ${key}: ${value || 'not set'}`);
+            }
+        }
+        
+        function openDatabase(name) {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(name);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        async function analyzeImportFile() {
+            const fileInput = document.getElementById('fileInput');
+            const showSampleData = document.getElementById('showSampleData').checked;
+            
+            if (!fileInput.files.length) {
+                alert('Please select a JSON file to analyze');
+                return;
+            }
+            
+            clearOutput();
+            log('=== Analyzing Import File ===\n');
+            
+            const file = fileInput.files[0];
+            log(`File: ${file.name}`);
+            log(`Size: ${(file.size / 1024 / 1024).toFixed(2)} MB\n`);
+            
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                
+                // Check if it's the new format (with metadata)
+                if (data.metadata && data.databases) {
+                    log('Format: New backup format (with metadata)\n', 'info');
+                    log('Metadata:', 'info');
+                    log(`  Version: ${data.metadata.version}`);
+                    log(`  Date: ${data.metadata.exportDate}`);
+                    log(`  Chain: ${data.metadata.chain || 'not specified'}`);
+                    log(`  Database count: ${data.metadata.databaseCount}\n`);
+                    
+                    log('Databases:\n');
+                    for (const [dbName, dbData] of Object.entries(data.databases)) {
+                        log(`\n  ${dbName}:`, 'info');
+                        
+                        if (dbData.stores) {
+                            for (const [storeName, storeData] of Object.entries(dbData.stores)) {
+                                const recordCount = Array.isArray(storeData) ? storeData.length : 0;
+                                log(`    ${storeName}: ${recordCount} records`);
+                                
+                                // Check for stake-related stores
+                                if (storeName.toLowerCase().includes('stake')) {
+                                    log(`      ^ Found stake store!`, 'info');
+                                }
+                                
+                                // Show sample data if requested
+                                if (showSampleData && recordCount > 0 && Array.isArray(storeData)) {
+                                    const sample = JSON.stringify(storeData[0], null, 2);
+                                    log(`      Sample: ${sample.substring(0, 300)}${sample.length > 300 ? '...' : ''}`);
+                                }
+                            }
+                        }
+                    }
+                } 
+                // Check if it's the old format (direct database structure)
+                else if (typeof data === 'object') {
+                    log('Format: Legacy backup format (direct database structure)\n', 'info');
+                    
+                    // Count total databases
+                    const dbNames = Object.keys(data);
+                    log(`Total databases: ${dbNames.length}\n`);
+                    
+                    for (const dbName of dbNames) {
+                        log(`\n  ${dbName}:`, 'info');
+                        
+                        const dbData = data[dbName];
+                        if (dbData && typeof dbData === 'object') {
+                            // Check if it has stores property
+                            const stores = dbData.stores || dbData;
+                            
+                            for (const [storeName, storeData] of Object.entries(stores)) {
+                                if (storeName === 'stores') continue; // Skip if nested stores property
+                                
+                                const recordCount = Array.isArray(storeData) ? storeData.length : 
+                                                  (typeof storeData === 'object' ? Object.keys(storeData).length : 0);
+                                log(`    ${storeName}: ${recordCount} records`);
+                                
+                                // Check for stake-related stores
+                                if (storeName.toLowerCase().includes('stake')) {
+                                    log(`      ^ Found stake store!`, 'info');
+                                }
+                                
+                                // Show sample data if requested
+                                if (showSampleData && recordCount > 0) {
+                                    let sample = '';
+                                    if (Array.isArray(storeData)) {
+                                        sample = JSON.stringify(storeData[0], null, 2);
+                                    } else if (typeof storeData === 'object') {
+                                        const firstKey = Object.keys(storeData)[0];
+                                        sample = JSON.stringify(storeData[firstKey], null, 2);
+                                    }
+                                    if (sample) {
+                                        log(`      Sample: ${sample.substring(0, 300)}${sample.length > 300 ? '...' : ''}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    log('Unknown format!', 'error');
+                    log('File structure:', 'error');
+                    log(JSON.stringify(data, null, 2).substring(0, 500));
+                }
+                
+                // Check for stake data
+                log('\n=== Stake Data Analysis ===\n');
+                const stakeStores = findStakeStoresInData(data);
+                if (stakeStores.length > 0) {
+                    log(`Found ${stakeStores.length} stake-related stores:`, 'info');
+                    stakeStores.forEach(path => log(`  ${path}`));
+                } else {
+                    log('No stake data found in this backup file!', 'error');
+                    log('This file will not restore stake data when imported.', 'error');
+                }
+                
+            } catch (e) {
+                log(`Error reading file: ${e.message}`, 'error');
+                console.error(e);
+            }
+        }
+        
+        function findStakeStoresInData(data, path = '') {
+            const stakeStores = [];
+            
+            if (!data || typeof data !== 'object') return stakeStores;
+            
+            for (const [key, value] of Object.entries(data)) {
+                const currentPath = path ? `${path}.${key}` : key;
+                
+                // Check if this key contains "stake"
+                if (key.toLowerCase().includes('stake')) {
+                    if (Array.isArray(value) && value.length > 0) {
+                        stakeStores.push(`${currentPath} (${value.length} records)`);
+                    } else if (typeof value === 'object' && Object.keys(value).length > 0) {
+                        // Recurse into nested objects
+                        stakeStores.push(...findStakeStoresInData(value, currentPath));
+                    }
+                } else if (typeof value === 'object' && !Array.isArray(value)) {
+                    // Recurse into nested objects even if key doesn't contain "stake"
+                    stakeStores.push(...findStakeStoresInData(value, currentPath));
+                }
+            }
+            
+            return stakeStores;
+        }
+        
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            log('Database Diagnostic Tool Ready\n');
+            log('Click "Scan All Databases" to begin analysis\n');
+        });
+    </script>
+</body>
+</html>

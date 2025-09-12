@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summary Layout Options Demo</title>
+    <link rel="stylesheet" href="css/summary-option1.css">
+    <link rel="stylesheet" href="css/summary-option2.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .demo-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .demo-section {
+            margin-bottom: 50px;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        .demo-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .demo-description {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .theme-switcher {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .theme-btn {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .theme-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        /* Dark theme */
+        body.dark-theme {
+            background: #1a1e23;
+            color: #f8f9fa;
+        }
+        body.dark-theme .demo-section {
+            background: #2d3238;
+        }
+        body.dark-theme .demo-title {
+            color: #f8f9fa;
+        }
+        body.dark-theme .demo-description {
+            color: #adb5bd;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <h1>Summary Layout Options</h1>
+            <p>Choose your preferred layout for the Details table</p>
+            
+            <div class="theme-switcher">
+                <button class="theme-btn active" onclick="switchTheme('light')">Light</button>
+                <button class="theme-btn" onclick="switchTheme('dark')">Dark</button>
+            </div>
+        </div>
+
+        <!-- Option 1: Card-Based Layout -->
+        <div class="demo-section">
+            <h2 class="demo-title">Option 1: Card-Based Layout</h2>
+            <p class="demo-description">
+                Modern card-based design with color-coded sections, visual indicators, and clean spacing. 
+                Great for easy scanning of different data types.
+            </p>
+            
+            <div id="summaryContainer1" class="option1">
+                <!-- Sample Cointool Card -->
+                <div class="summary-card cointool">
+                    <div class="summary-card-header">🛠️ Cointool Mints</div>
+                    <div class="summary-card-content">
+                        <div class="metric total">
+                            <div class="metric-label">Total Mints</div>
+                            <div class="metric-value">1,247</div>
+                        </div>
+                        <div class="metric total">
+                            <div class="metric-label">Total VMUs</div>
+                            <div class="metric-value">2,845,923</div>
+                        </div>
+                        <div class="metric total">
+                            <div class="metric-label">Remints</div>
+                            <div class="metric-value">156,782</div>
+                        </div>
+                        <div class="metric maturing">
+                            <div class="metric-label">Maturing</div>
+                            <div class="metric-value">1,923,445</div>
+                            <div class="metric-sublabel">VMUs</div>
+                        </div>
+                        <div class="metric claimable">
+                            <div class="metric-label">Claimable</div>
+                            <div class="metric-value">922,478</div>
+                            <div class="metric-sublabel">VMUs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sample XENFT Card -->
+                <div class="summary-card xenft">
+                    <div class="summary-card-header">💎 XENFTs</div>
+                    <div class="summary-card-content">
+                        <div class="metric total">
+                            <div class="metric-label">Total XENFTs</div>
+                            <div class="metric-value">42</div>
+                        </div>
+                        <div class="metric total">
+                            <div class="metric-label">Total VMUs</div>
+                            <div class="metric-value">89,234</div>
+                            <div class="vmu-breakdown">
+                                <span class="vmu-type apex">Apex: 15</span>
+                                <span class="vmu-type collector">Collector: 22</span>
+                                <span class="vmu-type limited">Limited: 5</span>
+                            </div>
+                        </div>
+                        <div class="metric maturing">
+                            <div class="metric-label">Maturing</div>
+                            <div class="metric-value">67,891</div>
+                            <div class="metric-sublabel">VMUs</div>
+                        </div>
+                        <div class="metric claimable">
+                            <div class="metric-label">Claimable</div>
+                            <div class="metric-value">8</div>
+                            <div class="metric-sublabel">Count</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sample Stakes Card -->
+                <div class="summary-card stake">
+                    <div class="summary-card-header">🔒 XEN Stakes</div>
+                    <div class="summary-card-content">
+                        <div class="metric total">
+                            <div class="metric-label">Total Stakes</div>
+                            <div class="metric-value">18</div>
+                        </div>
+                        <div class="metric maturing">
+                            <div class="metric-label">Maturing</div>
+                            <div class="metric-value">12</div>
+                            <div class="metric-sublabel">Stakes</div>
+                        </div>
+                        <div class="metric claimable">
+                            <div class="metric-label">Claimable</div>
+                            <div class="metric-value">6</div>
+                            <div class="metric-sublabel">Stakes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Option 2: Professional Table -->
+        <div class="demo-section">
+            <h2 class="demo-title">Option 2: Professional Table</h2>
+            <p class="demo-description">
+                Clean, professional table layout with alternating rows, progress indicators, and clear data organization. 
+                Perfect for detailed analysis and comparison.
+            </p>
+            
+            <div id="summaryContainer2" class="option2">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Total Count</th>
+                            <th>VMUs / Details</th>
+                            <th>Maturing</th>
+                            <th>Claimable</th>
+                            <th>Est. XEN</th>
+                            <th>Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="cointool">
+                            <td>
+                                <div class="type-cell">
+                                    <div class="type-icon cointool">CT</div>
+                                    <span>Cointool</span>
+                                </div>
+                            </td>
+                            <td class="metric-cell total">
+                                <div class="metric-primary">1,247</div>
+                            </td>
+                            <td class="metric-cell total">
+                                <div class="metric-primary">2,845,923</div>
+                                <div style="font-size: 10px; color: #6c757d; margin-top: 2px;">
+                                    R: 156,782
+                                </div>
+                            </td>
+                            <td class="metric-cell maturing">
+                                <div class="metric-primary">1,923,445</div>
+                            </td>
+                            <td class="metric-cell claimable">
+                                <div class="metric-primary">922,478</div>
+                            </td>
+                            <td class="xen-reward">
+                                <div class="xen-amount">15,234.567B</div>
+                                <div class="xen-usd">$1.2K</div>
+                            </td>
+                            <td>
+                                <div class="progress-indicator">
+                                    <div class="progress-fill maturing" style="width: 68%"></div>
+                                </div>
+                                <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
+                                    68% maturing
+                                </div>
+                            </td>
+                        </tr>
+                        <tr class="xenft">
+                            <td>
+                                <div class="type-cell">
+                                    <div class="type-icon xenft">XF</div>
+                                    <span>XENFTs</span>
+                                </div>
+                            </td>
+                            <td class="metric-cell total">
+                                <div class="metric-primary">42</div>
+                            </td>
+                            <td class="metric-cell total">
+                                <div class="metric-primary">89,234</div>
+                                <div class="vmu-details">
+                                    <span class="vmu-badge apex">A:15</span>
+                                    <span class="vmu-badge collector">C:22</span>
+                                    <span class="vmu-badge limited">L:5</span>
+                                </div>
+                            </td>
+                            <td class="metric-cell maturing">
+                                <div class="metric-primary">67,891</div>
+                            </td>
+                            <td class="metric-cell claimable">
+                                <div class="metric-primary">8</div>
+                            </td>
+                            <td class="xen-reward">
+                                <div class="xen-amount">3,847.892B</div>
+                                <div class="xen-usd">$305</div>
+                            </td>
+                            <td>
+                                <div class="progress-indicator">
+                                    <div class="progress-fill maturing" style="width: 76%"></div>
+                                </div>
+                                <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
+                                    76% maturing
+                                </div>
+                            </td>
+                        </tr>
+                        <tr class="stake">
+                            <td>
+                                <div class="type-cell">
+                                    <div class="type-icon stake">XS</div>
+                                    <span>Stakes</span>
+                                </div>
+                            </td>
+                            <td class="metric-cell total">
+                                <div class="metric-primary">18</div>
+                            </td>
+                            <td class="metric-cell total">
+                                <div class="metric-primary">—</div>
+                            </td>
+                            <td class="metric-cell maturing">
+                                <div class="metric-primary">12</div>
+                            </td>
+                            <td class="metric-cell claimable">
+                                <div class="metric-primary">6</div>
+                            </td>
+                            <td class="xen-reward">
+                                <div class="xen-amount">0.015B</div>
+                                <div class="xen-usd">$71</div>
+                            </td>
+                            <td>
+                                <div class="progress-indicator">
+                                    <div class="progress-fill claimable" style="width: 33%"></div>
+                                </div>
+                                <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
+                                    33% ready
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTheme(theme) {
+            // Remove existing theme classes
+            document.body.classList.remove('dark-theme');
+            document.body.classList.remove('dark-mode');
+            
+            // Add new theme class
+            if (theme !== 'light') {
+                document.body.classList.add(theme + '-theme');
+                document.body.classList.add(theme + '-mode');
+            }
+            
+            // Update active button
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

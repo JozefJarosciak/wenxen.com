@@ -1,0 +1,433 @@
+/* ===== OPTION 2: Professional Table Layout with Visual Indicators ===== */
+
+/* Main container styling */
+#summaryContainer.option2 {
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e1e5e9;
+  overflow: hidden;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Table styling */
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+}
+
+/* Table header */
+.summary-table thead {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 2px solid #dee2e6;
+}
+
+.summary-table th {
+  padding: 4px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  position: relative;
+}
+
+.summary-table th:first-child {
+  padding-left: 4px;
+}
+
+.summary-table th:last-child {
+  padding-right: 4px;
+}
+
+/* Table rows */
+.summary-table tbody tr {
+  border-bottom: 1px solid #f1f3f4;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.summary-table tbody tr:nth-child(even) {
+  background: rgba(248, 249, 250, 0.5);
+}
+
+.summary-table tbody tr:hover {
+  background: rgba(0, 123, 255, 0.04);
+  transform: translateX(2px);
+}
+
+/* Table cells */
+.summary-table td {
+  padding: 4px;
+  vertical-align: middle;
+  border-right: 1px solid #f8f9fa;
+}
+
+.summary-table td:first-child {
+  padding-left: 4px;
+  border-left: 3px solid transparent;
+}
+
+.summary-table td:last-child {
+  padding-right: 4px;
+  border-right: none;
+}
+
+/* Row type indicators */
+.summary-table tr.cointool td:first-child { border-left-color: #007bff; }
+.summary-table tr.xenft td:first-child { border-left-color: #28a745; }
+.summary-table tr.stake td:first-child { border-left-color: #ffc107; }
+.summary-table tr.xenft-stake td:first-child { border-left-color: #dc3545; }
+
+/* Type column styling */
+.type-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.type-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  color: white;
+  font-weight: bold;
+}
+
+.type-icon.cointool { background: #007bff; }
+.type-icon.xenft { background: #28a745; }
+.type-icon.stake { background: #ffc107; color: #333; }
+.type-icon.xenft-stake { background: #dc3545; }
+
+/* Metric styling */
+.metric-cell {
+  text-align: center;
+  font-weight: 500;
+}
+
+.metric-primary {
+  font-size: 11px;
+  font-weight: 700;
+  color: #212529;
+  margin-bottom: 1px;
+}
+
+.metric-secondary {
+  font-size: 8px;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+/* Status-based colors */
+.metric-cell.maturing .metric-primary { color: #fd7e14; }
+.metric-cell.claimable .metric-primary { color: #198754; }
+.metric-cell.total .metric-primary { color: #495057; }
+
+/* VMU breakdown styling */
+.vmu-details {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 3px;
+}
+
+.vmu-badge {
+  padding: 1px 4px;
+  border-radius: 6px;
+  font-size: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.vmu-badge.apex { background: #fff3cd; color: #856404; }
+.vmu-badge.collector { background: #d1ecf1; color: #0c5460; }
+.vmu-badge.limited { background: #f8d7da; color: #721c24; }
+
+/* Progress indicators */
+.progress-indicator {
+  width: 28px;
+  height: 3px;
+  border-radius: 1px;
+  background: #e9ecef;
+  margin: 4px auto 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-fill.maturing { background: linear-gradient(90deg, #fd7e14, #ff922b); }
+.progress-fill.claimable { background: linear-gradient(90deg, #28a745, #40c057); }
+
+/* Dark mode theming */
+body.dark-mode #summaryContainer.option2 {
+  background: #343a40;
+  border-color: #495057;
+}
+
+body.dark-mode .summary-table thead {
+  background: linear-gradient(135deg, #2d3238 0%, #1a1e23 100%);
+  border-bottom-color: #495057;
+}
+
+body.dark-mode .summary-table th {
+  color: #f8f9fa;
+}
+
+body.dark-mode .summary-table tbody tr {
+  border-bottom-color: #495057;
+}
+
+body.dark-mode .summary-table tbody tr:nth-child(even) {
+  background: rgba(73, 80, 87, 0.1);
+}
+
+body.dark-mode .summary-table tbody tr:hover {
+  background: rgba(0, 123, 255, 0.1);
+}
+
+body.dark-mode .summary-table td {
+  color: #f8f9fa;
+  border-right-color: #495057;
+}
+
+body.dark-mode .type-cell {
+  color: #f8f9fa;
+}
+
+body.dark-mode .metric-primary {
+  color: #f8f9fa;
+}
+
+body.dark-mode .metric-secondary {
+  color: #adb5bd;
+}
+
+body.dark-mode .progress-indicator {
+  background: #495057;
+}
+
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  /* Mobile card-based layout - no horizontal scrolling */
+  #summaryContainer.option2 {
+    margin: -3px -3px 6px -3px;
+    padding: 6px;
+    border-radius: 6px;
+    width: calc(100% + 6px);
+    max-width: calc(100% + 6px);
+    overflow: visible;
+  }
+  
+  .summary-table {
+    display: block;
+    width: 100%;
+    border: none;
+  }
+  
+  .summary-table thead {
+    display: none; /* Hide table headers in mobile */
+  }
+  
+  .summary-table tbody {
+    display: block;
+    width: 100%;
+  }
+  
+  .summary-table tbody tr {
+    display: block;
+    background: rgba(248, 249, 250, 0.8);
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    padding: 8px;
+    position: relative;
+    border-left: 3px solid transparent;
+  }
+  
+  .summary-table tbody tr:hover {
+    transform: none;
+    background: rgba(0, 123, 255, 0.06);
+  }
+  
+  .summary-table tbody tr.cointool { border-left-color: #007bff; }
+  .summary-table tbody tr.xenft { border-left-color: #28a745; }
+  .summary-table tbody tr.stake { border-left-color: #ffc107; }
+  .summary-table tbody tr.xenft-stake { border-left-color: #dc3545; }
+  
+  .summary-table td {
+    display: block;
+    padding: 0;
+    border: none;
+    margin-bottom: 6px;
+    position: relative;
+  }
+  
+  .summary-table td:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Add labels before each data item */
+  .summary-table td::before {
+    content: attr(data-label);
+    display: inline-block;
+    font-weight: 600;
+    color: #495057;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-right: 6px;
+    min-width: 56px;
+  }
+  
+  /* Type cell mobile layout */
+  .type-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  
+  .type-cell::before {
+    display: none; /* Hide label for type cell as it's obvious */
+  }
+  
+  .type-icon {
+    width: 12px;
+    height: 12px;
+    font-size: 6px;
+    flex-shrink: 0;
+  }
+  
+  /* Metric cells mobile layout */
+  .metric-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .metric-primary {
+    font-size: 10px;
+    font-weight: 700;
+    margin: 0;
+  }
+  
+  .metric-secondary {
+    font-size: 7px;
+    color: #6c757d;
+    margin-left: 6px;
+  }
+  
+  /* VMU details mobile layout */
+  .vmu-details {
+    flex-direction: row;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  
+  .vmu-badge {
+    font-size: 6px;
+    padding: 1px 3px;
+  }
+  
+  /* XEN rewards mobile layout */
+  .xen-reward {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .xen-amount {
+    font-size: 9px;
+    font-weight: 600;
+  }
+  
+  .xen-usd {
+    font-size: 6px;
+    color: #6c757d;
+    margin-left: 6px;
+  }
+  
+  /* Progress indicator mobile layout */
+  .progress-indicator {
+    width: 42px;
+    height: 3px;
+    margin: 3px 0 0 auto;
+  }
+  
+  /* Hide expandable functionality on mobile for simplicity */
+  .summary-table tbody tr.expandable {
+    cursor: default;
+  }
+  
+  .summary-table tbody tr.expandable::after {
+    display: none;
+  }
+  
+  .detail-row {
+    display: none !important; /* Hide detailed breakdowns on mobile */
+  }
+  
+  /* Dark mode mobile styling */
+  body.dark-mode .summary-table tbody tr {
+    background: rgba(73, 80, 87, 0.1);
+    border-color: #495057;
+    color: #f8f9fa;
+  }
+  
+  body.dark-mode .summary-table tbody tr:hover {
+    background: rgba(0, 123, 255, 0.1);
+  }
+  
+  body.dark-mode .summary-table td::before {
+    color: #adb5bd;
+  }
+  
+  body.dark-mode .metric-secondary {
+    color: #adb5bd;
+  }
+  
+  body.dark-mode .xen-usd {
+    color: #adb5bd;
+  }
+  
+}
+
+/* Accessibility improvements */
+.summary-table:focus-within {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.summary-table tbody tr:focus {
+  background: rgba(0, 123, 255, 0.1);
+  outline: none;
+}
+
+/* Animation for loading states */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: shimmer 2s infinite;
+}

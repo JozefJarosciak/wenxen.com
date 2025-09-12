@@ -1,0 +1,223 @@
+/* ===== OPTION 1: Card-Based Summary Layout with Color-Coded Sections ===== */
+
+/* Main container styling */
+#summaryContainer.option1 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Individual summary cards */
+.summary-card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: white;
+  border-left: 3px solid;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.summary-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Card type styling with subtle colors */
+.summary-card.cointool {
+  border-left-color: #5c7cfa;
+  background: white;
+}
+
+.summary-card.xenft {
+  border-left-color: #51cf66;
+  background: white;
+}
+
+.summary-card.stake {
+  border-left-color: #ffa94d;
+  background: white;
+}
+
+.summary-card.xenft-stake {
+  border-left-color: #ff6b6b;
+  background: white;
+}
+
+/* Card header (type label) */
+.summary-card-header {
+  font-weight: 600;
+  font-size: 13px;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-card-header::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: block;
+}
+
+.summary-card.cointool .summary-card-header::before { background: #5c7cfa; }
+.summary-card.xenft .summary-card-header::before { background: #51cf66; }
+.summary-card.stake .summary-card-header::before { background: #ffa94d; }
+.summary-card.xenft-stake .summary-card-header::before { background: #ff6b6b; }
+
+/* Card content (metrics) */
+.summary-card-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+  align-items: center;
+}
+
+/* Individual metric styling */
+.metric {
+  text-align: center;
+}
+
+.metric-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #6c757d;
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+
+.metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 1px;
+}
+
+.metric-sublabel {
+  font-size: 9px;
+  color: #868e96;
+  font-weight: normal;
+}
+
+/* Status-based metric colors */
+.metric.maturing .metric-value { color: #868e96; }
+.metric.claimable .metric-value { color: #51cf66; }
+.metric.total .metric-value { color: #495057; }
+
+/* Special styling for VMU breakdowns */
+.vmu-breakdown {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+.vmu-type {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+  border: 1px solid;
+}
+
+.vmu-type.apex { background: white; color: #868e96; border-color: #dee2e6; }
+.vmu-type.collector { background: white; color: #868e96; border-color: #dee2e6; }
+.vmu-type.limited { background: white; color: #868e96; border-color: #dee2e6; }
+
+/* Dark mode theming */
+body.dark-mode #summaryContainer.option1 {
+  background: #1a1e23;
+  border-color: #2d3238;
+}
+
+body.dark-mode .summary-card {
+  background: #2d3238;
+  border-left-color: inherit;
+  color: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-mode .summary-card.cointool { 
+  background: #2d3238;
+  border-left-color: #748ffc;
+}
+
+body.dark-mode .summary-card.xenft { 
+  background: #2d3238;
+  border-left-color: #69db7c;
+}
+
+body.dark-mode .summary-card.stake { 
+  background: #2d3238;
+  border-left-color: #ffd43b;
+}
+
+body.dark-mode .summary-card.xenft-stake { 
+  background: #2d3238;
+  border-left-color: #ff8787;
+}
+
+body.dark-mode .summary-card-header {
+  color: #dee2e6;
+}
+
+body.dark-mode .metric-value {
+  color: #f8f9fa;
+}
+
+body.dark-mode .metric-label {
+  color: #868e96;
+}
+
+body.dark-mode .metric-sublabel {
+  color: #6c757d;
+}
+
+body.dark-mode .metric.claimable .metric-value {
+  color: #69db7c;
+}
+
+body.dark-mode .vmu-type {
+  background: #1a1e23;
+  color: #868e96;
+  border-color: #495057;
+}
+
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  #summaryContainer.option1 {
+    padding: 12px;
+    gap: 10px;
+  }
+  
+  .summary-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  
+  .summary-card-content {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+  }
+  
+  .metric-value {
+    font-size: 14px;
+  }
+}
