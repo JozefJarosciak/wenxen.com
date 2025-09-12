@@ -618,9 +618,10 @@ async function sendCointoolTx({ ids, dataHex, salt, w3, action }) {
   for (let i = 0; i < uniq.length; i += MAX_VMU_PER_TX) {
     const chunk = uniq.slice(i, i + MAX_VMU_PER_TX);
     try {
-      const tx = await c.methods.f(chunk, dataHex, salt).send({ from: connectedAccount });
-      const msg = `${action || 'claim'} ${chunk.length} VMUs: ${tx.transactionHash}`;
-      if (typeof showToast === 'function') showToast(msg, 'success'); else alert(msg);
+      const tx = await executeWithAutoRescan(
+        c.methods.f(chunk, dataHex, salt).send({ from: connectedAccount }),
+        `CoinTool ${action || 'claim'} (${chunk.length} VMUs)`
+      );
     } catch (err) {
       console.error(err);
       alert(err?.message || `CoinTool ${action || 'claim'} failed.`);
@@ -1597,13 +1598,11 @@ async function handleBulkAction(mode){
         const tokenId = Number(r.Xenft_id || r.Mint_id_Start || r.tokenId);
         if (!Number.isFinite(tokenId)) { alert("Bad XENFT tokenId in selection."); continue; }
         try {
-          const tx = await tor.methods.bulkClaimMintReward(tokenId, connectedAccount)
-            .send({ from: connectedAccount });
-          if (typeof showToast === 'function') {
-            showToast(`XENFT #${tokenId} claim submitted: ${tx.transactionHash}`, "success");
-          } else {
-            alert(`XENFT #${tokenId} claim submitted: ${tx.transactionHash}`);
-          }
+          const tx = await executeWithAutoRescan(
+            tor.methods.bulkClaimMintReward(tokenId, connectedAccount).send({ from: connectedAccount }),
+            'XENFT bulk claim',
+            tokenId
+          );
         } catch (err) {
           console.error(err);
           alert(err?.message || `XENFT #${tokenId} claim failed.`);
@@ -1657,12 +1656,10 @@ async function handleBulkAction(mode){
       for (let i = 0; i < uniq.length; i += MAX_VMU_PER_TX) {
         const chunk = uniq.slice(i, i + MAX_VMU_PER_TX);
         try {
-          const tx = await c.methods.f(chunk, dataHex, grp.salt).send({ from: connectedAccount });
-          if (typeof showToast === 'function') {
-            showToast(`Submitted ${mode} (${chunk.length} VMUs): ${tx.transactionHash}`, "success");
-          } else {
-            alert(`Submitted ${mode} (${chunk.length} VMUs): ${tx.transactionHash}`);
-          }
+          const tx = await executeWithAutoRescan(
+            c.methods.f(chunk, dataHex, grp.salt).send({ from: connectedAccount }),
+            `CoinTool ${mode} (${chunk.length} VMUs)`
+          );
         } catch (err) {
           console.error(err);
           alert(err?.message || `Bulk ${mode} failed for salt ${grp.salt}`);
@@ -5321,7 +5318,10 @@ async function connectWallet() {
       // XEN_ETH address is already defined in main_app.js
       const xenContract = new w3.eth.Contract(window.xenAbi, XEN_ETH);
       // ✅ FIX: Call withdraw() with no arguments
-      const tx = await xenContract.methods.withdraw().send({ from: connectedAccount });
+      const tx = await executeWithAutoRescan(
+        xenContract.methods.withdraw().send({ from: connectedAccount }),
+        'XEN Stake withdraw'
+      );
 
       if (typeof showToast === 'function') {
         showToast(`Stake withdraw submitted: ${tx.transactionHash}`, "success");
@@ -5340,7 +5340,7 @@ async function connectWallet() {
 
   // NEW: Stake XENFT → endStake(tokenId)
   if (String(row.SourceType) === 'Stake XENFT') {
-    // Stake NFTs don’t have “remint”; just end the stake.
+    // Stake NFTs don't have "remint"; just end the stake.
     const tokenId = Number(row.Mint_id_Start || row.tokenId);
     if (!Number.isFinite(tokenId)) { alert("Bad Stake XENFT tokenId."); return; }
 
@@ -5350,8 +5350,25 @@ async function connectWallet() {
       '0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC';
 
     try {
-      const stake = new w3.eth.Contract(window.xenftStakeAbi, STAKE_ADDR);
-      const tx = await stake.methods.endStake(tokenId).send({ from: connectedAccount });
+      // Add endStake method to ABI if not present
+      const stakeAbi = window.xenftStakeAbi || [];
+      const hasEndStake = stakeAbi.some(item => item.type === 'function' && item.name === 'endStake');
+      if (!hasEndStake) {
+        stakeAbi.push({
+          "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+          "name": "endStake",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        });
+      }
+      
+      const stake = new w3.eth.Contract(stakeAbi, STAKE_ADDR);
+      const tx = await executeWithAutoRescan(
+        stake.methods.endStake(tokenId).send({ from: connectedAccount }),
+        'Stake XENFT end',
+        tokenId
+      );
 
       if (typeof showToast === 'function') {
         showToast(`Stake XENFT #${tokenId} end submitted: ${tx.transactionHash}`, "success");
@@ -5385,8 +5402,11 @@ async function connectWallet() {
 
     try {
       const torrent = new w3.eth.Contract(window.xenftAbi, TORRENT_ADDR);
-      const tx = await torrent.methods.bulkClaimMintReward(tokenId, connectedAccount)
-        .send({ from: connectedAccount });
+      const tx = await executeWithAutoRescan(
+        torrent.methods.bulkClaimMintReward(tokenId, connectedAccount).send({ from: connectedAccount }),
+        'XENFT claim',
+        tokenId
+      );
       if (typeof showToast === 'function') {
         showToast(`XENFT #${tokenId} claim submitted: ${tx.transactionHash}`, "success");
       } else {
@@ -6008,7 +6028,7 @@ function formatBackupFileName(now = new Date()){
   const mm = String(now.getMinutes()).padStart(2, "0");
   const ss = String(now.getSeconds()).padStart(2, "0");
   const suffix = am ? "AM" : "PM";
-  return `mintscanner-backup-${y}-${m}-${d}_${h}-${mm}-${ss}_${suffix}.json`;
+  return `wenxen-backup-${y}-${m}-${d}_${h}-${mm}-${ss}_${suffix}.json`;
 }
 async function exportBackup() {
   console.log(`Exporting backup for ALL chains`);
@@ -6181,7 +6201,7 @@ async function exportBackup() {
   } catch {}
   
   const payload = {
-    fileType: "mintscanner-backup",
+    fileType: "wenxen-backup",
     version: 6, // Version 6 supports all chains export
     exportedAt: new Date().toISOString(),
     exportedChain: "ALL", // Indicates this is a full backup
@@ -6274,7 +6294,7 @@ async function checkIfMigrationNeeded() {
   return false;
 }
 
-// Import: supports new "mintscanner-backup" AND legacy "cointool-backup"
+// Import: supports new "wenxen-backup" AND legacy "cointool-backup"
 async function importBackupFromFile(file) {
   if (!file) return;
 
@@ -6344,8 +6364,8 @@ async function importBackupFromFile(file) {
   // Track if we imported any old databases
   let importedOldDatabases = false;
 
-  // New multi-DB format
-  if (data && data.fileType === "mintscanner-backup" && Array.isArray(data.databases)) {
+  // New multi-DB format (supports both "wenxen-backup" and legacy "mintscanner-backup")
+  if (data && (data.fileType === "wenxen-backup" || data.fileType === "mintscanner-backup") && Array.isArray(data.databases)) {
     applySettingsSnapshot(data.settings || {}); // settings first
 
     for (const dbDef of data.databases) {

@@ -659,6 +659,10 @@
 <script type="module" src="./js/data/indexedDbUtils.js?v=20250908173121"></script>
 <script type="module" src="./js/data/apiUtils.js?v=20250908173121"></script>
 
+<!-- Auto-Rescan Manager -->
+<script src="./js/utils/autoRescanManager.js?v=20250912"></script>
+<script src="./js/utils/transactionHelper.js?v=20250912"></script>
+
 <!-- Toast notification system now provided by js/ui/toastManager.js module -->
 
 <!-- Module loading helper and fallback -->
@@ -666,21 +670,23 @@
   // Wait for modules to load with fallback
   (function() {
     var moduleCheckCount = 0;
-    var maxChecks = 20; // 2 seconds max wait
+    var maxChecks = 50; // 5 seconds max wait (increased from 2)
     
     function checkModulesLoaded() {
       moduleCheckCount++;
       
       // Check if critical functions are available
-      if (typeof window.acceptPrivacy !== 'undefined') {
-        console.log('Modules loaded successfully');
+      if (typeof window.acceptPrivacy !== 'undefined' && 
+          typeof window.showToast !== 'undefined' &&
+          typeof window.setActiveTab !== 'undefined') {
+        console.log('Modules loaded successfully after ' + (moduleCheckCount * 100) + 'ms');
         return;
       }
       
       if (moduleCheckCount < maxChecks) {
         setTimeout(checkModulesLoaded, 100);
       } else {
-        console.warn('Modules failed to load, using fallback functions');
+        console.warn('Modules failed to load after ' + (moduleCheckCount * 100) + 'ms, using fallback functions');
         
         // Provide fallback implementations
         window.acceptPrivacy = function() {

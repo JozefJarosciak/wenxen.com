@@ -172,20 +172,20 @@ async function startCointoolMint(vmu, termDays){
   const saltHex  = "0x01";
   let est = await contract.methods.t(vmu, dataHex, saltHex).estimateGas({ from: connectedAccount });
   est = Math.ceil(est * 1.2);
-  const receipt = await contract.methods.t(vmu, dataHex, saltHex).send({ from: connectedAccount, gas: est });
+  const receipt = await executeWithAutoRescan(
+    contract.methods.t(vmu, dataHex, saltHex).send({ from: connectedAccount, gas: est }),
+    `CoinTool mint (${vmu} VMUs)`
+  );
   const txUrl = window.chainManager?.getExplorerUrl('tx', receipt?.transactionHash) || `https://etherscan.io/tx/${receipt?.transactionHash}`;
   console.log(`[MINT/COINTOOL] ${txUrl}`);
-  if (typeof showToast === 'function') showToast(`Mint submitted: ${receipt.transactionHash}`, 'success');
-  else alert(`Mint submitted: ${receipt.transactionHash}`);
-  // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
-  try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
-  // Delayed scan to catch the mined transaction (typical block time ~12s)
-  setTimeout(async () => {
-    try { 
-      if (typeof window.scanMints === 'function') await window.scanMints();
-      if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
-    } catch {}
-  }, 6000);
+  // Use centralized auto-rescan
+  await window.autoRescanManager?.monitorTransaction(
+    Promise.resolve(receipt),
+    'Cointool Mint'
+  ) || (() => {
+    if (typeof showToast === 'function') showToast(`Mint submitted: ${receipt.transactionHash}`, 'success');
+    else alert(`Mint submitted: ${receipt.transactionHash}`);
+  })();
 }
 
 async function startXenftMint(vmu, termDays, kind, burnRaw){
@@ -202,39 +202,39 @@ async function startXenftMint(vmu, termDays, kind, burnRaw){
     await ensureXenApprovalIfNeeded(xenftAddress, burnWei);
     let est = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
-    const r = await xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).send({ from: connectedAccount, gas: est });
+    const r = await executeWithAutoRescan(
+      xenft.methods.bulkClaimRankLimited(vmu, termDays, burnWei).send({ from: connectedAccount, gas: est }),
+      `XENFT mint limited (${vmu} VMUs)`
+    );
     const apexTxUrl = window.chainManager?.getExplorerUrl('tx', r?.transactionHash) || `https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`;
     console.log(`[MINT/XENFT-APEX] ${apexTxUrl}`);
-    if (typeof showToast === 'function') showToast(`XENFT APEX mint submitted: ${r.transactionHash}`, 'success');
-    else alert(`XENFT APEX mint submitted: ${r.transactionHash}`);
-    // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
-    try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
-    // Delayed scan to catch the mined transaction
-    setTimeout(async () => {
-      try { 
-        if (window.xenft && typeof window.xenft.scan === 'function') await window.xenft.scan();
-        if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
-      } catch {}
-    }, 6000);
+    // Use centralized auto-rescan
+    await window.autoRescanManager?.monitorTransaction(
+      Promise.resolve(r),
+      'XENFT APEX mint'
+    ) || (() => {
+      if (typeof showToast === 'function') showToast(`XENFT APEX mint submitted: ${r.transactionHash}`, 'success');
+      else alert(`XENFT APEX mint submitted: ${r.transactionHash}`);
+    })();
     return;
   }
   // Regular XENFT
   let est = await xenft.methods.bulkClaimRank(vmu, termDays).estimateGas({ from: connectedAccount });
   est = Math.ceil(est * 1.2);
-  const r = await xenft.methods.bulkClaimRank(vmu, termDays).send({ from: connectedAccount, gas: est });
+  const r = await executeWithAutoRescan(
+    xenft.methods.bulkClaimRank(vmu, termDays).send({ from: connectedAccount, gas: est }),
+    `XENFT mint (${vmu} VMUs)`
+  );
   const xenftTxUrl = window.chainManager?.getExplorerUrl('tx', r?.transactionHash) || `https://etherscan.io/tx/${r?.transactionHash || '(pending)'}`;
   console.log(`[MINT/XENFT] ${xenftTxUrl}`);
-  if (typeof showToast === 'function') showToast(`XENFT mint submitted: ${r.transactionHash}`, 'success');
-  else alert(`XENFT mint submitted: ${r.transactionHash}`);
-  // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
-  try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
-  // Delayed scan to catch the mined transaction
-  setTimeout(async () => {
-    try { 
-      if (window.xenft && typeof window.xenft.scan === 'function') await window.xenft.scan();
-      if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
-    } catch {}
-  }, 6000);
+  // Use centralized auto-rescan
+  await window.autoRescanManager?.monitorTransaction(
+    Promise.resolve(r),
+    'XENFT mint'
+  ) || (() => {
+    if (typeof showToast === 'function') showToast(`XENFT mint submitted: ${r.transactionHash}`, 'success');
+    else alert(`XENFT mint submitted: ${r.transactionHash}`);
+  })();
 }
 
 // --- Staking ---
@@ -264,18 +264,18 @@ async function startStakeFlow(){
     const xen = new web3Wallet.eth.Contract(window.xenAbi, xenAddress);
     let est = await xen.methods.stake(amountWei, termDays).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
-    const tx = await xen.methods.stake(amountWei, termDays).send({ from: connectedAccount, gas: est });
-    if (typeof showToast === 'function') showToast(`Stake submitted: ${tx.transactionHash}`, 'success');
-    else alert(`Stake submitted: ${tx.transactionHash}`);
-    // Trigger immediate refresh for UI feedback, then delayed refresh for confirmed transaction
-    try { if (typeof window.refreshUnified === 'function') await window.refreshUnified(); } catch {}
-    // Delayed scan to catch the mined transaction
-    setTimeout(async () => {
-      try { 
-        if (window.xenStake && typeof window.xenStake.scan === 'function') await window.xenStake.scan();
-        if (typeof window.refreshUnified === 'function') await window.refreshUnified(); 
-      } catch {}
-    }, 6000);
+    const tx = await executeWithAutoRescan(
+      xen.methods.stake(amountWei, termDays).send({ from: connectedAccount, gas: est }),
+      'XEN stake'
+    );
+    // Use centralized auto-rescan
+    await window.autoRescanManager?.monitorTransaction(
+      Promise.resolve(tx),
+      'XEN Stake'
+    ) || (() => {
+      if (typeof showToast === 'function') showToast(`Stake submitted: ${tx.transactionHash}`, 'success');
+      else alert(`Stake submitted: ${tx.transactionHash}`);
+    })();
   } catch (err) {
     console.error('[STAKE] failed', err);
     alert(err?.message || 'Stake failed.');
