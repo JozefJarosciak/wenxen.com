@@ -1045,7 +1045,7 @@ function initializeXenTotalTooltip() {
         html += '<tr>';
         html += `<td style="padding: 2px 8px; color: #9ca3af;">${formatAddress(item.address)}</td>`;
         html += `<td style="padding: 2px 8px; text-align: right; color: #e5e7eb;">${xenFormatted}</td>`;
-        html += `<td style="padding: 2px 8px; text-align: right; color: #86efac;">${usdFormatted}</td>`;
+        html += `<td style="padding: 2px 8px; text-align: right;" class="usd-value">${usdFormatted}</td>`;
         html += '</tr>';
       });
       
@@ -1075,7 +1075,7 @@ function initializeXenTotalTooltip() {
         : '-';
       
       html += `<td style="padding: 4px 8px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`;
-      html += `<td style="padding: 4px 8px; text-align: right; font-weight: bold; color: #86efac;">${totalUsdFormatted}</td>`;
+      html += `<td style="padding: 4px 8px; text-align: right; font-weight: bold;" class="usd-value">${totalUsdFormatted}</td>`;
       html += '</tr>';
       
       html += '</tbody></table>';

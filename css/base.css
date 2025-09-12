@@ -3509,7 +3509,7 @@ body.dark-mode .summary-toggle:hover {
 
 /* Status-based colors */
 .metric-cell.maturing .metric-primary { color: #fd7e14; }
-.metric-cell.claimable .metric-primary { color: #28a745; }
+.metric-cell.claimable .metric-primary { color: #198754; }
 .metric-cell.total .metric-primary { color: #495057; }
 
 /* VMU breakdown styling */
@@ -3700,16 +3700,16 @@ body.dark-mode .progress-indicator {
 .summary-table tbody tr.detail-row {
   background: rgba(248, 249, 250, 0.8) !important;
   border-left: 2px solid #e9ecef;
-  font-size: 7px;
+  font-size: 11px;
 }
 
 .summary-table tbody tr.detail-row td {
-  padding: 1px 6px;
+  padding: 8px 12px;
   border-top: none;
 }
 
 .summary-table tbody tr.detail-row .type-cell {
-  padding-left: 14px;
+  padding-left: 24px;
   font-weight: 500;
   color: #6c757d;
 }
@@ -3722,27 +3722,27 @@ body.dark-mode .progress-indicator {
 .xen-amount {
   font-size: 10px;
   font-weight: 700;
-  color: #28a745;
+  color: #198754;
   margin-bottom: 1px;
 }
 
-/* Smaller font for XEN amounts in detail rows */
+/* Adjusted font sizes for detail rows */
 .summary-table tbody tr.detail-row .xen-amount {
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .summary-table tbody tr.detail-row .xen-usd {
-  font-size: 6px;
+  font-size: 10px;
 }
 
-/* Smaller metrics in detail rows */
+/* Adjusted metrics in detail rows */
 .summary-table tbody tr.detail-row .metric-primary {
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .summary-table tbody tr.detail-row .metric-secondary {
-  font-size: 6px;
+  font-size: 10px;
 }
 
 .xen-usd {
@@ -3771,6 +3771,15 @@ body.dark-mode .xen-amount {
 
 body.dark-mode .xen-usd {
   color: #adb5bd;
+}
+
+/* USD value styling for light/dark themes */
+.usd-value {
+  color: #198754; /* Darker green in light theme */
+}
+
+body.dark-mode .usd-value {
+  color: #86efac; /* Light green in dark theme */
 }
 
 /* Accessibility improvements */

@@ -88,7 +88,7 @@ function initializeXenTotalBreakdown() {
         <tr>
           <td style="padding: ${padding}; font-weight: bold;">Total</td>
           <td style="padding: ${padding}; text-align: right; font-weight: bold;">${totals.totalXenFormatted}</td>
-          <td style="padding: ${padding}; text-align: right; font-weight: bold; color: #86efac;">${totals.totalUsdFormatted}</td>
+          <td style="padding: ${padding}; text-align: right; font-weight: bold;" class="usd-value">${totals.totalUsdFormatted}</td>
           <td style="padding: 2px 4px; text-align: right; white-space: nowrap;">
             <button id="refreshXenBtn" class="refresh-btn" title="Refresh XEN price & cRank" style="padding: ${buttonPadding}; font-size: ${buttonSize};">⟳</button>
             <button id="toggleXenBreakdown" class="toggle-btn" title="Show breakdown by address" style="padding: ${buttonPadding}; font-size: ${buttonSize};">+</button>
@@ -160,7 +160,7 @@ function initializeXenTotalBreakdown() {
         html += '<tr>';
         html += `<td style="padding: 2px 6px; opacity: 0.8;">${formatAddress(item.address)}</td>`;
         html += `<td style="padding: 2px 6px; text-align: right;">${xenFormatted}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right; color: #86efac;">${usdFormatted}</td>`;
+        html += `<td style="padding: 2px 6px; text-align: right;" class="usd-value">${usdFormatted}</td>`;
         html += '<td></td>';
         html += '</tr>';
       });
@@ -184,7 +184,7 @@ function initializeXenTotalBreakdown() {
       html += '<tr style="border-top: 1px solid rgba(128,128,128,0.3);">';
       html += '<td style="padding: 2px 6px; font-weight: bold;">Total</td>';
       html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`;
-      html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold; color: #86efac;">${totalUsdFormatted}</td>`;
+      html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;" class="usd-value">${totalUsdFormatted}</td>`;
       html += '<td style="padding: 2px 4px; text-align: right;">';
       html += '<button id="refreshXenBtn2" class="refresh-btn" title="Refresh XEN price & cRank" style="padding: 2px 6px; font-size: 12px;">⟳</button>';
       html += '<button id="toggleXenBreakdown2" class="toggle-btn active" title="Hide breakdown" style="padding: 2px 6px; font-size: 12px;">−</button>';
