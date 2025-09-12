@@ -185,22 +185,75 @@ document.addEventListener('DOMContentLoaded', async () => {
 // --- About tab loader ---
 async function ensureAboutLoaded(){
   if (_aboutLoaded) return;
-  const mount = document.getElementById('aboutMarkdown');
-  if (!mount) return;
+  _aboutLoaded = true;
+  
+  // Setup About subtabs
+  setupAboutSubtabs();
+}
+
+// --- About subtab handler ---
+function setupAboutSubtabs() {
+  const subtabButtons = document.querySelectorAll('.about-subtab-btn');
+  const aboutPanels = document.querySelectorAll('.about-panel');
+  
+  // Sync iframe themes on load
+  syncIframeThemes();
+  
+  subtabButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      const targetSubtab = e.target.dataset.subtab;
+      
+      // Update button states
+      subtabButtons.forEach(btn => btn.classList.remove('active'));
+      e.target.classList.add('active');
+      
+      // Update panel visibility
+      aboutPanels.forEach(panel => panel.classList.remove('active'));
+      
+      // Show the selected panel
+      const targetPanel = document.getElementById(`about-${targetSubtab}`);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+        
+        // Sync theme for the iframe
+        const iframe = targetPanel.querySelector('iframe');
+        if (iframe) {
+          syncIframeTheme(iframe);
+        }
+        
+        // Initialize Mermaid diagrams if showing design tab
+        if (targetSubtab === 'design' && iframe && iframe.contentWindow && iframe.contentWindow.mermaid) {
+          setTimeout(() => {
+            iframe.contentWindow.mermaid.init();
+          }, 500);
+        }
+      }
+    });
+  });
+}
+
+// Sync iframe themes with parent document
+function syncIframeThemes() {
+  const iframes = document.querySelectorAll('.about-iframe');
+  iframes.forEach(iframe => {
+    iframe.addEventListener('load', () => {
+      syncIframeTheme(iframe);
+    });
+  });
+}
+
+function syncIframeTheme(iframe) {
   try {
-    const url = new URL('README.md', document.baseURI).toString();
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    if (window.marked && typeof window.marked.parse === 'function') {
-      mount.innerHTML = window.marked.parse(text);
-    } else {
-      // Fallback: show as preformatted text
-      mount.textContent = text;
+    const currentTheme = document.body.classList.contains('theme-dark') ? 'theme-dark' : 'theme-light';
+    if (iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'theme-change', theme: currentTheme }, '*');
+      // Also try direct access
+      if (iframe.contentDocument && iframe.contentDocument.body) {
+        iframe.contentDocument.body.className = currentTheme;
+      }
     }
-    _aboutLoaded = true;
   } catch (e) {
-    mount.innerHTML = '<p class="muted">Failed to load README. Please try again later.</p>';
+    console.debug('Could not sync iframe theme:', e);
   }
 }
 

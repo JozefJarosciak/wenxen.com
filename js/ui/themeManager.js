@@ -17,9 +17,10 @@ export const themeManager = {
   applyTheme(mode) {
     const effectiveMode = this.effectiveTheme(mode);
     
-    // Update body classes
-    document.body.classList.remove('light-mode', 'dark-mode');
+    // Update body classes for both naming conventions
+    document.body.classList.remove('light-mode', 'dark-mode', 'theme-light', 'theme-dark');
     document.body.classList.add(effectiveMode + '-mode');
+    document.body.classList.add('theme-' + effectiveMode);
     
     // Toggle Tabulator dark CSS
     try {
@@ -48,6 +49,23 @@ export const themeManager = {
       }
     } catch (error) {
       console.warn('Failed to update VMU chart theme:', error);
+    }
+    
+    // Update About tab iframes if they exist
+    try {
+      const iframes = document.querySelectorAll('.about-iframe');
+      iframes.forEach(iframe => {
+        if (iframe.contentWindow) {
+          const themeClass = 'theme-' + effectiveMode;
+          iframe.contentWindow.postMessage({ type: 'theme-change', theme: themeClass }, '*');
+          // Also try direct access
+          if (iframe.contentDocument && iframe.contentDocument.body) {
+            iframe.contentDocument.body.className = themeClass;
+          }
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to update iframe themes:', error);
     }
     
     // Update header menu UI

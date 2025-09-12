@@ -537,7 +537,21 @@
   <!-- About tab -->
   <section id="tab-about" class="tab-panel" role="tabpanel" aria-labelledby="About">
     <h2>About</h2>
-    <div id="aboutMarkdown" class="markdown-body">Loading…</div>
+    <!-- About subtabs -->
+    <div class="about-subtabs">
+      <button class="about-subtab-btn active" data-subtab="overview">Overview</button>
+      <button class="about-subtab-btn" data-subtab="design">Design</button>
+    </div>
+    
+    <!-- About subtab content -->
+    <div class="about-content">
+      <div id="about-overview" class="about-panel active">
+        <iframe src="app-overview.html" class="about-iframe" title="Application Overview"></iframe>
+      </div>
+      <div id="about-design" class="about-panel">
+        <iframe src="design.html" class="about-iframe" title="Design Documentation"></iframe>
+      </div>
+    </div>
   </section>
 
 </div>
