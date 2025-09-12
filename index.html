@@ -264,8 +264,8 @@
         <label for="mintAction">Action</label>
         <select id="mintAction" class="mint-input">
           <option value="mint" selected>Mint</option>
-          <option value="stake">Stake</option>
-          <option value="stake-xenft">Stake XENFT</option>
+          <option value="stake">Stake XEN</option>
+          <option value="stake-xenft">Mint Stake XENFT</option>
         </select>
       </div>
     </div>
@@ -382,12 +382,12 @@
     </div>
     <br>
     <div class="mint-actions" id="stakeActions" style="display:none;">
-      <button id="startStakeBtn" class="btn-mint">Start Staking</button>
+      <button id="startStakeBtn" class="btn-mint">Stake XEN</button>
       <div id="stakeConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to stake.</div>
     </div>
 
     <!-- Stake XENFT controls (hidden by default; shown when Action=Stake XENFT) -->
-    <div id="stakeXenftControls" class="mint-controls" style="display:none; margin-top:10px;">
+    <div id="stakeXenftControls" class="mint-controls" style="display:none; margin-top:10px; grid-template-columns: 1fr; gap: 16px;">
       <div class="mint-field">
         <label for="stakeXenftAmount">Amount (XEN)</label>
         <div style="display:flex; align-items:center; gap:10px;">

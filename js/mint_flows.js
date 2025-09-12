@@ -60,8 +60,13 @@ async function prefillStakeXenftAmountFromBalance(force = false) {
   
   try {
     const balWei = await fetchXenBalanceWei();
-    if (!balWei) {
-      if (force) alert('Could not fetch XEN balance. Try again.');
+    if (!balWei || Web3.utils.toBN(balWei).lte(Web3.utils.toBN('0'))) {
+      if (force) alert('Could not fetch XEN balance or balance is zero.');
+      // Handle zero or missing balance
+      window._stakeXenftBalanceWei = '0';
+      document.getElementById('stakeXenftAmount').value = '0';
+      document.getElementById('stakeXenftPercentOptions').style.display = 'none';
+      updateStakeXenftStartEnabled();
       return;
     }
     
@@ -77,13 +82,33 @@ async function prefillStakeXenftAmountFromBalance(force = false) {
   } catch (e) {
     console.error('[STAKE-XENFT] Failed to fill balance:', e);
     if (force) alert('Error fetching balance.');
+    // Handle error case - disable button
+    window._stakeXenftBalanceWei = '0';
+    document.getElementById('stakeXenftAmount').value = '0';
+    document.getElementById('stakeXenftPercentOptions').style.display = 'none';
+    updateStakeXenftStartEnabled();
   }
 }
 
 function updateStakeXenftStartEnabled() {
   const btn = document.getElementById('startStakeXenftBtn');
   const amtStr = String(document.getElementById('stakeXenftAmount')?.value || '').trim();
-  const ok = amtStr !== '' && Number(amtStr) > 0;
+  const amtNumber = Number(amtStr);
+  
+  // Check if amount is valid
+  let ok = amtStr !== '' && amtNumber > 0;
+  
+  // If we have balance info, also check if user has enough XEN
+  if (ok && window._stakeXenftBalanceWei) {
+    try {
+      const amtWei = Web3.utils.toWei(amtStr, 'ether');
+      const hasEnough = Web3.utils.toBN(window._stakeXenftBalanceWei).gte(Web3.utils.toBN(amtWei));
+      ok = ok && hasEnough;
+    } catch (_) {
+      ok = false; // Invalid amount format
+    }
+  }
+  
   if (btn) btn.disabled = !ok;
 }
 
@@ -464,7 +489,22 @@ async function fetchXenBalanceWei(){
 function updateStakeStartEnabled(){
   const btn = document.getElementById('startStakeBtn');
   const amtStr = String(document.getElementById('stakeAmount')?.value || '').trim();
-  const ok = amtStr !== '' && Number(amtStr) > 0;
+  const amtNumber = Number(amtStr);
+  
+  // Check if amount is valid
+  let ok = amtStr !== '' && amtNumber > 0;
+  
+  // If we have balance info, also check if user has enough XEN
+  if (ok && window._stakeXenBalanceWei) {
+    try {
+      const amtWei = Web3.utils.toWei(amtStr, 'ether');
+      const hasEnough = Web3.utils.toBN(window._stakeXenBalanceWei).gte(Web3.utils.toBN(amtWei));
+      ok = ok && hasEnough;
+    } catch (_) {
+      ok = false; // Invalid amount format
+    }
+  }
+  
   if (btn) btn.disabled = !ok;
 }
 
@@ -480,19 +520,30 @@ async function prefillStakeAmountFromBalance(showAlert){
     return;
   }
 
-  const wei = await fetchXenBalanceWei();
-  window._stakeXenBalanceWei = wei;
-  if (wei && Web3.utils.toBN(wei).gt(Web3.utils.toBN('0'))) {
-    // Only prefill if empty or zero
-    if (!amountEl.value || Number(amountEl.value) <= 0) {
-      const BN = Web3.utils.toBN;
-      const ONE = BN('1000000000000000000');
-      const rounded = BN(wei).div(ONE).toString(); // round down to whole token
-      amountEl.value = rounded;
+  try {
+    const wei = await fetchXenBalanceWei();
+    window._stakeXenBalanceWei = wei;
+    if (wei && Web3.utils.toBN(wei).gt(Web3.utils.toBN('0'))) {
+      // Only prefill if empty or zero
+      if (!amountEl.value || Number(amountEl.value) <= 0) {
+        const BN = Web3.utils.toBN;
+        const ONE = BN('1000000000000000000');
+        const rounded = BN(wei).div(ONE).toString(); // round down to whole token
+        amountEl.value = rounded;
+      }
+      if (pctWrap) pctWrap.style.display = '';
+    } else {
+      console.debug('[STAKE] Zero or missing XEN balance.');
+      if (pctWrap) pctWrap.style.display = 'none';
+      // Clear amount field if balance is zero to ensure button is disabled
+      amountEl.value = '0';
     }
-    if (pctWrap) pctWrap.style.display = '';
-  } else {
-    console.debug('[STAKE] Zero or missing XEN balance.');
+  } catch (e) {
+    console.error('[STAKE] Failed to fetch XEN balance:', e);
+    if (showAlert) alert('Error fetching balance.');
+    // Handle error case - disable button
+    window._stakeXenBalanceWei = '0';
+    amountEl.value = '0';
     if (pctWrap) pctWrap.style.display = 'none';
   }
   updateStakeStartEnabled();
@@ -583,25 +634,10 @@ async function startMintingFlow(){
   document.getElementById('btnStakeGetBalance')?.addEventListener('click', () => prefillStakeAmountFromBalance(true));
   
   // Stake XENFT event handlers
-  document.getElementById('btnStakeXenftSetMaxTerm')?.addEventListener('click', async () => {
-    try {
-      let provider = null;
-      try {
-        const rpcList = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC_READ];
-        provider = new Web3(rpcList[0]);
-      } catch (_) {
-        provider = new Web3(DEFAULT_RPC_READ);
-      }
-      const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
-      const xen = new provider.eth.Contract(window.xenAbi, xenAddress);
-      const secs = await xen.methods.getCurrentMaxTerm().call();
-      const days = Math.max(1, Math.min(1000, Math.floor(Number(secs)/86400)));
-      document.getElementById('stakeXenftTermDays').value = String(days);
-      updateStakeXenftTermPreview();
-      console.log(`[STAKE-XENFT] Max term from XEN: ${days} day(s).`);
-    } catch(e) {
-      console.warn('Failed to fetch max term from XEN', e);
-    }
+  document.getElementById('btnStakeXenftSetMaxTerm')?.addEventListener('click', () => {
+    document.getElementById('stakeXenftTermDays').value = '1000';
+    updateStakeXenftTermPreview();
+    console.log('[STAKE-XENFT] Max term set to 1000 days (fixed maximum for Stake XENFTs).');
   });
   
   document.getElementById('stakeXenftTermDays')?.addEventListener('input', updateStakeXenftTermPreview);
@@ -729,6 +765,7 @@ async function startMintingFlow(){
       if (stakeXenftActs) stakeXenftActs.style.display = showStakeXenft ? '' : 'none';
       
       if (showStake) prefillStakeAmountFromBalance();
+      if (showStakeXenft) prefillStakeXenftAmountFromBalance();
     };
     if (sel) { sel.addEventListener('change', onChange); onChange(); }
   })();
