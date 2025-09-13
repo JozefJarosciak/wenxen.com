@@ -29,6 +29,12 @@
   // padTopicAddress -> js/utils/stringUtils.js
   // fmtLocalDateTime, dayKeyLocal -> js/utils/dateUtils.js
 
+  // Ensure functions are available
+  const cleanHexAddr = window.cleanHexAddr || (addr => String(addr || "").trim().toLowerCase());
+  const padTopicAddress = window.padTopicAddress || (addr => "0x" + "0".repeat(24) + addr.replace(/^0x/, "").toLowerCase());
+  const fmtLocalDateTime = window.fmtLocalDateTime || (ts => new Date(ts * 1000).toLocaleString());
+  const dayKeyLocal = window.dayKeyLocal || (ts => new Date(ts * 1000).toISOString().split('T')[0]);
+
   // IDB
   const STORE="stakes", STORE_ST="scanState";
   function openDB(){return new Promise((resolve,reject)=>{
@@ -101,6 +107,161 @@
     }
   }
 
+  // --- Fast XEN Stakes scanning using exact same method as working scanner ---
+  async function scanStakesEventBased(addr, etherscanApiKey) {
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    console.log(`🚀 XEN Stakes Scanner - Using unified event-based scanning for ${currentChain} address ${addr}`);
+    console.log(`🔑 XEN Stakes Scanner - API Key present: ${!!etherscanApiKey}`);
+
+    try {
+      // Use exact same Web3 instance creation as working scanner
+      const w3 = newWeb3();
+
+      // Get genesis timestamp for APY calculation
+      const xen = new w3.eth.Contract(window.xenAbi, CONTRACT_ADDRESS);
+      let genesisTs = 1665187200, SECONDS_IN_DAY = 86400;
+      try { genesisTs = Number(await xen.methods.genesisTs().call()) || genesisTs; } catch {}
+      try { SECONDS_IN_DAY = Number(await xen.methods.SECONDS_IN_DAY().call()) || 86400; } catch {}
+
+      // APY calculation function (same as working scanner)
+      const apyAt = (ts) => {
+        const START = 20, END = 2, STEP = 90 * SECONDS_IN_DAY;
+        const dec = Math.floor(Math.max(0, ts - genesisTs) / STEP);
+        const apy = START - dec;
+        return apy < END ? END : apy;
+      };
+
+      // Use exact same contract address as working scanner
+      const xenContractAddress = CONTRACT_ADDRESS;
+
+      // Use exact same topic calculation as working scanner
+      const topicStaked = w3.utils.sha3("Staked(address,uint256,uint256)");
+      const topicWithdrawn = w3.utils.sha3("Withdrawn(address,uint256,uint256)");
+
+      // Use exact same address padding as working scanner
+      const userAddressTopic = padTopicAddress(addr);
+
+      console.log(`🔍 Using CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}`);
+      console.log(`🔍 Calculated Staked topic: ${topicStaked}`);
+      console.log(`🔍 Calculated Withdrawn topic: ${topicWithdrawn}`);
+      console.log(`🔍 User address topic: ${userAddressTopic}`);
+
+      const stakes = [];
+
+      // Use exact same fetchLogsSplit method as working scanner
+      console.log(`📡 XEN Stakes Scanner - Using fetchLogsSplit method like working scanner...`);
+
+      try {
+        // Fetch Staked events using exact same method
+        const sinkStaked = [];
+        await fetchLogsSplit(etherscanApiKey, {
+          fromBlock: "0",
+          toBlock: "latest",
+          address: CONTRACT_ADDRESS,
+          topic0: topicStaked,
+          topic1: userAddressTopic
+        }, sinkStaked);
+
+        console.log(`XEN Stakes Scanner - fetchLogsSplit found ${sinkStaked.length} Staked events for ${addr}`);
+
+        for (const event of sinkStaked) {
+          // Decode the event data like the working scanner does
+          let amountWei = 0n, termDays = 0;
+          try {
+            const dataHex = event.data || "0x";
+            const decoded = w3.eth.abi.decodeParameters(["uint256","uint256"], dataHex);
+            amountWei = BigInt(decoded[0].toString());
+            termDays = Number(decoded[1]) || 0;
+          } catch(e) {
+            console.warn(`XEN Stakes Scanner - Could not decode event data for ${event.transactionHash}:`, e);
+          }
+
+          const blockNumber = Number(BigInt(event.blockNumber));
+          const timeStamp = Number(BigInt(event.timeStamp || "0x0"));
+
+          const TOK = 10n ** 18n;
+          const amountTokens = (amountWei >= 0n) ? (amountWei / TOK) : 0n;
+          const maturityTs = timeStamp + termDays * 86400;
+          const apy = apyAt(timeStamp);
+          const status = maturityTs <= Math.floor(Date.now() / 1000) ? "Claimable" : "Maturing";
+
+          const stakeRow = {
+            id: `${addr}-${event.transactionHash}`,
+            owner: addr,
+            amount: amountTokens.toString(),
+            amountWei: amountWei.toString(),
+            term: termDays,
+            apy,
+            startTs: timeStamp,
+            maturityTs,
+            Maturity_Date_Fmt: fmtLocalDateTime(maturityTs),
+            maturityDateOnly: dayKeyLocal(maturityTs),
+            SourceType: "Stake",
+            status: status,
+            Status: status,
+            actions: [{ type: "stake", hash: event.transactionHash, timeStamp: timeStamp }]
+          };
+
+          stakes.push(stakeRow);
+          console.log(`XEN Stakes Scanner - Found Staked event: ${event.transactionHash} at block ${blockNumber}, amount: ${amountTokens} XEN, term: ${termDays} days`);
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 200));
+
+        // Fetch Withdrawn events using exact same method
+        const sinkWithdrawn = [];
+        await fetchLogsSplit(etherscanApiKey, {
+          fromBlock: "0",
+          toBlock: "latest",
+          address: CONTRACT_ADDRESS,
+          topic0: topicWithdrawn,
+          topic1: userAddressTopic
+        }, sinkWithdrawn);
+
+        console.log(`XEN Stakes Scanner - fetchLogsSplit found ${sinkWithdrawn.length} Withdrawn events for ${addr}`);
+
+        // Process Withdrawn events and update corresponding stakes
+        for (const event of sinkWithdrawn) {
+          const withdrawTs = Number(BigInt(event.timeStamp || "0x0"));
+          const withdrawHash = event.transactionHash;
+
+          // Find the corresponding stake (simplified matching by oldest active stake)
+          const activeStake = stakes.find(stake => stake.status === 'Maturing' || stake.status === 'Claimable');
+          if (activeStake) {
+            const matured = (Number(activeStake.maturityTs) || 0) <= withdrawTs;
+            const newStatus = matured ? "Claimed" : "Ended Early";
+
+            activeStake.status = newStatus;
+            activeStake.Status = newStatus;
+
+            // Add withdraw action
+            if (!activeStake.actions.some(a => a.hash === withdrawHash)) {
+              activeStake.actions.push({
+                type: "withdraw",
+                hash: withdrawHash,
+                timeStamp: withdrawTs,
+              });
+            }
+
+            console.log(`XEN Stakes Scanner - Found Withdrawn event: ${withdrawHash} marking stake as ${newStatus}`);
+          }
+        }
+
+      } catch (error) {
+        console.error(`XEN Stakes Scanner - Error using fetchLogsSplit:`, error);
+        return null; // Signal fallback needed
+      }
+
+      console.log(`XEN Stakes Scanner - Event-based scan complete: ${stakes.length} stakes found for ${addr} on ${currentChain}`);
+      return stakes;
+
+    } catch (error) {
+      console.error(`XEN Stakes Scanner - Event-based scanning failed for ${addr} on ${currentChain}:`, error);
+      return null; // Signal fallback needed
+    }
+  }
+
   // Core scan
   async function scan(){
     const addrs=(function(){const el=document.getElementById("ethAddress"); const raw=(el&&el.value)||localStorage.getItem("ethAddress")||""; const arr=raw.replace(/[;,]+/g,"\n").split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>s.toLowerCase()); const seen=new Set(); return arr.filter(a=>seen.has(a)?false:(seen.add(a),true));})();
@@ -138,8 +299,38 @@
       for(let a=0; a<addrs.length; a++){
         const addr=cleanHexAddr(addrs[a]);
         try{
-          const latestBlock=await w3.eth.getBlockNumber();
           if (addrLbl) addrLbl.textContent=`Scanning address ${a+1}/${addrs.length}: ${addr.slice(0,6)}…${addr.slice(-4)}`;
+
+          // Try new fast event-based scanning first
+          if (window.progressUI) {
+            window.progressUI.setStage(`Using fast XEN Stakes scanning...`, 1, 1);
+          }
+
+          try {
+            console.log('🚀 XEN Stakes Scanner - Calling unified event-based scanner...');
+            updateStatus(`Using fast event-based scanning for ${addr.slice(0,6)}...`);
+
+            const eventStakes = await scanStakesEventBased(addr, apiKey);
+            if (eventStakes !== null) {
+              updateStatus(`Processing ${eventStakes.length} event-based stakes...`);
+
+              // Process and save the event-based stakes (they're already in the right format)
+              for (const stake of eventStakes) {
+                await saveRow(db, stake);
+              }
+
+              updateStatus(`✅ Event-based scan completed: ${eventStakes.length} stakes saved for ${addr.slice(0,6)}...`);
+              console.log(`🎉 XEN Stakes Scanner - Event-based scan saved ${eventStakes.length} stakes for ${addr}`);
+              continue; // Skip old scanning logic for this address
+            }
+          } catch (eventScanError) {
+            console.error('❌ XEN Stakes Scanner - Event-based scan failed, falling back to old method:', eventScanError);
+            updateStatus(`Event scan failed, using fallback method...`);
+          }
+
+          // Fallback to old block-based scanning if event-based fails
+          console.log('XEN Stakes Scanner - Using fallback block-based scanning...');
+          const latestBlock=await w3.eth.getBlockNumber();
 
           if (forceRescan) await clearScanState(db, addr);
           const st=await getScanState(db, addr);
