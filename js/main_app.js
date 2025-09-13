@@ -195,32 +195,32 @@ async function ensureAboutLoaded(){
 function setupAboutSubtabs() {
   const subtabButtons = document.querySelectorAll('.about-subtab-btn');
   const aboutPanels = document.querySelectorAll('.about-panel');
-  
+
   // Sync iframe themes on load
   syncIframeThemes();
-  
+
   subtabButtons.forEach(button => {
     button.addEventListener('click', (e) => {
       const targetSubtab = e.target.dataset.subtab;
-      
+
       // Update button states
       subtabButtons.forEach(btn => btn.classList.remove('active'));
       e.target.classList.add('active');
-      
+
       // Update panel visibility
       aboutPanels.forEach(panel => panel.classList.remove('active'));
-      
+
       // Show the selected panel
       const targetPanel = document.getElementById(`about-${targetSubtab}`);
       if (targetPanel) {
         targetPanel.classList.add('active');
-        
+
         // Sync theme for the iframe
         const iframe = targetPanel.querySelector('iframe');
         if (iframe) {
           syncIframeTheme(iframe);
         }
-        
+
         // Initialize Mermaid diagrams if showing design tab
         if (targetSubtab === 'design' && iframe && iframe.contentWindow && iframe.contentWindow.mermaid) {
           setTimeout(() => {
@@ -228,6 +228,11 @@ function setupAboutSubtabs() {
           }, 500);
         }
       }
+
+      // Dispatch subtab changed event for router integration
+      document.dispatchEvent(new CustomEvent('subtabChanged', {
+        detail: { tabId: 'tab-about', subtabId: targetSubtab }
+      }));
     });
   });
 }

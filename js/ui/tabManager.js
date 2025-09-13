@@ -130,13 +130,15 @@ export const tabManager = {
   },
 
   // Switch to specific tab
-  switchToTab(tabId) {
+  switchToTab(tabId, fromRouter = false) {
     // Validate tab exists
     const panel = document.getElementById(tabId);
     if (!panel) {
       console.warn(`Tab panel ${tabId} not found, falling back to dashboard`);
       tabId = 'tab-dashboard';
     }
+
+    const previousTab = this.currentTab;
 
     // Update states
     this.setPanelStates(tabId);
@@ -147,9 +149,9 @@ export const tabManager = {
     // Handle tab-specific logic
     this.onTabActivated(tabId);
 
-    // Dispatch custom event
+    // Dispatch custom event (include fromRouter flag to prevent routing loops)
     document.dispatchEvent(new CustomEvent('tabChanged', {
-      detail: { tabId, previousTab: this.currentTab }
+      detail: { tabId, previousTab, fromRouter }
     }));
   },
 
@@ -212,8 +214,8 @@ export const tabManager = {
   },
 
   // Public API for programmatic tab switching
-  setActiveTab(tabId) {
-    this.switchToTab(tabId);
+  setActiveTab(tabId, fromRouter = false) {
+    this.switchToTab(tabId, fromRouter);
   },
 
   // Get current active tab
