@@ -158,11 +158,11 @@ window.summaryOption2 = {
     // Clear existing rows
     tbody.innerHTML = '';
 
-    // Add rows for each type
-    this.addCointoolRow(tbody);
+    // Add rows for each type in desired order
     this.addXenftRow(tbody);
-    this.addStakeRow(tbody);
     this.addXenftStakeRow(tbody);
+    this.addStakeRow(tbody);
+    this.addCointoolRow(tbody);
 
     // Update table structure based on claimable data
     this.updateTableStructure();
@@ -377,7 +377,7 @@ window.summaryOption2 = {
       row.innerHTML = `
         <td>
           <div class="type-cell">
-            <span>Stakes</span>
+            <span>Stake (Vanilla)</span>
           </div>
         </td>
         <td class="metric-cell total">
@@ -426,7 +426,7 @@ window.summaryOption2 = {
     row.innerHTML = `
       <td>
         <div class="type-cell">
-          <span>Stakes</span>
+          <span>Stake (Vanilla)</span>
         </div>
       </td>
       <td class="metric-cell total">
