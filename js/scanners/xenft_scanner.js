@@ -354,21 +354,23 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     throw new Error("No working RPC endpoints found");
   }
 
-  // --- Fast Base XENFT scanning using transfer events ---
-  async function scanBaseFast(addr, etherscanApiKey) {
-    console.log(`XENFT Scanner - Using fast event-based scanning for Base address ${addr}`);
-    console.log(`XENFT Scanner - API Key present: ${!!etherscanApiKey}`);
+  // --- Fast XENFT scanning using transfer events (works for all chains) ---
+  async function scanEventBased(addr, etherscanApiKey) {
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    console.log(`🚀 XENFT Scanner - Using unified event-based scanning for ${currentChain} address ${addr}`);
+    console.log(`🔑 XENFT Scanner - API Key present: ${!!etherscanApiKey}`);
 
     try {
-      // Get XENFT contract address for Base
+      // Get XENFT contract address for current chain
       const xenftContractAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') ||
-        '0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6';
+        (currentChain === 'BASE' ? '0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6' : '0x0a252663DBCc0b073063D6420a40319e438Cfa59');
 
-      // Fetch all NFT transfers for this address using BaseScan API
-      const chainId = window.chainManager?.getCurrentConfig()?.id || 8453;
+      // Fetch all NFT transfers for this address using Etherscan multichain API
+      const chainId = window.chainManager?.getCurrentConfig()?.id || (currentChain === 'BASE' ? 8453 : 1);
       const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${xenftContractAddress}&address=${addr}&startblock=0&endblock=99999999&page=1&offset=10000&sort=asc&apikey=${etherscanApiKey}`;
 
-      console.log(`XENFT Scanner - Fetching transfers from: ${url.replace(etherscanApiKey, '[API_KEY]')}`);
+      console.log(`📡 XENFT Scanner - Fetching ${currentChain} transfers via Etherscan V2 API...`);
+      console.log(`🔗 Contract: ${xenftContractAddress}`);
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -377,7 +379,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
       const data = await response.json();
       if (data.status !== "1") {
-        console.log(`XENFT Scanner - No XENFT transfers found for ${addr} on Base`);
+        console.log(`XENFT Scanner - No XENFT transfers found for ${addr} on ${currentChain}`);
         return [];
       }
 
@@ -385,7 +387,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       const transfers = data.result || [];
       const ownedTokens = new Set();
 
-      console.log(`XENFT Scanner - Processing ${transfers.length} transfers for ${addr}`);
+      console.log(`XENFT Scanner - Processing ${transfers.length} transfers for ${addr} on ${currentChain}`);
 
       // Process transfers chronologically to track ownership
       for (const transfer of transfers) {
@@ -406,12 +408,12 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       }
 
       const tokenIds = Array.from(ownedTokens);
-      console.log(`XENFT Scanner - Fast scan complete: ${tokenIds.length} tokens owned by ${addr}: [${tokenIds.join(', ')}]`);
+      console.log(`XENFT Scanner - Event-based scan complete: ${tokenIds.length} tokens owned by ${addr} on ${currentChain}: [${tokenIds.join(', ')}]`);
 
       return tokenIds.sort((a, b) => Number(a) - Number(b));
 
     } catch (error) {
-      console.error(`XENFT Scanner - Fast Base scanning failed for ${addr}:`, error);
+      console.error(`XENFT Scanner - Event-based scanning failed for ${addr} on ${currentChain}:`, error);
       return null; // Signal fallback needed
     }
   }
@@ -453,181 +455,35 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         const contractAddress = contract.options.address;
         console.log(`XENFT Scanner - Chain: ${currentChain}, Contract: ${contractAddress}, Address: ${addr}`);
         
-        // Special handling for Base chain - use fast event-based scanning
-        if (currentChain === 'BASE') {
-          const etherscanApiKey = document.getElementById('etherscanApiKey')?.value?.trim();
-          if (!etherscanApiKey) {
-            console.error('XENFT Scanner - Etherscan API key required for Base scanning');
-            alert('Please add an Etherscan API key in Settings to scan Base XENFTs');
-            continue;
-          }
-
-          if (window.progressUI) {
-            window.progressUI.setStage('Using fast Base XENFT scanning...', 1, 1);
-          }
-
-          // Use fast event-based scanning
-          try {
-            console.log('XENFT Scanner - Calling scanBaseFast...');
-            const fastTokenIds = await scanBaseFast(addr, etherscanApiKey);
-            if (fastTokenIds !== null) {
-              tokenIds = fastTokenIds;
-              console.log(`XENFT Scanner - Fast scan found ${tokenIds.length} tokens for ${addr}`);
-            } else {
-              console.log('XENFT Scanner - Fast scan returned null, skipping address');
-              continue;
-            }
-          } catch (fastScanError) {
-            console.error('XENFT Scanner - Fast scan threw error:', fastScanError);
-            continue;
-          }
-
-          // Fast Base scanning is now complete, proceed to token processing
-        } else {
-          // For other chains, use standard methods
-          let targetBalance = 0;
-          try {
-            targetBalance = Number(await contract.methods.balanceOf(addr).call());
-            console.log(`XENFT Scanner - ${addr} has ${targetBalance} XENFTs on Base`);
-          } catch (e) {
-            console.log(`Balance check failed for ${addr}:`, e.message);
-          }
-
-          if (targetBalance > 0) {
-            // Clear scan state if force rescan
-            if (forceRescan && scanState) {
-              await clearScanState(db, addr);
-              console.log(`XENFT Scanner - Force rescan enabled, cleared previous state for ${addr}`);
-            }
-            // Get the latest token ID to know where to start searching
-            let latestTokenId = 860000; // Default estimate
-            try {
-              latestTokenId = Number(await contract.methods.tokenIdCounter().call());
-              console.log(`XENFT Scanner - Latest token ID on Base: ${latestTokenId}`);
-            } catch (e) {
-              console.log(`Could not get tokenIdCounter, using estimate`);
-            }
-            
-            // Search backwards from the latest token ID
-            // Need to search enough range to find all tokens
-            let foundCount = 0;
-            const maxSearch = Math.max(20000, targetBalance * 100); // Search at least 20k tokens or 100x the balance
-
-            // Resume from last scanned position if available
-            let startId = latestTokenId;
-            const endId = Math.max(1, latestTokenId - maxSearch);
-
-            // Track the actual search range for progress calculation
-            let actualSearchRange = maxSearch;
-            let progressOffset = 0;
-
-            if (scanState && scanState.lastScannedTokenId && !forceRescan) {
-              startId = scanState.lastScannedTokenId - 1; // Resume from one before last scanned
-              foundCount = scanState.foundTokens || 0;
-              progressOffset = latestTokenId - startId; // How much we've already searched
-              actualSearchRange = startId - endId + 1; // Remaining range to search
-              console.log(`XENFT Scanner - Resuming Base scan from token ID ${startId}, already found ${foundCount} tokens`);
-              console.log(`XENFT Scanner - Already searched ${progressOffset} tokens, ${actualSearchRange} remaining`);
-            } else {
-              console.log(`XENFT Scanner - Starting fresh Base scan from ID ${startId} down to ${endId}`);
-            }
-
-            const searchStartTime = Date.now();
-            for (let testId = startId; testId >= endId && foundCount < targetBalance; testId--) {
-              try {
-                const testOwner = await contract.methods.ownerOf(testId.toString()).call();
-                if (testOwner.toLowerCase() === addr.toLowerCase()) {
-                  // Validate with vmuCount like in Python code
-                  try {
-                    const vmuCount = await contract.methods.vmuCount(testId.toString()).call();
-                    if (Number(vmuCount) > 0) {
-                      tokenIds.push(testId.toString());
-                      foundCount++;
-                      console.log(`XENFT Scanner - Found valid Base token ${testId} for ${addr} (${foundCount}/${targetBalance})`);
-                    }
-                  } catch (e) {
-                    // If vmuCount fails, still add it as it passed ownerOf check
-                    tokenIds.push(testId.toString());
-                    foundCount++;
-                    console.log(`XENFT Scanner - Found Base token ${testId} for ${addr} (${foundCount}/${targetBalance})`);
-                  }
-                }
-              } catch (err) {
-                // Token doesn't exist or not owned, continue
-              }
-              
-              // Save progress every 500 tokens to avoid too frequent DB writes
-              if (testId % 500 === 0) {
-                await putScanState(db, addr, testId, foundCount);
-              }
-
-              // Add small delay every 25 tokens to avoid rate limiting
-              if (testId % 25 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 20));
-              }
-
-              // Show progress with ETA
-              if (testId % 100 === 0 && window.progressUI) {
-                const searched = startId - testId; // Tokens searched in current session
-                const totalSearched = progressOffset + searched; // Total tokens searched overall
-                const elapsed = (Date.now() - searchStartTime) / 1000;
-                const rate = searched / Math.max(1, elapsed);
-                const remaining = actualSearchRange - searched;
-                const eta = rate > 0 ? remaining / rate : 0;
-
-                let etaText = '';
-                if (eta > 0 && eta < 3600) {
-                  if (eta < 60) {
-                    etaText = `, ETA: ${Math.ceil(eta)}s`;
-                  } else {
-                    const mins = Math.floor(eta / 60);
-                    const secs = Math.ceil(eta % 60);
-                    etaText = `, ETA: ${mins}m ${secs}s`;
-                  }
-                }
-
-                window.progressUI.setStage(`Searching Base tokens (found ${foundCount}/${targetBalance}${etaText})`, totalSearched, maxSearch);
-              }
-            }
-
-            // Mark scan as completed and save final state
-            await markScanComplete(db, addr, foundCount);
-            console.log(`XENFT Scanner - Base scan completed for ${addr}, found ${foundCount} tokens total`);
-
-            // Sort token IDs in ascending order for display
-            tokenIds.sort((a, b) => Number(a) - Number(b));
-
-            if (tokenIds.length > 0) {
-              console.log(`XENFT Scanner - Found ${tokenIds.length}/${targetBalance} Base tokens for ${addr}: ${tokenIds.join(', ')}`);
-              if (tokenIds.length < targetBalance) {
-                console.log(`XENFT Scanner - Note: Could not find all tokens, may need wider search range`);
-              }
-            } else {
-              console.log(`XENFT Scanner - No tokens found for ${addr} in search range`);
-            }
-          }
-          // For other chains, use standard methods
-          // Try ownedTokens first (Ethereum XENFT method)
-          if (contract.methods.ownedTokens) {
-            try {
-              tokenIds = await contract.methods.ownedTokens().call({ from: addr });
-            } catch (ownedTokensError) {
-              // If ownedTokens fails, try standard ERC721 enumerable methods
-              if (contract.methods.balanceOf) {
-                const balance = await contract.methods.balanceOf(addr).call();
-                tokenIds = await Promise.all(
-                  Array.from({length:Number(balance)},(_,j)=>contract.methods.tokenOfOwnerByIndex(addr,j).call())
-                );
-              }
-            }
-          } else if (contract.methods.balanceOf) {
-            // Fallback to standard ERC721 enumerable methods
-            const balance = await contract.methods.balanceOf(addr).call();
-            tokenIds = await Promise.all(
-              Array.from({length:Number(balance)},(_,j)=>contract.methods.tokenOfOwnerByIndex(addr,j).call())
-            );
-          }
+        // Use unified fast event-based scanning for all chains
+        const etherscanApiKey = document.getElementById('etherscanApiKey')?.value?.trim();
+        if (!etherscanApiKey) {
+          console.error(`XENFT Scanner - Etherscan API key required for ${currentChain} scanning`);
+          alert(`Please add an Etherscan API key in Settings to scan ${currentChain} XENFTs`);
+          continue;
         }
+
+        if (window.progressUI) {
+          window.progressUI.setStage(`Using fast ${currentChain} XENFT scanning...`, 1, 1);
+        }
+
+        // Use fast event-based scanning for all chains
+        try {
+          console.log('XENFT Scanner - Calling unified event-based scanner...');
+          const eventTokenIds = await scanEventBased(addr, etherscanApiKey);
+          if (eventTokenIds !== null) {
+            tokenIds = eventTokenIds;
+            console.log(`XENFT Scanner - Event-based scan found ${tokenIds.length} tokens for ${addr} on ${currentChain}`);
+          } else {
+            console.log('XENFT Scanner - Event-based scan returned null, skipping address');
+            continue;
+          }
+        } catch (eventScanError) {
+          console.error('XENFT Scanner - Event-based scan threw error:', eventScanError);
+          continue;
+        }
+
+        // Event-based scanning is now complete for all chains, proceed to token processing
       } catch (e) {
         const msg = (e && (e.message || String(e))) || "";
         // Detect HTTP 408 or EVM timeout shapes
