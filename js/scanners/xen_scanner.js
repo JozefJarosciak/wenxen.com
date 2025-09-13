@@ -177,6 +177,45 @@
           const apy = apyAt(timeStamp);
           const status = maturityTs <= Math.floor(Date.now() / 1000) ? "Claimable" : "Maturing";
 
+          // Format dates using Luxon like other scanners for consistency
+          let Maturity_Date_Fmt = "", maturityDateOnly = "";
+          try {
+            if (typeof window.luxon !== "undefined" && window.luxon.DateTime) {
+              const dt = window.luxon.DateTime.fromSeconds(maturityTs);
+              Maturity_Date_Fmt = dt.toFormat("yyyy LLL dd, hh:mm a");
+              maturityDateOnly = dt.toFormat("yyyy-MM-dd");
+              console.log(`XEN Stakes Scanner - Using Luxon formatting: ${Maturity_Date_Fmt} | ${maturityDateOnly}`);
+            } else {
+              console.log(`XEN Stakes Scanner - Luxon not available, using manual fallback formatting`);
+              // Manual fallback to match other scanners' format exactly
+              const d = new Date(maturityTs * 1000);
+              const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+              const day = String(d.getDate()).padStart(2, "0");
+              let hour = d.getHours();
+              const ampm = hour >= 12 ? "PM" : "AM";
+              hour = hour % 12 || 12;
+              const minute = String(d.getMinutes()).padStart(2, "0");
+
+              Maturity_Date_Fmt = `${d.getFullYear()} ${months[d.getMonth()]} ${day}, ${String(hour).padStart(2, "0")}:${minute} ${ampm}`;
+              maturityDateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${day}`;
+              console.log(`XEN Stakes Scanner - Manual fallback formatting: ${Maturity_Date_Fmt} | ${maturityDateOnly}`);
+            }
+          } catch (e) {
+            console.warn(`XEN Stakes Scanner - Date formatting error:`, e);
+            // Manual fallback in case of error too
+            const d = new Date(maturityTs * 1000);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const day = String(d.getDate()).padStart(2, "0");
+            let hour = d.getHours();
+            const ampm = hour >= 12 ? "PM" : "AM";
+            hour = hour % 12 || 12;
+            const minute = String(d.getMinutes()).padStart(2, "0");
+
+            Maturity_Date_Fmt = `${d.getFullYear()} ${months[d.getMonth()]} ${day}, ${String(hour).padStart(2, "0")}:${minute} ${ampm}`;
+            maturityDateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${day}`;
+            console.log(`XEN Stakes Scanner - Error fallback formatting: ${Maturity_Date_Fmt} | ${maturityDateOnly}`);
+          }
+
           const stakeRow = {
             id: `${addr}-${event.transactionHash}`,
             owner: addr,
@@ -186,8 +225,8 @@
             apy,
             startTs: timeStamp,
             maturityTs,
-            Maturity_Date_Fmt: fmtLocalDateTime(maturityTs),
-            maturityDateOnly: dayKeyLocal(maturityTs),
+            Maturity_Date_Fmt,
+            maturityDateOnly,
             SourceType: "Stake",
             status: status,
             Status: status,
@@ -379,6 +418,24 @@
                   const apy = apyAt(tsSec);
                   const _status = maturityTs <= Math.floor(Date.now() / 1000) ? "Claimable" : "Maturing";
 
+                  // Format dates using Luxon like other scanners for consistency
+                  let Maturity_Date_Fmt = "", maturityDateOnly = "";
+                  try {
+                    if (typeof window.luxon !== "undefined" && window.luxon.DateTime) {
+                      const dt = window.luxon.DateTime.fromSeconds(maturityTs);
+                      Maturity_Date_Fmt = dt.toFormat("yyyy LLL dd, hh:mm a");
+                      maturityDateOnly = dt.toFormat("yyyy-MM-dd");
+                    } else {
+                      // Fallback if Luxon not available
+                      Maturity_Date_Fmt = fmtLocalDateTime(maturityTs);
+                      maturityDateOnly = dayKeyLocal(maturityTs);
+                    }
+                  } catch (e) {
+                    console.warn(`XEN Stakes Scanner - Date formatting error:`, e);
+                    Maturity_Date_Fmt = fmtLocalDateTime(maturityTs);
+                    maturityDateOnly = dayKeyLocal(maturityTs);
+                  }
+
                   const row = {
                     id, // Now defined
                     owner: addr,
@@ -388,8 +445,8 @@
                     apy,
                     startTs: tsSec, // ✅ FIX: Use tsSec
                     maturityTs,
-                    Maturity_Date_Fmt: fmtLocalDateTime(maturityTs),
-                    maturityDateOnly: dayKeyLocal(maturityTs),
+                    Maturity_Date_Fmt,
+                    maturityDateOnly,
                     SourceType: "Stake",
                     status: _status,
                     Status: _status,
