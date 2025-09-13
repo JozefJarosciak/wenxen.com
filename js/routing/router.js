@@ -22,9 +22,14 @@ export const router = {
     this.isInitialized = true;
   },
 
-  // Detect base path for production deployment
+  // Detect base path and environment for routing
   detectBasePath() {
     const pathname = window.location.pathname;
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+
+    // Check if we're in IDE development server (IntelliJ IDEA)
+    this.isIdeServer = hostname === 'localhost' && port === '63342';
 
     // In production (GitHub Pages or similar), base path might be /wenxen.com/
     // In development (file:// or localhost), base path is usually empty
@@ -34,6 +39,13 @@ export const router = {
       routeConfig.basePath = '/wenxen.com';
     } else {
       routeConfig.basePath = '';
+    }
+
+    // For IDE server, we need to use query parameters instead of path routing
+    if (this.isIdeServer) {
+      this.routingMode = 'query';
+    } else {
+      this.routingMode = 'path';
     }
   },
 
@@ -60,17 +72,24 @@ export const router = {
     });
   },
 
-  // Get current path from URL
+  // Get current path from URL (supports both path and query modes)
   getCurrentPath() {
-    const pathname = window.location.pathname;
-    const basePath = routeConfig.basePath;
+    if (this.routingMode === 'query') {
+      // For IDE server, use query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('route') || '';
+    } else {
+      // Standard path routing
+      const pathname = window.location.pathname;
+      const basePath = routeConfig.basePath;
 
-    // Remove base path if present
-    if (basePath && pathname.startsWith(basePath)) {
-      return pathname.substring(basePath.length);
+      // Remove base path if present
+      if (basePath && pathname.startsWith(basePath)) {
+        return pathname.substring(basePath.length);
+      }
+
+      return pathname;
     }
-
-    return pathname;
   },
 
   // Handle current route (from URL)
@@ -107,10 +126,25 @@ export const router = {
     const origin = window.location.origin;
     const basePath = routeConfig.basePath;
 
-    // Ensure path starts with /
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (this.routingMode === 'query') {
+      // For IDE server, use query parameter
+      const baseUrl = `${origin}${window.location.pathname}`;
+      const urlParams = new URLSearchParams(window.location.search);
 
-    return `${origin}${basePath}${cleanPath}`;
+      // Preserve existing parameters but update route
+      if (path && path !== '/') {
+        urlParams.set('route', path.replace(/^\/+/, ''));
+      } else {
+        urlParams.delete('route');
+      }
+
+      const queryString = urlParams.toString();
+      return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+    } else {
+      // Standard path routing
+      const cleanPath = path.startsWith('/') ? path : `/${path}`;
+      return `${origin}${basePath}${cleanPath}`;
+    }
   },
 
   // Navigate to a specific route
