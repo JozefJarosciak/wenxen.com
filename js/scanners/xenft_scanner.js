@@ -93,11 +93,14 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
       const dbName = `${chainPrefix}_DB_Xenft`;
       
-      const request = indexedDB.open(dbName, 1);
+      const request = indexedDB.open(dbName, 2);
       request.onupgradeneeded = event => {
         const db = event.target.result;
         if (!db.objectStoreNames.contains("xenfts")) {
           db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+        }
+        if (!db.objectStoreNames.contains("scanState")) {
+          db.createObjectStore("scanState", { keyPath: "address" });
         }
       };
       request.onsuccess = e => resolve(e.target.result);
@@ -123,7 +126,56 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     return all.find(t => t.tokenId == tokenId || t.Xenft_id == tokenId);
   }
 
+  // --- SCAN STATE MANAGEMENT ---
+  async function getScanState(db, address) {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction("scanState", "readonly");
+        const store = tx.objectStore("scanState");
+        const req = store.get(address.toLowerCase());
+        req.onsuccess = e => resolve(e.target.result || null);
+        req.onerror = e => reject(e.target.error);
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
 
+  async function putScanState(db, address, lastTokenId, foundTokens) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("scanState", "readwrite");
+      tx.objectStore("scanState").put({
+        address: address.toLowerCase(),
+        lastScannedTokenId: Number(lastTokenId) || 0,
+        foundTokens: foundTokens || 0,
+        updatedAt: Date.now(),
+        searchCompleted: false
+      }).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async function markScanComplete(db, address, totalFound) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("scanState", "readwrite");
+      tx.objectStore("scanState").put({
+        address: address.toLowerCase(),
+        lastScannedTokenId: 0,
+        foundTokens: totalFound || 0,
+        updatedAt: Date.now(),
+        searchCompleted: true
+      }).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async function clearScanState(db, address) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("scanState", "readwrite");
+      tx.objectStore("scanState").delete(address.toLowerCase()).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
 
   // --- LOG SCAN (bulkClaimMintReward -> EndTorrent) ---
   async function fetchEndTorrentActions(w3OrRpcList, addr, fromBlock) {
@@ -302,6 +354,68 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     throw new Error("No working RPC endpoints found");
   }
 
+  // --- Fast Base XENFT scanning using transfer events ---
+  async function scanBaseFast(addr, etherscanApiKey) {
+    console.log(`XENFT Scanner - Using fast event-based scanning for Base address ${addr}`);
+    console.log(`XENFT Scanner - API Key present: ${!!etherscanApiKey}`);
+
+    try {
+      // Get XENFT contract address for Base
+      const xenftContractAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') ||
+        '0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6';
+
+      // Fetch all NFT transfers for this address using BaseScan API
+      const chainId = window.chainManager?.getCurrentConfig()?.id || 8453;
+      const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${xenftContractAddress}&address=${addr}&startblock=0&endblock=99999999&page=1&offset=10000&sort=asc&apikey=${etherscanApiKey}`;
+
+      console.log(`XENFT Scanner - Fetching transfers from: ${url.replace(etherscanApiKey, '[API_KEY]')}`);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`BaseScan API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.status !== "1") {
+        console.log(`XENFT Scanner - No XENFT transfers found for ${addr} on Base`);
+        return [];
+      }
+
+      // Process transfers to find currently owned tokens
+      const transfers = data.result || [];
+      const ownedTokens = new Set();
+
+      console.log(`XENFT Scanner - Processing ${transfers.length} transfers for ${addr}`);
+
+      // Process transfers chronologically to track ownership
+      for (const transfer of transfers) {
+        const tokenId = transfer.tokenID;
+        const fromAddr = transfer.from.toLowerCase();
+        const toAddr = transfer.to.toLowerCase();
+        const userAddr = addr.toLowerCase();
+
+        if (toAddr === userAddr) {
+          // Token transferred TO user (mint or receive)
+          ownedTokens.add(tokenId);
+          console.log(`XENFT Scanner - Token ${tokenId} acquired by ${addr} in tx ${transfer.hash}`);
+        } else if (fromAddr === userAddr) {
+          // Token transferred FROM user (sent away)
+          ownedTokens.delete(tokenId);
+          console.log(`XENFT Scanner - Token ${tokenId} transferred away from ${addr} in tx ${transfer.hash}`);
+        }
+      }
+
+      const tokenIds = Array.from(ownedTokens);
+      console.log(`XENFT Scanner - Fast scan complete: ${tokenIds.length} tokens owned by ${addr}: [${tokenIds.join(', ')}]`);
+
+      return tokenIds.sort((a, b) => Number(a) - Number(b));
+
+    } catch (error) {
+      console.error(`XENFT Scanner - Fast Base scanning failed for ${addr}:`, error);
+      return null; // Signal fallback needed
+    }
+  }
+
   // --- public scan() ---
   async function scan() {
     
@@ -339,10 +453,38 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         const contractAddress = contract.options.address;
         console.log(`XENFT Scanner - Chain: ${currentChain}, Contract: ${contractAddress}, Address: ${addr}`);
         
-        // Special handling for Base chain
+        // Special handling for Base chain - use fast event-based scanning
         if (currentChain === 'BASE') {
-          // For Base, we need a different approach since it doesn't support enumeration properly
-          // First check the balance to know how many tokens to look for
+          const etherscanApiKey = document.getElementById('etherscanApiKey')?.value?.trim();
+          if (!etherscanApiKey) {
+            console.error('XENFT Scanner - Etherscan API key required for Base scanning');
+            alert('Please add an Etherscan API key in Settings to scan Base XENFTs');
+            continue;
+          }
+
+          if (window.progressUI) {
+            window.progressUI.setStage('Using fast Base XENFT scanning...', 1, 1);
+          }
+
+          // Use fast event-based scanning
+          try {
+            console.log('XENFT Scanner - Calling scanBaseFast...');
+            const fastTokenIds = await scanBaseFast(addr, etherscanApiKey);
+            if (fastTokenIds !== null) {
+              tokenIds = fastTokenIds;
+              console.log(`XENFT Scanner - Fast scan found ${tokenIds.length} tokens for ${addr}`);
+            } else {
+              console.log('XENFT Scanner - Fast scan returned null, skipping address');
+              continue;
+            }
+          } catch (fastScanError) {
+            console.error('XENFT Scanner - Fast scan threw error:', fastScanError);
+            continue;
+          }
+
+          // Fast Base scanning is now complete, proceed to token processing
+        } else {
+          // For other chains, use standard methods
           let targetBalance = 0;
           try {
             targetBalance = Number(await contract.methods.balanceOf(addr).call());
@@ -350,8 +492,13 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           } catch (e) {
             console.log(`Balance check failed for ${addr}:`, e.message);
           }
-          
+
           if (targetBalance > 0) {
+            // Clear scan state if force rescan
+            if (forceRescan && scanState) {
+              await clearScanState(db, addr);
+              console.log(`XENFT Scanner - Force rescan enabled, cleared previous state for ${addr}`);
+            }
             // Get the latest token ID to know where to start searching
             let latestTokenId = 860000; // Default estimate
             try {
@@ -365,11 +512,27 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
             // Need to search enough range to find all tokens
             let foundCount = 0;
             const maxSearch = Math.max(20000, targetBalance * 100); // Search at least 20k tokens or 100x the balance
-            const startId = latestTokenId;
+
+            // Resume from last scanned position if available
+            let startId = latestTokenId;
             const endId = Math.max(1, latestTokenId - maxSearch);
-            
-            console.log(`XENFT Scanner - Searching for ${targetBalance} tokens from ID ${startId} down to ${endId}`);
-            
+
+            // Track the actual search range for progress calculation
+            let actualSearchRange = maxSearch;
+            let progressOffset = 0;
+
+            if (scanState && scanState.lastScannedTokenId && !forceRescan) {
+              startId = scanState.lastScannedTokenId - 1; // Resume from one before last scanned
+              foundCount = scanState.foundTokens || 0;
+              progressOffset = latestTokenId - startId; // How much we've already searched
+              actualSearchRange = startId - endId + 1; // Remaining range to search
+              console.log(`XENFT Scanner - Resuming Base scan from token ID ${startId}, already found ${foundCount} tokens`);
+              console.log(`XENFT Scanner - Already searched ${progressOffset} tokens, ${actualSearchRange} remaining`);
+            } else {
+              console.log(`XENFT Scanner - Starting fresh Base scan from ID ${startId} down to ${endId}`);
+            }
+
+            const searchStartTime = Date.now();
             for (let testId = startId; testId >= endId && foundCount < targetBalance; testId--) {
               try {
                 const testOwner = await contract.methods.ownerOf(testId.toString()).call();
@@ -393,31 +556,56 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
                 // Token doesn't exist or not owned, continue
               }
               
+              // Save progress every 500 tokens to avoid too frequent DB writes
+              if (testId % 500 === 0) {
+                await putScanState(db, addr, testId, foundCount);
+              }
+
               // Add small delay every 25 tokens to avoid rate limiting
               if (testId % 25 === 0) {
                 await new Promise(resolve => setTimeout(resolve, 20));
               }
-              
-              // Show progress
+
+              // Show progress with ETA
               if (testId % 100 === 0 && window.progressUI) {
-                const searched = startId - testId;
-                window.progressUI.setStage(`Searching Base tokens (found ${foundCount}/${targetBalance})`, searched, maxSearch);
+                const searched = startId - testId; // Tokens searched in current session
+                const totalSearched = progressOffset + searched; // Total tokens searched overall
+                const elapsed = (Date.now() - searchStartTime) / 1000;
+                const rate = searched / Math.max(1, elapsed);
+                const remaining = actualSearchRange - searched;
+                const eta = rate > 0 ? remaining / rate : 0;
+
+                let etaText = '';
+                if (eta > 0 && eta < 3600) {
+                  if (eta < 60) {
+                    etaText = `, ETA: ${Math.ceil(eta)}s`;
+                  } else {
+                    const mins = Math.floor(eta / 60);
+                    const secs = Math.ceil(eta % 60);
+                    etaText = `, ETA: ${mins}m ${secs}s`;
+                  }
+                }
+
+                window.progressUI.setStage(`Searching Base tokens (found ${foundCount}/${targetBalance}${etaText})`, totalSearched, maxSearch);
               }
             }
-            
+
+            // Mark scan as completed and save final state
+            await markScanComplete(db, addr, foundCount);
+            console.log(`XENFT Scanner - Base scan completed for ${addr}, found ${foundCount} tokens total`);
+
             // Sort token IDs in ascending order for display
             tokenIds.sort((a, b) => Number(a) - Number(b));
-            
+
             if (tokenIds.length > 0) {
               console.log(`XENFT Scanner - Found ${tokenIds.length}/${targetBalance} Base tokens for ${addr}: ${tokenIds.join(', ')}`);
               if (tokenIds.length < targetBalance) {
                 console.log(`XENFT Scanner - Note: Could not find all tokens, may need wider search range`);
               }
             } else {
-              console.log(`XENFT Scanner - No tokens found for ${addr} in range ${endId}-${startId}`);
+              console.log(`XENFT Scanner - No tokens found for ${addr} in search range`);
             }
           }
-        } else {
           // For other chains, use standard methods
           // Try ownedTokens first (Ethereum XENFT method)
           if (contract.methods.ownedTokens) {
