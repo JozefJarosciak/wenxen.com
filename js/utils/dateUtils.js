@@ -26,7 +26,7 @@ export const dateUtils = {
       try {
         return window.luxon.DateTime.fromSeconds(ts)
           .setZone(Intl.DateTimeFormat().resolvedOptions().timeZone)
-          .toFormat("yyyy-LL-dd");
+          .toFormat("yyyy-MM-dd");
       } catch {}
     }
     const d = new Date(ts * 1000);

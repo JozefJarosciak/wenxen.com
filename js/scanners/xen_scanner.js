@@ -73,7 +73,7 @@
   // Logs API
   async function fetchLogsOnce(apiKey, params){
     const qs=new URLSearchParams(params).toString();
-    // Use Etherscan V2 multichain API
+    // Use Etherscan V2 multichain API for all chains
     const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
     const url=`https://api.etherscan.io/v2/api?chainid=${chainId}&module=logs&action=getLogs&${qs}&apikey=${apiKey}`;
     await throttle();
@@ -107,18 +107,21 @@
     }
   }
 
-  // --- Fast XEN Stakes scanning using exact same method as working scanner ---
+  // --- Fast XEN Stakes scanning using unified method for all chains ---
   async function scanStakesEventBased(addr, etherscanApiKey) {
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
     console.log(`🚀 XEN Stakes Scanner - Using unified event-based scanning for ${currentChain} address ${addr}`);
-    console.log(`🔑 XEN Stakes Scanner - API Key present: ${!!etherscanApiKey}`);
 
     try {
       // Use exact same Web3 instance creation as working scanner
       const w3 = newWeb3();
 
+      // Get the correct contract address for current chain
+      const xenContractAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || CONTRACT_ADDRESS;
+      console.log(`🔍 Using XEN contract: ${xenContractAddress} on ${currentChain}`);
+
       // Get genesis timestamp for APY calculation
-      const xen = new w3.eth.Contract(window.xenAbi, CONTRACT_ADDRESS);
+      const xen = new w3.eth.Contract(window.xenAbi, xenContractAddress);
       let genesisTs = 1665187200, SECONDS_IN_DAY = 86400;
       try { genesisTs = Number(await xen.methods.genesisTs().call()) || genesisTs; } catch {}
       try { SECONDS_IN_DAY = Number(await xen.methods.SECONDS_IN_DAY().call()) || 86400; } catch {}
@@ -131,9 +134,6 @@
         return apy < END ? END : apy;
       };
 
-      // Use exact same contract address as working scanner
-      const xenContractAddress = CONTRACT_ADDRESS;
-
       // Use exact same topic calculation as working scanner
       const topicStaked = w3.utils.sha3("Staked(address,uint256,uint256)");
       const topicWithdrawn = w3.utils.sha3("Withdrawn(address,uint256,uint256)");
@@ -141,28 +141,20 @@
       // Use exact same address padding as working scanner
       const userAddressTopic = padTopicAddress(addr);
 
-      console.log(`🔍 Using CONTRACT_ADDRESS: ${CONTRACT_ADDRESS}`);
-      console.log(`🔍 Calculated Staked topic: ${topicStaked}`);
-      console.log(`🔍 Calculated Withdrawn topic: ${topicWithdrawn}`);
-      console.log(`🔍 User address topic: ${userAddressTopic}`);
-
       const stakes = [];
 
-      // Use exact same fetchLogsSplit method as working scanner
-      console.log(`📡 XEN Stakes Scanner - Using fetchLogsSplit method like working scanner...`);
-
       try {
-        // Fetch Staked events using exact same method
+        // Fetch Staked events using exact same method as working scanner
         const sinkStaked = [];
         await fetchLogsSplit(etherscanApiKey, {
           fromBlock: "0",
           toBlock: "latest",
-          address: CONTRACT_ADDRESS,
+          address: xenContractAddress,
           topic0: topicStaked,
           topic1: userAddressTopic
         }, sinkStaked);
 
-        console.log(`XEN Stakes Scanner - fetchLogsSplit found ${sinkStaked.length} Staked events for ${addr}`);
+        console.log(`XEN Stakes Scanner - found ${sinkStaked.length} Staked events for ${addr} on ${currentChain}`);
 
         for (const event of sinkStaked) {
           // Decode the event data like the working scanner does
@@ -203,7 +195,6 @@
           };
 
           stakes.push(stakeRow);
-          console.log(`XEN Stakes Scanner - Found Staked event: ${event.transactionHash} at block ${blockNumber}, amount: ${amountTokens} XEN, term: ${termDays} days`);
         }
 
         // Small delay to avoid rate limiting
@@ -214,12 +205,12 @@
         await fetchLogsSplit(etherscanApiKey, {
           fromBlock: "0",
           toBlock: "latest",
-          address: CONTRACT_ADDRESS,
+          address: xenContractAddress,
           topic0: topicWithdrawn,
           topic1: userAddressTopic
         }, sinkWithdrawn);
 
-        console.log(`XEN Stakes Scanner - fetchLogsSplit found ${sinkWithdrawn.length} Withdrawn events for ${addr}`);
+        console.log(`XEN Stakes Scanner - found ${sinkWithdrawn.length} Withdrawn events for ${addr} on ${currentChain}`);
 
         // Process Withdrawn events and update corresponding stakes
         for (const event of sinkWithdrawn) {
@@ -243,8 +234,6 @@
                 timeStamp: withdrawTs,
               });
             }
-
-            console.log(`XEN Stakes Scanner - Found Withdrawn event: ${withdrawHash} marking stake as ${newStatus}`);
           }
         }
 
