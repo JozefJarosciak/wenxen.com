@@ -434,6 +434,6 @@ window.getNetworkState = () => {
   return { currentChain, config };
 };
 
-console.log('NetworkSelector: Module loaded');
+// NetworkSelector module loaded
 
 export default networkSelector;

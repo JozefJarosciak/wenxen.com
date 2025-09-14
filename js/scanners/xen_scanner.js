@@ -42,11 +42,29 @@
     const dbName = window.chainManager?.getDatabaseName('xen_stake') || 'ETH_DB_XenStake';
     const req=indexedDB.open(dbName,1);
     req.onupgradeneeded=e=>{const db=e.target.result;
+      console.log(`[XenStake] Database upgrade needed for ${dbName}, creating stores...`);
       if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:"id"}); os.createIndex("byOwner","owner",{unique:false});}
       if(!db.objectStoreNames.contains(STORE_ST)){db.createObjectStore(STORE_ST,{keyPath:"address"});}
       if(!db.objectStoreNames.contains("processProgress")){db.createObjectStore("processProgress",{keyPath:"address"});}
     };
-    req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{
+      const db = req.result;
+      // Check if required stores exist, if not, need to recreate database with higher version
+      if (!db.objectStoreNames.contains(STORE)) {
+        console.warn(`[XenStake] Database ${dbName} exists but missing required stores. Attempting to recreate...`);
+        db.close();
+        // Delete and recreate database
+        const deleteReq = indexedDB.deleteDatabase(dbName);
+        deleteReq.onsuccess = () => {
+          // Recursively call openDB to recreate with upgrade
+          openDB().then(resolve).catch(reject);
+        };
+        deleteReq.onerror = () => reject(deleteReq.error);
+        return;
+      }
+      resolve(db);
+    };
+    req.onerror=()=>reject(req.error);
   });}
   function getByOwner(db, owner){return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORE,"readonly"); const idx=tx.objectStore(STORE).index("byOwner");
@@ -638,13 +656,21 @@
   function getAllFromStore(db, storeName) {
     return new Promise((resolve, reject) => {
       try {
+        // Check if the store exists before creating transaction
+        if (!db.objectStoreNames.contains(storeName)) {
+          console.error(`[XenStake] Store '${storeName}' not found in database. Available stores:`, Array.from(db.objectStoreNames));
+          resolve([]); // Return empty array instead of failing
+          return;
+        }
+
         const tx = db.transaction(storeName, "readonly");
         const store = tx.objectStore(storeName);
         const req = store.getAll();
         req.onsuccess = e => resolve(e.target.result || []);
         req.onerror = e => reject(e.target.error);
       } catch (e) {
-        reject(e);
+        console.error(`[XenStake] Error accessing store '${storeName}':`, e);
+        resolve([]); // Return empty array instead of failing
       }
     });
   }

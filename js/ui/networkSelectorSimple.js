@@ -199,6 +199,6 @@ window.forceNetworkUpdate = () => {
   console.log('Forced network display update');
 };
 
-console.log('NetworkSelector: Module loaded');
+// NetworkSelector module loaded
 
 export default networkSelector;

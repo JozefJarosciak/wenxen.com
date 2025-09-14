@@ -21,14 +21,14 @@ export class SuperSafeDatabaseMigrator {
     // Database configurations
     this.ethereumDatabases = [
       { name: 'ETH_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-      { name: 'ETH_DB_Xenft', version: 1, stores: ['xenfts'] },  // XENFTs only has xenfts store
+      { name: 'ETH_DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
       { name: 'ETH_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
       { name: 'ETH_DB_XenftStake', version: 2, stores: ['stakes', 'scanState'] }
     ];
     
     this.baseDatabases = [
       { name: 'BASE_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-      { name: 'BASE_DB_Xenft', version: 1, stores: ['xenfts'] },  // XENFTs only has xenfts store
+      { name: 'BASE_DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
       { name: 'BASE_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
       { name: 'BASE_DB_XenftStake', version: 2, stores: ['stakes', 'scanState'] }
     ];
@@ -616,7 +616,7 @@ export class SuperSafeDatabaseMigrator {
     
     // Check if migration is needed
     if (!this.isMigrationNeeded()) {
-      console.log('Database migration already completed (v7_super_safe)');
+      // Database migration already completed
       return { success: true, results: [], alreadyCompleted: true };
     }
     
@@ -1204,9 +1204,11 @@ export class SuperSafeDatabaseMigrator {
           if (!db.objectStoreNames.contains(storeName)) {
             let keyPath = 'id';
             if (storeName === 'mints') keyPath = 'ID';
+            if (storeName === 'xenfts') keyPath = 'Xenft_id';
             if (storeName === 'scanState') keyPath = 'address';
             if (storeName === 'actionsCache') keyPath = 'address';
             if (storeName === 'stakes') keyPath = 'id';
+            if (storeName === 'processProgress') keyPath = 'id';
             
             const store = db.createObjectStore(storeName, { keyPath });
             
@@ -1298,4 +1300,4 @@ export const superSafeMigrator = new SuperSafeDatabaseMigrator();
 // Export for use
 export default superSafeMigrator;
 
-console.log('Super-safe database migrator v7 loaded - use superSafeMigrator.migrate() to start');
+// Super-safe database migrator v7 loaded

@@ -12,16 +12,19 @@
       }
     },
     'xenft': {
-      version: 1,
+      version: 3,
       stores: {
-        'xenfts': { keyPath: 'Xenft_id' }  // Correct store name and keyPath
+        'xenfts': { keyPath: 'Xenft_id' },
+        'scanState': { keyPath: 'address' },
+        'processProgress': { keyPath: 'id' }
       }
     },
     'xenft-stake': {
       version: 2,
       stores: {
         'stakes': { keyPath: 'tokenId' },
-        'scanState': { keyPath: 'address' }
+        'scanState': { keyPath: 'address' },
+        'processProgress': { keyPath: 'address' }
       }
     },
     'xen-stake': {
@@ -96,7 +99,7 @@
       try {
         await initializeDatabase(dbName, schema);
         results.push({ dbName, status: 'success' });
-        console.log(`[DatabaseInitializer] Created/verified database: ${dbName}`);
+        // Database created/verified
       } catch (error) {
         results.push({ dbName, status: 'error', error });
         console.error(`[DatabaseInitializer] Failed to initialize ${dbName}:`, error);
@@ -114,14 +117,14 @@
       const isEthereum = currentChain === 'ETHEREUM';
       const chainPrefix = isEthereum ? 'ETH' : 'BASE';
       
-      console.log(`[DatabaseInitializer] Initializing databases for ${chainPrefix} chain...`);
+      // Initializing databases for chain
       const results = await initializeChainDatabases(chainPrefix);
       
       // Log summary
       const successful = results.filter(r => r.status === 'success').length;
       const failed = results.filter(r => r.status === 'error').length;
       
-      console.log(`[DatabaseInitializer] Initialization complete: ${successful} successful, ${failed} failed`);
+      // Initialization complete
       
       return results;
     } catch (error) {
@@ -135,7 +138,7 @@
     const results = [];
     
     for (const chainPrefix of ['ETH', 'BASE']) {
-      console.log(`[DatabaseInitializer] Initializing databases for ${chainPrefix} chain...`);
+      // Initializing databases for chain
       const chainResults = await initializeChainDatabases(chainPrefix);
       results.push(...chainResults);
     }
@@ -159,7 +162,7 @@
   // Listen for chain switches to initialize new chain databases
   if (window.addEventListener) {
     window.addEventListener('chainChanged', async (event) => {
-      console.log('[DatabaseInitializer] Chain changed, initializing databases...');
+      // Chain changed, initializing databases
       await initializeCurrentChainDatabases();
     });
   }

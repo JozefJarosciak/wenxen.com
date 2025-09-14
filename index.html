@@ -745,7 +745,7 @@
       if (typeof window.acceptPrivacy !== 'undefined' && 
           typeof window.showToast !== 'undefined' &&
           typeof window.setActiveTab !== 'undefined') {
-        console.log('Modules loaded successfully after ' + (moduleCheckCount * 100) + 'ms');
+        // Modules loaded successfully
         return;
       }
       
@@ -795,7 +795,7 @@
   
   // Run migrations in order
   async function initializeApp() {
-    console.log('Starting app initialization');
+    // Starting app initialization
     
     try {
       // 1. Migrate localStorage from old format to chain-specific
@@ -841,7 +841,7 @@
         dangerZoneDropdown.initialize();
       }
       
-      console.log('App initialization complete');
+      // App initialization complete
     } catch (error) {
       console.error('App initialization error:', error);
     }

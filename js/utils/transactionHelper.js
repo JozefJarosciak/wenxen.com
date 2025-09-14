@@ -66,5 +66,5 @@
   // Also expose executeWithAutoRescan directly for backward compatibility
   window.executeWithAutoRescan = executeWithAutoRescan;
   
-  console.log('[Transaction Helper] Initialized');
+  // Transaction helper initialized
 })();

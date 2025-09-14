@@ -1,7 +1,7 @@
 // Migration utilities for moving from old localStorage format to chain-specific format
 
 export function migrateOldLocalStorage() {
-  console.log('Starting localStorage migration...');
+  // Starting localStorage migration
   const migrations = [];
   
   // List of keys to migrate from old format to Ethereum-specific
@@ -74,7 +74,7 @@ export function migrateOldLocalStorage() {
   }
   
   if (migrations.length > 0) {
-    console.log('Migration completed:', migrations);
+    // Migration completed silently
     
     // Set a flag to indicate migration has been done
     localStorage.setItem('migrationCompleted', 'v1');

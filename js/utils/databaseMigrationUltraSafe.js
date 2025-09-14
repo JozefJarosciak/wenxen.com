@@ -17,16 +17,16 @@ export class UltraSafeDatabaseMigrator {
     // Database configurations
     this.ethereumDatabases = [
       { name: 'ETH_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-      { name: 'ETH_DB_Xenft', version: 1, stores: ['mints', 'scanState'] },
+      { name: 'ETH_DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
       { name: 'ETH_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
-      { name: 'ETH_DB_XenftStake', version: 1, stores: ['stakes', 'scanState'] }
+      { name: 'ETH_DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
     ];
     
     this.baseDatabases = [
       { name: 'BASE_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-      { name: 'BASE_DB_Xenft', version: 1, stores: ['mints', 'scanState'] },
+      { name: 'BASE_DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
       { name: 'BASE_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
-      { name: 'BASE_DB_XenftStake', version: 1, stores: ['stakes', 'scanState'] }
+      { name: 'BASE_DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
     ];
     
     // Validation rules
@@ -873,9 +873,11 @@ export class UltraSafeDatabaseMigrator {
             // Determine key path
             let keyPath = 'id';
             if (storeName === 'mints') keyPath = 'ID';
+            if (storeName === 'xenfts') keyPath = 'Xenft_id';
             if (storeName === 'scanState') keyPath = 'address';
             if (storeName === 'actionsCache') keyPath = 'address';
             if (storeName === 'stakes') keyPath = 'id';
+            if (storeName === 'processProgress') keyPath = 'id';
             
             const store = db.createObjectStore(storeName, { keyPath });
             
@@ -955,4 +957,4 @@ export const ultraSafeMigrator = new UltraSafeDatabaseMigrator();
 // Export for use
 export default ultraSafeMigrator;
 
-console.log('Ultra-safe database migrator loaded - use ultraSafeMigrator.migrate() to start');
+// Ultra-safe database migrator loaded

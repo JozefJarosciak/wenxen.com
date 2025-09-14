@@ -533,7 +533,7 @@ if (typeof window !== 'undefined') {
     const initHandler = () => {
         if (window.ethereum) {
             chainMismatchHandler.initialize();
-            console.log('Chain mismatch handler initialized');
+            // Chain mismatch handler initialized
         } else {
             // Retry after a delay if ethereum not ready
             setTimeout(initHandler, 1000);

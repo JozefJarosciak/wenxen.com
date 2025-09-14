@@ -467,7 +467,7 @@ class NetworkSelectorUI {
 export const networkSelector = new NetworkSelectorUI();
 
 // Don't auto-initialize here - will be initialized from index.html after app setup
-console.log('NetworkSelector module loaded');
+// NetworkSelector module loaded
 
 // Make available globally
 window.networkSelector = networkSelector;

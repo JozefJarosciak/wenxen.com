@@ -9,7 +9,7 @@ class NetworkSelectorUI {
   }
 
   async initialize() {
-    console.log('NetworkSelector: Starting initialization');
+    // Starting initialization
     
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
@@ -27,7 +27,7 @@ class NetworkSelectorUI {
       return;
     }
     
-    console.log('NetworkSelector: Elements found, setting up...');
+    // Elements found, setting up
     
     // Setup event handlers
     this.setupEventHandlers();
@@ -48,7 +48,7 @@ class NetworkSelectorUI {
       });
     }
     
-    console.log('NetworkSelector: Initialization complete');
+    // Initialization complete
   }
   
   setupEventHandlers() {
@@ -213,7 +213,7 @@ class NetworkSelectorUI {
       return;
     }
     
-    console.log(`NetworkSelector: Updating display for ${currentChain} (${config.name})`);
+    // Updating display for network
     
     // Update button text
     const nameEl = document.getElementById('networkDisplayName');
@@ -312,4 +312,4 @@ window.debugNetworkSelector = () => {
   console.log('Dropdown display:', document.getElementById('networkDropdown')?.style.display);
 };
 
-console.log('NetworkSelector: Module loaded');
+// NetworkSelector module loaded

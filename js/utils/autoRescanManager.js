@@ -97,5 +97,5 @@
   // Make it globally available
   window.autoRescanManager = autoRescanManager;
   
-  console.log('[Auto-Rescan] Manager initialized');
+  // Auto-rescan manager initialized
 })();

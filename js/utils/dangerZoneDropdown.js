@@ -87,7 +87,7 @@ export class DangerZoneDropdown {
       this.dropdown.value = 'all-with-storage';
     }
     
-    console.log(`Danger Zone dropdown updated for ${chainName}`);
+    // Danger Zone dropdown updated
   }
 }
 

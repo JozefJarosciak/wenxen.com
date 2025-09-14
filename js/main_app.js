@@ -6265,8 +6265,8 @@ async function exportBackup() {
   const chains = ['ETHEREUM', 'BASE'];
   const dbTypes = [
     { suffix: 'DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-    { suffix: 'DB_Xenft', version: 1, stores: ['xenfts'] },
-    { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState'] },
+    { suffix: 'DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
+    { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] },
     { suffix: 'DB_XenStake', version: 1, stores: ['stakes', 'scanState'] }
   ];
   
@@ -6480,12 +6480,12 @@ async function cleanupIncorrectDatabases() {
     'DB-Xen-Stake', 'DB-Xenft-Stake'
   ];
   
-  console.log('[Cleanup] Removing incorrectly named databases with hyphens...');
+  // Cleaning up incorrectly named databases
   
   for (const dbName of incorrectDatabases) {
     try {
       await deleteDatabaseByName(dbName);
-      console.log(`[Cleanup] Deleted incorrect database: ${dbName}`);
+      // Deleted incorrect database
     } catch (e) {
       // Database might not exist, that's ok
     }
