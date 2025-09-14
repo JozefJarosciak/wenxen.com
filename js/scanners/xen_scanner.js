@@ -402,24 +402,20 @@
               }
 
               updateStatus(`✅ Event-based scan completed: ${eventStakes.length} stakes saved for ${addr.slice(0,6)}...`);
-              console.log(`🎉 XEN Stakes Scanner - Event-based scan saved ${eventStakes.length} stakes for ${addr}`);
               // Clear progress on successful completion
               await clearProcessProgress(db, addr);
               continue; // Skip old scanning logic for this address
             }
           } catch (eventScanError) {
-            console.error('❌ XEN Stakes Scanner - Event-based scan failed, falling back to old method:', eventScanError);
             updateStatus(`Event scan failed, using fallback method...`);
           }
 
           // Fallback to old block-based scanning if event-based fails
-          console.log('XEN Stakes Scanner - Using fallback block-based scanning...');
           const latestBlock=await w3.eth.getBlockNumber();
 
           if (forceRescan) {
             await clearScanState(db, addr);
             await clearProcessProgress(db, addr);
-            console.log(`[XEN] Force rescan enabled - cleared process progress for ${addr}`);
           }
           const st=await getScanState(db, addr);
 
@@ -433,8 +429,6 @@
             : Math.max(MIN_CONTRACT_BLOCK, lastScannedBlock + 1 - SCAN_BACKTRACK_BLOCKS);
 
           const resumeFrom = safeStartBlock;
-
-          console.log(`[XEN] Safety buffer: lastTx=${lastTransactionBlock}, safeStart=${safeStartBlock}, buffer=${SAFETY_BUFFER_BLOCKS}`);
 
           const totalBlocks=Math.max(0, latestBlock - resumeFrom + 1);
           const totalChunks=Math.max(1, Math.ceil(totalBlocks/CHUNK_SIZE));

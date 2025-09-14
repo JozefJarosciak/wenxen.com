@@ -571,10 +571,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         throw new Error('Failed to get current block number from any RPC endpoint');
       }
 
-      console.log(`[XENFT] Scanning from block ${safeStartBlock} to ${currentBlock} (${currentBlock - safeStartBlock + 1} blocks)`);
-
       if (safeStartBlock > currentBlock) {
-        console.log(`[XENFT] No new blocks to scan for ${addr}`);
         if (window.progressUI) {
           window.progressUI.setStage(`No new blocks to scan for ${addr}`, 1, 1);
         }
@@ -606,8 +603,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           window.progressUI.setStage(`Scanning blocks ${blockStart}-${blockEnd} (chunk ${chunkIndex}/${totalChunks})`, chunkIndex, totalChunks);
         }
 
-        console.log(`[XENFT] Processing chunk ${chunkIndex}/${totalChunks}: blocks ${blockStart}-${blockEnd}`);
-
         try {
           const chunkTransfers = await fetchXenftTransfersInRange(addr, etherscanApiKey, blockStart, blockEnd);
 
@@ -617,8 +612,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
             // Save progress after each chunk
             const lastTx = chunkTransfers[chunkTransfers.length - 1];
             await saveProcessProgress(db, addr, chunkIndex, lastTx.hash, totalProcessed + chunkTransfers.length);
-
-            console.log(`[XENFT] Chunk ${chunkIndex}: found ${chunkTransfers.length} transfers`);
 
             // Update progress with transfer count
             if (window.progressUI) {
@@ -635,8 +628,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           }
 
         } catch (error) {
-          console.error(`[XENFT] Chunk ${chunkIndex} failed:`, error);
-
           // Continue with next chunk on non-fatal errors
           if (!error.message.includes('timeout') && !error.message.includes('network')) {
             continue;
@@ -647,7 +638,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
       // Process transfers to find currently owned tokens
       const ownedTokens = new Set();
-      console.log(`[XENFT] Processing ${allTransfers.length} total transfers for ${addr}`);
 
       if (window.progressUI) {
         window.progressUI.setStage(`Processing ${allTransfers.length} transfers to determine ownership`, totalChunks, totalChunks);

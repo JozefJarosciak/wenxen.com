@@ -1035,13 +1035,14 @@ async function fetchAllWalletBalances() {
           return balance;
         } catch (e) {
           const isRateLimit = e?.message?.includes('request limit') || e?.message?.includes('rate limit');
-          const isNetworkError = e?.message?.includes('network') || e?.message?.includes('timeout');
 
-          console.warn(`[WALLET-BALANCE] ${name} failed for ${address}: ${e?.message || e}`);
+          // Reduced console spam - only log first retry
+          if (retry === 0) {
+            console.warn(`[WALLET-BALANCE] ${name} failed for ${address}: ${e?.message || e}`);
+          }
 
           // If this was the last retry, return 0
           if (retry === maxRetries - 1) {
-            console.error(`[WALLET-BALANCE] All RPCs failed for ${address}, defaulting to 0`);
             return '0';
           }
 
@@ -1071,7 +1072,9 @@ async function fetchAllWalletBalances() {
       balances[address] = balance;
     });
 
-    console.debug('[WALLET-BALANCE] Fetched balances:', Object.keys(balances).length, 'addresses');
+    // Cache balances globally for reuse
+    window._cachedWalletBalances = { ...balances };
+
     return balances;
 
   } catch (e) {
@@ -1079,6 +1082,10 @@ async function fetchAllWalletBalances() {
     return balances;
   }
 }
+
+// Throttle wallet balance updates to prevent spam
+let lastWalletBalanceUpdate = 0;
+const WALLET_BALANCE_THROTTLE_MS = 30000; // Only update every 30 seconds
 
 async function updateXENTotalBadge(includeWalletBalances = true) {
   const badge = document.getElementById("estXenTotal");
@@ -1119,27 +1126,45 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     addressBreakdown[address].count++;
   });
 
-  // Add wallet balances if requested
+  // Add wallet balances if requested and throttled
   if (includeWalletBalances) {
-    try {
-      const walletBalances = await fetchAllWalletBalances();
+    const now = Date.now();
+    const shouldUpdateBalances = (now - lastWalletBalanceUpdate) > WALLET_BALANCE_THROTTLE_MS;
 
-      Object.entries(walletBalances).forEach(([address, balanceWei]) => {
-        if (!addressBreakdown[address]) {
-          addressBreakdown[address] = {
-            xen: 0n,
-            count: 0,
-            walletBalance: 0n
-          };
+    if (shouldUpdateBalances) {
+      try {
+        lastWalletBalanceUpdate = now;
+        const walletBalances = await fetchAllWalletBalances();
+
+        Object.entries(walletBalances).forEach(([address, balanceWei]) => {
+          if (!addressBreakdown[address]) {
+            addressBreakdown[address] = {
+              xen: 0n,
+              count: 0,
+              walletBalance: 0n
+            };
+          }
+          // Convert from wei to tokens (divide by 10^18)
+          const balanceWeiBI = BigInt(balanceWei || '0');
+          const balanceTokens = balanceWeiBI / BigInt('1000000000000000000'); // 10^18
+          addressBreakdown[address].walletBalance = balanceTokens;
+          total += balanceTokens;
+        });
+      } catch (e) {
+        // Reduced console spam - only log major errors
+        if (e.message && !e.message.includes('rate limit')) {
+          console.warn('[XEN-TOTAL] Wallet balance error:', e.message);
         }
-        // Convert from wei to tokens (divide by 10^18)
-        const balanceWeiBI = BigInt(balanceWei || '0');
-        const balanceTokens = balanceWeiBI / BigInt('1000000000000000000'); // 10^18
-        addressBreakdown[address].walletBalance = balanceTokens;
-        total += balanceTokens;
+      }
+    } else {
+      // Use cached wallet balances from previous calculation
+      Object.keys(addressBreakdown).forEach(address => {
+        if (window._cachedWalletBalances && window._cachedWalletBalances[address]) {
+          const balanceTokens = BigInt(window._cachedWalletBalances[address]) / BigInt('1000000000000000000');
+          addressBreakdown[address].walletBalance = balanceTokens;
+          total += balanceTokens;
+        }
       });
-    } catch (e) {
-      console.error('[XEN-TOTAL] Failed to include wallet balances:', e);
     }
   }
 

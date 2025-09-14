@@ -126,8 +126,6 @@ async function scanCointoolMints() {
 
 // Scan mints for a specific address
 async function scanAddressMints(address, etherscanApiKey, forceRescan) {
-  console.log(`[COINTOOL] Scanning mints for ${address}`);
-
   // Get or refresh post-mint actions using event-based scanning
   const postMintActions = await fetchPostMintActions(address, etherscanApiKey, forceRescan);
 
@@ -143,11 +141,8 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
   const totalMints = Math.max(eventBasedMints.length, parseInt(maxId) || 0);
 
   if (totalMints === 0) {
-    console.log(`[COINTOOL] No mints found for ${address}`);
     return;
   }
-
-  console.log(`[COINTOOL] Found ${totalMints} potential mints for ${address} (events: ${eventBasedMints.length}, contract: ${maxId})`);
 
   // Initialize performance monitoring
   startPerformanceMonitoring(totalMints);
@@ -161,14 +156,8 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
 
   // Process event-based mints first (most recent/accurate)
   if (eventBasedMints.length > 0) {
-    console.log(`[COINTOOL] Processing ${eventBasedMints.length} event-based mints first`);
     if (window.progressUI && window.progressUI.setStage) {
       window.progressUI.setStage(`Found ${eventBasedMints.length} recent mint events`, 0, totalMints);
-    }
-    for (const event of eventBasedMints) {
-      // Extract mint ID from event data or topics if available
-      // For now, just ensure these events are captured
-      console.log(`[COINTOOL] Found mint event:`, event.transactionHash, 'at block', parseInt(event.blockNumber, 16));
     }
   }
 
@@ -181,7 +170,6 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
     const mintProgress = await getMintProgress(address);
     if (mintProgress && mintProgress.lastProcessedMintId > 0) {
       startFromMintId = mintProgress.lastProcessedMintId + 1;
-      console.log(`[COINTOOL] Resuming from mint ID ${startFromMintId} for ${address}`);
       if (window.progressUI && window.progressUI.setStage) {
         window.progressUI.setStage(`Resuming from mint ID ${startFromMintId}`, startFromMintId - 1, maxIdToProcess);
       }
@@ -189,7 +177,6 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
   } else {
     // Clear mint progress on force rescan
     await clearMintProgress(address);
-    console.log(`[COINTOOL] Force rescan enabled - cleared mint progress for ${address}`);
     if (window.progressUI && window.progressUI.setStage) {
       window.progressUI.setStage(`Starting full rescan of ${maxIdToProcess} mints`, 0, maxIdToProcess);
     }

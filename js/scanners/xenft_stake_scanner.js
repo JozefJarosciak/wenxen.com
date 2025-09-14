@@ -352,12 +352,10 @@
             const resumeIndex = newTxs.findIndex(tx => tx.hash === processProgress.lastProcessedTxHash);
             if (resumeIndex !== -1) {
               startFromIndex = resumeIndex + 1; // Start after the last processed transaction
-              console.log(`[XENFT Stake] Resuming from transaction ${startFromIndex}/${newTxs.length} (hash: ${processProgress.lastProcessedTxHash.slice(0,10)}...)`);
             }
           }
         } else {
           await clearProcessProgress(db, addr);
-          console.log(`[XENFT Stake] Force rescan enabled - cleared process progress for ${addr}`);
         }
 
         let _startedAt = Date.now();
@@ -378,6 +376,11 @@
             const eta = rate > 0 ? remain / rate : 0;
             if (window.progressUI) window.progressUI.setEta(eta);
             _lastUi = now;
+          }
+
+          // Yield to browser every 10 transactions to prevent UI freezing
+          if (i % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1));
           }
 
           const isMint = tx.to.toLowerCase() === addr.toLowerCase();
