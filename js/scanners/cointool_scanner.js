@@ -152,9 +152,19 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
   // Initialize performance monitoring
   startPerformanceMonitoring(totalMints);
 
+  // Initialize progress UI
+  if (window.progressUI) {
+    if (window.progressUI.setStage) {
+      window.progressUI.setStage(`Initializing Cointool scan for ${totalMints} potential mints`, 0, totalMints);
+    }
+  }
+
   // Process event-based mints first (most recent/accurate)
   if (eventBasedMints.length > 0) {
     console.log(`[COINTOOL] Processing ${eventBasedMints.length} event-based mints first`);
+    if (window.progressUI && window.progressUI.setStage) {
+      window.progressUI.setStage(`Found ${eventBasedMints.length} recent mint events`, 0, totalMints);
+    }
     for (const event of eventBasedMints) {
       // Extract mint ID from event data or topics if available
       // For now, just ensure these events are captured
@@ -172,17 +182,23 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
     if (mintProgress && mintProgress.lastProcessedMintId > 0) {
       startFromMintId = mintProgress.lastProcessedMintId + 1;
       console.log(`[COINTOOL] Resuming from mint ID ${startFromMintId} for ${address}`);
+      if (window.progressUI && window.progressUI.setStage) {
+        window.progressUI.setStage(`Resuming from mint ID ${startFromMintId}`, startFromMintId - 1, maxIdToProcess);
+      }
     }
   } else {
     // Clear mint progress on force rescan
     await clearMintProgress(address);
     console.log(`[COINTOOL] Force rescan enabled - cleared mint progress for ${address}`);
+    if (window.progressUI && window.progressUI.setStage) {
+      window.progressUI.setStage(`Starting full rescan of ${maxIdToProcess} mints`, 0, maxIdToProcess);
+    }
   }
 
-  // Process mints in parallel batches for better performance
-  // Configurable batch sizes - can be adjusted based on API performance
-  const BATCH_SIZE = parseInt(localStorage.getItem('cointoolBatchSize')) || 15; // Process 15 mints concurrently
-  const DELAY_BETWEEN_BATCHES = parseInt(localStorage.getItem('cointoolBatchDelay')) || 50; // 50ms delay between batches
+  // Process mints in sequential batches to prevent browser crashes
+  // Configurable batch sizes - smaller batches to prevent memory issues
+  const BATCH_SIZE = parseInt(localStorage.getItem('cointoolBatchSize')) || 10; // Process 10 mints per batch (reduced from 15)
+  const DELAY_BETWEEN_BATCHES = parseInt(localStorage.getItem('cointoolBatchDelay')) || 100; // 100ms minimum delay between batches
 
   const startTime = Date.now();
 
@@ -190,12 +206,34 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
     const endId = Math.min(startId + BATCH_SIZE - 1, maxIdToProcess);
     const batchStart = Date.now();
 
+    // Update progress UI at start of each batch
+    const overallProgress = Math.floor(((startId - startFromMintId) / (maxIdToProcess - startFromMintId + 1)) * 100);
+    if (window.progressUI) {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const processed = startId - startFromMintId;
+      const rate = processed > 0 ? processed / elapsed : 0;
+      const remaining = maxIdToProcess - endId;
+      const eta = rate > 0 && remaining > 0 ? `${Math.ceil(remaining / rate)}s` : 'calculating...';
+
+      if (window.progressUI.setStage) {
+        window.progressUI.setStage(`Processing mints ${startId}-${endId} (${rate.toFixed(1)}/s, ETA: ${eta})`, startId - startFromMintId, maxIdToProcess - startFromMintId + 1);
+      } else if (window.progressUI.setProgress) {
+        window.progressUI.setProgress(overallProgress, `Processing mints ${endId}/${maxIdToProcess} (${rate.toFixed(1)}/s, ETA: ${eta})`);
+      }
+    }
+
     // Process mints sequentially within batch to enable granular progress tracking
     for (let mintId = startId; mintId <= endId; mintId++) {
       try {
         await processMint(address, mintId, postMintActions, forceRescan);
         // Save progress after each mint to enable crash recovery
         await saveMintProgress(address, mintId);
+
+        // Yield to browser every 5 mints to prevent UI freezing
+        if ((mintId - startId) % 5 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 1));
+        }
+
       } catch (error) {
         console.error(`[COINTOOL] Failed to process mint ${mintId} for ${address}:`, error);
         // Continue with next mint even if one fails
@@ -207,19 +245,18 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
     const actualBatchSize = endId - startId + 1;
     recordBatchTime(actualBatchSize, batchDuration);
 
-    // Add small delay between batches to avoid overwhelming APIs
+    // Add small delay between batches to avoid overwhelming APIs and allow UI updates
     if (endId < maxIdToProcess) {
-      await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+      await new Promise(resolve => setTimeout(resolve, Math.max(DELAY_BETWEEN_BATCHES, 100)));
     }
 
-    // Update progress more frequently with performance metrics
-    if (window.progressUI && window.progressUI.setProgress) {
-      const progress = Math.floor((endId / maxIdToProcess) * 100);
-      const elapsed = (Date.now() - startTime) / 1000;
-      const rate = endId / elapsed;
-      const remaining = (maxIdToProcess - endId) / rate;
-      const eta = remaining > 0 ? `${Math.ceil(remaining)}s` : 'finishing...';
-      window.progressUI.setProgress(progress, `Processing mints ${endId}/${maxIdToProcess} (${rate.toFixed(1)}/s, ETA: ${eta})`);
+    // Force garbage collection hint (if available) after each batch to prevent memory buildup
+    if (window.gc && typeof window.gc === 'function') {
+      try {
+        window.gc();
+      } catch (e) {
+        // gc() not available in this browser, that's fine
+      }
     }
   }
   
