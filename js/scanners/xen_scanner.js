@@ -44,6 +44,7 @@
     req.onupgradeneeded=e=>{const db=e.target.result;
       if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:"id"}); os.createIndex("byOwner","owner",{unique:false});}
       if(!db.objectStoreNames.contains(STORE_ST)){db.createObjectStore(STORE_ST,{keyPath:"address"});}
+      if(!db.objectStoreNames.contains("processProgress")){db.createObjectStore("processProgress",{keyPath:"address"});}
     };
     req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
   });}
@@ -61,8 +62,41 @@
   function putScanState(db,address,last){address=cleanHexAddr(address);return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORE_ST,"readwrite"); tx.objectStore(STORE_ST).put({address,lastScannedBlock:Number(last)||0}).onsuccess=()=>resolve(); tx.onerror=e=>reject(e.target.error);
   });}
+
+  function putScanStateWithTransactions(db,address,lastScannedBlock,lastTransactionBlock){address=cleanHexAddr(address);return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE_ST,"readwrite");
+    const store=tx.objectStore(STORE_ST);
+
+    // Get existing state to preserve lastTransactionBlock if not provided
+    const getRequest=store.get(address);
+    getRequest.onsuccess=()=>{
+      const existing=getRequest.result||{};
+      const newState={
+        address,
+        lastScannedBlock:Number(lastScannedBlock)||0,
+        lastTransactionBlock:lastTransactionBlock>0?lastTransactionBlock:(existing.lastTransactionBlock||0),
+        lastScannedAt:Date.now()
+      };
+      store.put(newState).onsuccess=()=>resolve();
+    };
+    getRequest.onerror=e=>reject(e.target.error);
+    tx.onerror=e=>reject(e.target.error);
+  });}
   function clearScanState(db,address){address=cleanHexAddr(address);return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORE_ST,"readwrite"); tx.objectStore(STORE_ST).delete(address).onsuccess=()=>resolve(); tx.onerror=e=>reject(e.target.error);
+  });}
+
+  // Process progress tracking for crash recovery
+  function getProcessProgress(db,address){address=cleanHexAddr(address);return new Promise((resolve,reject)=>{
+    const tx=db.transaction("processProgress","readonly"); tx.objectStore("processProgress").get(address).onsuccess=e=>resolve(e.target.result||null); tx.onerror=e=>reject(e.target.error);
+  });}
+  function saveProcessProgress(db,address,currentChunk,processedInChunk,totalProcessed,lastProcessedHash){address=cleanHexAddr(address);return new Promise((resolve,reject)=>{
+    const tx=db.transaction("processProgress","readwrite");
+    const progress={address,currentChunk:Number(currentChunk)||0,processedInChunk:Number(processedInChunk)||0,totalProcessed:Number(totalProcessed)||0,lastProcessedHash:lastProcessedHash||"",updatedAt:Date.now()};
+    tx.objectStore("processProgress").put(progress).onsuccess=()=>resolve(); tx.onerror=e=>reject(e.target.error);
+  });}
+  function clearProcessProgress(db,address){address=cleanHexAddr(address);return new Promise((resolve,reject)=>{
+    const tx=db.transaction("processProgress","readwrite"); tx.objectStore("processProgress").delete(address).onsuccess=()=>resolve(); tx.onerror=e=>reject(e.target.error);
   });}
 
   // Web3 + RPC
@@ -77,8 +111,28 @@
     const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
     const url=`https://api.etherscan.io/v2/api?chainid=${chainId}&module=logs&action=getLogs&${qs}&apikey=${apiKey}`;
     await throttle();
-    const res=await fetch(url); if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data=await res.json().catch(()=>({status:"0",message:"bad json"})); return data;
+
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json().catch(()=>({status:"0",message:"bad json"}));
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error(`[XEN] Request timeout for URL: ${url}`);
+        return {status:"0", message:"Request timeout"};
+      }
+      throw error;
+    }
   }
   async function fetchLogsSplit(apiKey, params, sink, depth=0, attempt=1){
     try{
@@ -349,6 +403,8 @@
 
               updateStatus(`✅ Event-based scan completed: ${eventStakes.length} stakes saved for ${addr.slice(0,6)}...`);
               console.log(`🎉 XEN Stakes Scanner - Event-based scan saved ${eventStakes.length} stakes for ${addr}`);
+              // Clear progress on successful completion
+              await clearProcessProgress(db, addr);
               continue; // Skip old scanning logic for this address
             }
           } catch (eventScanError) {
@@ -360,10 +416,25 @@
           console.log('XEN Stakes Scanner - Using fallback block-based scanning...');
           const latestBlock=await w3.eth.getBlockNumber();
 
-          if (forceRescan) await clearScanState(db, addr);
+          if (forceRescan) {
+            await clearScanState(db, addr);
+            await clearProcessProgress(db, addr);
+            console.log(`[XEN] Force rescan enabled - cleared process progress for ${addr}`);
+          }
           const st=await getScanState(db, addr);
-          const baseStart = st ? (st.lastScannedBlock + 1) : MIN_CONTRACT_BLOCK;
-          const resumeFrom= Math.max(MIN_CONTRACT_BLOCK, baseStart - SCAN_BACKTRACK_BLOCKS);
+
+          // Use safety buffer approach: always rescan from before last transaction
+          const SAFETY_BUFFER_BLOCKS = 100; // Larger buffer for block-based scanning
+          const lastTransactionBlock = st?.lastTransactionBlock || 0;
+          const lastScannedBlock = st?.lastScannedBlock || 0;
+
+          const safeStartBlock = lastTransactionBlock > 0
+            ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, MIN_CONTRACT_BLOCK)
+            : Math.max(MIN_CONTRACT_BLOCK, lastScannedBlock + 1 - SCAN_BACKTRACK_BLOCKS);
+
+          const resumeFrom = safeStartBlock;
+
+          console.log(`[XEN] Safety buffer: lastTx=${lastTransactionBlock}, safeStart=${safeStartBlock}, buffer=${SAFETY_BUFFER_BLOCKS}`);
 
           const totalBlocks=Math.max(0, latestBlock - resumeFrom + 1);
           const totalChunks=Math.max(1, Math.ceil(totalBlocks/CHUNK_SIZE));
@@ -391,13 +462,37 @@
             const items=[]; for(const ev of sinkStake) items.push({kind:"stake", ev}); for(const ev of sinkWd) items.push({kind:"withdraw", ev});
             items.sort((a,b)=>{ const ba=Number(BigInt(a.ev.blockNumber)), bb=Number(BigInt(b.ev.blockNumber)); if(ba!==bb) return ba-bb; const la=Number(BigInt(a.ev.logIndex||"0x0")), lb=Number(BigInt(b.ev.logIndex||"0x0")); return la-lb; });
 
+            // Track the highest block that actually contains transactions
+            let lastBlockWithTransactions = 0;
+
             if(items.length){
               updateStatus(`Processing ${items.length} stake logs…`);
-              for(let i=0;i<items.length;i++){
+              // Get process progress for crash recovery
+              let processProgress = await getProcessProgress(db, addr);
+              let startFromIndex = 0;
+              let totalProcessedSoFar = 0;
+
+              if (processProgress && !forceRescan) {
+                // Find where to resume in this chunk based on last processed hash
+                const lastHash = processProgress.lastProcessedHash;
+                if (lastHash) {
+                  const resumeIndex = items.findIndex(item => item.ev.transactionHash === lastHash);
+                  if (resumeIndex !== -1) {
+                    startFromIndex = resumeIndex + 1; // Start after the last processed transaction
+                    totalProcessedSoFar = processProgress.totalProcessed || 0;
+                    console.log(`[XEN] Resuming from transaction ${startFromIndex}/${items.length} in chunk (hash: ${lastHash.slice(0,10)}...)`);
+                  }
+                }
+              }
+
+              for(let i=startFromIndex;i<items.length;i++){
                 const it=items[i], ev=it.ev;
                 const hash=ev.transactionHash;
                 const bnum=Number(BigInt(ev.blockNumber));
                 const tsHex=ev.timeStamp;
+
+                // Track the highest block number that contains transactions
+                lastBlockWithTransactions = Math.max(lastBlockWithTransactions, bnum);
                 const tsSec= tsHex ? Number(BigInt(tsHex)) : (await (async()=>{ try{ const b=await w3.eth.getBlock(bnum); return Number(b?.timestamp||0);}catch{return 0;} })());
 
                 if (it.kind==="stake"){
@@ -455,6 +550,8 @@
 
                   await saveRow(db, row);
                   stakesCache.push(row);
+                  // Save progress after each transaction for crash recovery
+                  await saveProcessProgress(db, addr, chunksDone, i + 1, totalProcessedSoFar + i + 1, hash);
                 } else {
                   const latestOpen = stakesCache.slice().sort((a,b)=>(b.startTs||0)-(a.startTs||0))
                     .find(r => !(Array.isArray(r.actions)&&r.actions.some(x=>x.type==="withdraw")));
@@ -479,9 +576,13 @@
                       });
                     }
                     await saveRow(db, latestOpen);
+                    // Save progress after each transaction for crash recovery
+                    await saveProcessProgress(db, addr, chunksDone, i + 1, totalProcessedSoFar + i + 1, hash);
                     if (i%10===0) await refreshStakesCache();
                   } else {
                     await refreshStakesCache();
+                    // Save progress even when no matching stake found
+                    await saveProcessProgress(db, addr, chunksDone, i + 1, totalProcessedSoFar + i + 1, hash);
                   }
                 }
               }
@@ -489,7 +590,14 @@
               if (tokenTxt) tokenTxt.textContent=`No XEN stake activity ${startBlock}–${endBlock}`;
             }
 
-            await putScanState(db, addr, endBlock);
+            // Always update progress, but track last transaction block separately for safety buffer
+            await putScanStateWithTransactions(db, addr, endBlock, lastBlockWithTransactions);
+
+            if (lastBlockWithTransactions > 0) {
+              console.log(`[XEN] Processed ${items.length} transactions, highest block: ${lastBlockWithTransactions}`);
+            } else {
+              console.log(`[XEN] No transactions found in blocks ${startBlock}-${endBlock}`);
+            }
             chunksDone++; window.__scanLastActivityTs=Date.now();
             if (tokenBar) { tokenBar.max=totalChunks; tokenBar.value=chunksDone; }
             const now=Date.now();
@@ -516,6 +624,9 @@
           }
 
           if (tokenBar) { tokenBar.max=prevBarMax; tokenBar.value=prevBarVal; }
+          // Clear process progress on successful completion of address scanning
+          await clearProcessProgress(db, addr);
+          console.log(`[XEN] Chunk-based scan completed successfully for ${addr} - cleared process progress`);
         } catch(err){
           console.error("[XenStake] Scan failed for", addr, err);
           if (tokenTxt) tokenTxt.textContent=`Error scanning ${addr.slice(0,6)}…`;

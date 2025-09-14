@@ -63,6 +63,9 @@ async function openCointoolDB() {
       if (!db.objectStoreNames.contains("actionsCache")) {
         db.createObjectStore("actionsCache", { keyPath: "address" });
       }
+      if (!db.objectStoreNames.contains("mintProgress")) {
+        db.createObjectStore("mintProgress", { keyPath: "address" });
+      }
     };
     
     request.onsuccess = event => resolve(event.target.result);
@@ -125,67 +128,107 @@ async function scanCointoolMints() {
 async function scanAddressMints(address, etherscanApiKey, forceRescan) {
   console.log(`[COINTOOL] Scanning mints for ${address}`);
 
-  // Get or refresh post-mint actions
+  // Get or refresh post-mint actions using event-based scanning
   const postMintActions = await fetchPostMintActions(address, etherscanApiKey, forceRescan);
 
-  // Get max mint ID for this address
-  const maxId = await makeRpcCall(() => 
+  // First try to get latest mints via event-based scanning for better accuracy
+  const eventBasedMints = await scanEventsForMints(address, etherscanApiKey, forceRescan);
+
+  // Also get max mint ID for this address as fallback
+  const maxId = await makeRpcCall(() =>
     contractInstance.methods.map(address, COINTOOL_SALT_BYTES).call()
   );
 
-  if (!maxId || maxId === '0') {
+  // Use the higher of event-based count or contract maxId
+  const totalMints = Math.max(eventBasedMints.length, parseInt(maxId) || 0);
+
+  if (totalMints === 0) {
     console.log(`[COINTOOL] No mints found for ${address}`);
     return;
   }
 
-  console.log(`[COINTOOL] Found ${maxId} potential mints for ${address}`);
+  console.log(`[COINTOOL] Found ${totalMints} potential mints for ${address} (events: ${eventBasedMints.length}, contract: ${maxId})`);
 
   // Initialize performance monitoring
-  startPerformanceMonitoring(parseInt(maxId));
+  startPerformanceMonitoring(totalMints);
+
+  // Process event-based mints first (most recent/accurate)
+  if (eventBasedMints.length > 0) {
+    console.log(`[COINTOOL] Processing ${eventBasedMints.length} event-based mints first`);
+    for (const event of eventBasedMints) {
+      // Extract mint ID from event data or topics if available
+      // For now, just ensure these events are captured
+      console.log(`[COINTOOL] Found mint event:`, event.transactionHash, 'at block', parseInt(event.blockNumber, 16));
+    }
+  }
+
+  // Process all mints by ID (covering both old and new)
+  const maxIdToProcess = Math.max(totalMints, parseInt(maxId) || 0);
+
+  // Get last processed mint ID for crash recovery
+  let startFromMintId = 1;
+  if (!forceRescan) {
+    const mintProgress = await getMintProgress(address);
+    if (mintProgress && mintProgress.lastProcessedMintId > 0) {
+      startFromMintId = mintProgress.lastProcessedMintId + 1;
+      console.log(`[COINTOOL] Resuming from mint ID ${startFromMintId} for ${address}`);
+    }
+  } else {
+    // Clear mint progress on force rescan
+    await clearMintProgress(address);
+    console.log(`[COINTOOL] Force rescan enabled - cleared mint progress for ${address}`);
+  }
 
   // Process mints in parallel batches for better performance
   // Configurable batch sizes - can be adjusted based on API performance
   const BATCH_SIZE = parseInt(localStorage.getItem('cointoolBatchSize')) || 15; // Process 15 mints concurrently
   const DELAY_BETWEEN_BATCHES = parseInt(localStorage.getItem('cointoolBatchDelay')) || 50; // 50ms delay between batches
-  
+
   const startTime = Date.now();
-  
-  for (let startId = 1; startId <= maxId; startId += BATCH_SIZE) {
-    const endId = Math.min(startId + BATCH_SIZE - 1, maxId);
+
+  for (let startId = startFromMintId; startId <= maxIdToProcess; startId += BATCH_SIZE) {
+    const endId = Math.min(startId + BATCH_SIZE - 1, maxIdToProcess);
     const batchStart = Date.now();
-    const batchPromises = [];
-    
-    // Create batch of concurrent mint processing
+
+    // Process mints sequentially within batch to enable granular progress tracking
     for (let mintId = startId; mintId <= endId; mintId++) {
-      batchPromises.push(processMint(address, mintId, postMintActions, forceRescan));
+      try {
+        await processMint(address, mintId, postMintActions, forceRescan);
+        // Save progress after each mint to enable crash recovery
+        await saveMintProgress(address, mintId);
+      } catch (error) {
+        console.error(`[COINTOOL] Failed to process mint ${mintId} for ${address}:`, error);
+        // Continue with next mint even if one fails
+      }
     }
-    
-    // Wait for batch to complete
-    await Promise.all(batchPromises);
-    
+
     // Record batch performance
     const batchDuration = Date.now() - batchStart;
     const actualBatchSize = endId - startId + 1;
     recordBatchTime(actualBatchSize, batchDuration);
-    
+
     // Add small delay between batches to avoid overwhelming APIs
-    if (endId < maxId) {
+    if (endId < maxIdToProcess) {
       await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
     }
-    
+
     // Update progress more frequently with performance metrics
     if (window.progressUI && window.progressUI.setProgress) {
-      const progress = Math.floor((endId / maxId) * 100);
+      const progress = Math.floor((endId / maxIdToProcess) * 100);
       const elapsed = (Date.now() - startTime) / 1000;
       const rate = endId / elapsed;
-      const remaining = (maxId - endId) / rate;
+      const remaining = (maxIdToProcess - endId) / rate;
       const eta = remaining > 0 ? `${Math.ceil(remaining)}s` : 'finishing...';
-      window.progressUI.setProgress(progress, `Processing mints ${endId}/${maxId} (${rate.toFixed(1)}/s, ETA: ${eta})`);
+      window.progressUI.setProgress(progress, `Processing mints ${endId}/${maxIdToProcess} (${rate.toFixed(1)}/s, ETA: ${eta})`);
     }
   }
   
   // Generate performance summary
   finishPerformanceMonitoring();
+
+  // Clear mint progress on successful completion
+  await clearMintProgress(address);
+  console.log(`[COINTOOL] Scan completed successfully for ${address} - cleared mint progress`);
 }
 
 // Process a single mint
@@ -243,10 +286,30 @@ async function fetchMintDetails(address, mintId, etherscanApiKey) {
   const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
   const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=contract&action=getcontractcreation&contractaddresses=${proxyAddress}&apikey=${etherscanApiKey}`;
   
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Explorer API failed: ${response.status}`);
-  
-  const data = await response.json();
+  // Add timeout to prevent hanging requests
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for contract info
+
+  let data;
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Explorer API failed: ${response.status}`);
+    }
+
+    data = await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error(`[COINTOOL] Contract info request timeout`);
+      return null; // Return null on timeout instead of throwing
+    }
+    throw error;
+  }
   if (data.status !== "1" || !data.result || data.result.length === 0) {
     return null; // No creation found
   }
@@ -555,6 +618,187 @@ function finishPerformanceMonitoring() {
   }
   
   console.log(``);
+}
+
+// Scan for Cointool mint events using block-based incremental scanning
+async function scanEventsForMints(address, etherscanApiKey, forceRescan) {
+  try {
+    console.log(`[COINTOOL] Scanning events for ${address} mints`);
+
+    // Get scan state for incremental scanning with safety buffer
+    let lastScannedBlock = 0;
+    let lastTransactionBlock = 0;
+    if (!forceRescan) {
+      const scanState = await getScanState(address);
+      if (scanState) {
+        lastScannedBlock = scanState.lastScannedBlock || 0;
+        lastTransactionBlock = scanState.lastTransactionBlock || 0;
+      }
+    }
+
+    // Get current block for scanning range
+    const currentBlock = await web3Instance.eth.getBlockNumber();
+
+    // Always rescan from safety buffer blocks before last known transaction to handle API lag
+    // This ensures we never miss transactions that appear late in APIs
+    const SAFETY_BUFFER_BLOCKS = 50; // Configurable safety margin
+    const safeStartBlock = Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, 15700000);
+    const fromBlock = safeStartBlock;
+
+    console.log(`[COINTOOL] Using safety buffer: lastTransaction=${lastTransactionBlock}, safeStart=${safeStartBlock}, buffer=${SAFETY_BUFFER_BLOCKS}`);
+
+    console.log(`[COINTOOL] Event scanning from block ${fromBlock} to ${currentBlock} for ${address}`);
+
+    if (fromBlock > currentBlock) {
+      console.log(`[COINTOOL] No new blocks to scan for ${address}`);
+      return [];
+    }
+
+    // Use Etherscan V2 multichain API like other scanners
+    const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=${currentBlock}&address=${CONTRACT_ADDRESS}&topic0=${COINTOOL_EVENT_TOPIC}&apikey=${etherscanApiKey}`;
+
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    let data;
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      data = await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error(`[COINTOOL] Request timeout for ${address}`);
+        throw new Error('Request timeout');
+      }
+      throw error;
+    }
+
+    let events = [];
+    let lastBlockWithTransaction = lastScannedBlock; // Start with previous value
+
+    if (data.status === "1" && Array.isArray(data.result)) {
+      events = data.result.filter(event => {
+        // Filter events for this specific address
+        return event.topics && event.topics.length >= 2 &&
+               event.topics[1] && event.topics[1].toLowerCase().includes(address.toLowerCase().replace('0x', ''));
+      });
+
+      console.log(`[COINTOOL] Found ${events.length} mint events for ${address}`);
+
+      // Find the highest block number that actually contained transactions
+      if (events.length > 0) {
+        lastBlockWithTransaction = Math.max(...events.map(e => parseInt(e.blockNumber, 16)));
+        console.log(`[COINTOOL] Last block with actual transactions: ${lastBlockWithTransaction}`);
+      }
+    } else {
+      console.log(`[COINTOOL] No events found or API error:`, data.message || 'Unknown error');
+    }
+
+    // Always update scan progress, but handle transaction tracking carefully
+    await saveScanState(address, currentBlock, lastBlockWithTransaction);
+
+    if (lastBlockWithTransaction > lastTransactionBlock) {
+      console.log(`[COINTOOL] Found new transactions up to block ${lastBlockWithTransaction} (${events.length} events)`);
+    } else {
+      console.log(`[COINTOOL] Scanned up to block ${currentBlock}, no new transactions found`);
+    }
+
+    return events;
+
+  } catch (error) {
+    console.error(`[COINTOOL] Error scanning events for ${address}:`, error);
+    return [];
+  }
+}
+
+// Get scan state for incremental scanning
+async function getScanState(address) {
+  return new Promise((resolve, reject) => {
+    const transaction = dbInstance.transaction(['scanState'], 'readonly');
+    const store = transaction.objectStore('scanState');
+    const request = store.get(address.toLowerCase());
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Save scan state for incremental scanning
+async function saveScanState(address, lastScannedBlock, lastTransactionBlock) {
+  return new Promise((resolve, reject) => {
+    const transaction = dbInstance.transaction(['scanState'], 'readwrite');
+    const store = transaction.objectStore('scanState');
+
+    // Get existing state to preserve lastTransactionBlock if not provided
+    const getRequest = store.get(address.toLowerCase());
+
+    getRequest.onsuccess = () => {
+      const existingState = getRequest.result || {};
+
+      const newState = {
+        address: address.toLowerCase(),
+        lastScannedBlock: lastScannedBlock,
+        lastTransactionBlock: lastTransactionBlock > 0 ? lastTransactionBlock : (existingState.lastTransactionBlock || 0),
+        lastScannedAt: Date.now()
+      };
+
+      const putRequest = store.put(newState);
+      putRequest.onsuccess = () => resolve();
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+
+    getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
+// Mint progress tracking for crash recovery
+async function getMintProgress(address) {
+  return new Promise((resolve, reject) => {
+    const transaction = dbInstance.transaction(['mintProgress'], 'readonly');
+    const store = transaction.objectStore('mintProgress');
+    const request = store.get(address.toLowerCase());
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveMintProgress(address, lastProcessedMintId) {
+  return new Promise((resolve, reject) => {
+    const transaction = dbInstance.transaction(['mintProgress'], 'readwrite');
+    const store = transaction.objectStore('mintProgress');
+
+    const progressState = {
+      address: address.toLowerCase(),
+      lastProcessedMintId: lastProcessedMintId,
+      updatedAt: Date.now()
+    };
+
+    const request = store.put(progressState);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function clearMintProgress(address) {
+  return new Promise((resolve, reject) => {
+    const transaction = dbInstance.transaction(['mintProgress'], 'readwrite');
+    const store = transaction.objectStore('mintProgress');
+    const request = store.delete(address.toLowerCase());
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 // Post-mint actions fetching (simplified version)

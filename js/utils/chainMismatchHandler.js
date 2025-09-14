@@ -92,13 +92,14 @@ export class ChainMismatchHandler {
 
     // Start periodic chain mismatch detection
     startChainMismatchDetection() {
-        // Check every 2 seconds
+        // Check every 5 seconds to reduce load on Firefox
         this.checkInterval = setInterval(() => {
             // Only check if no toast is showing and user hasn't declined
-            if (!this.currentToast && !this.userDeclined) {
+            // Also check if there's a connected wallet
+            if (!this.currentToast && !this.userDeclined && window.connectedAccount) {
                 this.checkChainMismatch();
             }
-        }, 2000);
+        }, 5000);
     }
 
     // Stop detection
@@ -160,10 +161,16 @@ export class ChainMismatchHandler {
         if (!window.ethereum) return null;
 
         try {
+            // Check if wallet is available and connected
+            if (!window.ethereum.isConnected || !window.ethereum.isConnected()) {
+                return null;
+            }
+
             const chainId = await window.ethereum.request({ method: 'eth_chainId' });
             return chainId;
         } catch (error) {
-            console.error('Error getting wallet chain:', error);
+            // Don't spam console with wallet errors - just return null silently
+            // These are common when wallet is not connected or available
             return null;
         }
     }

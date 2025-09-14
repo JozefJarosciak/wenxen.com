@@ -419,10 +419,20 @@ async function importAndRankRPCs() {
   // 1) Fetch public RPCs (Chainlist). Fallback to a small known set if needed.
   let candidates = [];
   try {
-    const res = await fetch(CHAINLIST_JSON, { mode: "cors" });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for chainlist
+
+    const res = await fetch(CHAINLIST_JSON, {
+      mode: "cors",
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
     const json = await res.json();
     candidates = extractChainRPCs(json, chainId);
-  } catch {}
+  } catch (error) {
+    // Silent fallback on any error including timeout
+  }
   if (!candidates.length) {
     // Chain-specific fallbacks
     if (chainId === 8453) { // Base
@@ -957,23 +967,135 @@ function formatNumberForMobile(num) {
   return numValue.toLocaleString();
 }
 
-function updateXENTotalBadge() {
+// Fetch XEN balances for all user addresses
+async function fetchAllWalletBalances() {
+  const balances = {};
+
+  try {
+    // Get addresses from settings
+    const addressInput = document.getElementById("ethAddress")?.value?.trim();
+    if (!addressInput) return balances;
+
+    const addresses = addressInput.split("\n").map(s => s.trim()).filter(Boolean);
+    if (addresses.length === 0) return balances;
+
+    // Set up Web3 provider with RPC rotation
+    let availableRpcs = [];
+    let currentRpcIndex = 0;
+    const currentChainId = window.chainManager?.getCurrentConfig()?.id || 1;
+
+    // Try wallet first if connected to same chain
+    if (window.web3Wallet) {
+      try {
+        const walletChainId = await window.web3Wallet.eth.getChainId();
+        if (Number(walletChainId) === currentChainId) {
+          availableRpcs.push({ provider: window.web3Wallet, name: 'wallet' });
+        }
+      } catch (e) {
+        console.debug('[WALLET-BALANCE] Wallet not available for balance checks');
+      }
+    }
+
+    // Add RPC endpoints as fallback options
+    const rpcEndpoints = window.chainManager?.getRPCEndpoints() || [];
+    rpcEndpoints.forEach((rpc, index) => {
+      availableRpcs.push({
+        provider: new Web3(rpc),
+        name: `RPC-${index + 1}`,
+        url: rpc
+      });
+    });
+
+    if (availableRpcs.length === 0) return balances;
+
+    // Get chain-specific XEN contract address
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO');
+    if (!xenAddress || !window.xenAbi) return balances;
+
+    // Function to get next RPC provider
+    const getNextProvider = () => {
+      const rpc = availableRpcs[currentRpcIndex];
+      currentRpcIndex = (currentRpcIndex + 1) % availableRpcs.length;
+      return rpc;
+    };
+
+    // Function to fetch balance with RPC rotation
+    const fetchBalanceWithRetry = async (address, maxRetries = availableRpcs.length) => {
+      for (let retry = 0; retry < maxRetries; retry++) {
+        const { provider, name, url } = getNextProvider();
+
+        try {
+          const token = new provider.eth.Contract(window.xenAbi, xenAddress);
+          const balance = await token.methods.balanceOf(address).call();
+
+          if (retry > 0) {
+            console.debug(`[WALLET-BALANCE] Successfully fetched balance for ${address} using ${name}`);
+          }
+
+          return balance;
+        } catch (e) {
+          const isRateLimit = e?.message?.includes('request limit') || e?.message?.includes('rate limit');
+          const isNetworkError = e?.message?.includes('network') || e?.message?.includes('timeout');
+
+          console.warn(`[WALLET-BALANCE] ${name} failed for ${address}: ${e?.message || e}`);
+
+          // If this was the last retry, return 0
+          if (retry === maxRetries - 1) {
+            console.error(`[WALLET-BALANCE] All RPCs failed for ${address}, defaulting to 0`);
+            return '0';
+          }
+
+          // Add extra delay for rate limits
+          if (isRateLimit) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+      }
+      return '0';
+    };
+
+    // Fetch balance for each address with rate limiting and RPC rotation
+    const results = [];
+    for (let i = 0; i < addresses.length; i++) {
+      const addr = addresses[i];
+
+      // Add delay between requests to respect RPC rate limits
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 150)); // 150ms delay = ~6.7/second
+      }
+
+      const balance = await fetchBalanceWithRetry(addr);
+      results.push({ address: addr.toLowerCase(), balance });
+    }
+    results.forEach(({ address, balance }) => {
+      balances[address] = balance;
+    });
+
+    console.debug('[WALLET-BALANCE] Fetched balances:', Object.keys(balances).length, 'addresses');
+    return balances;
+
+  } catch (e) {
+    console.error('[WALLET-BALANCE] Failed to fetch wallet balances:', e);
+    return balances;
+  }
+}
+
+async function updateXENTotalBadge(includeWalletBalances = true) {
   const badge = document.getElementById("estXenTotal");
   if (!badge || typeof cointoolTable === 'undefined' || !cointoolTable) return;
 
   const activeData = cointoolTable.getData("active");
   let total = 0n;
   const addressBreakdown = {};
-  
-  // Debug: Check what fields are available in the first row
-  
+
+  // Process mint/stake data first
   activeData.forEach(rowData => {
     const xenValue = estimateXENForRow(rowData);
     total += BigInt(xenValue);
-    
+
     // Collect breakdown by address - try multiple possible field names
     let address = rowData.Address || rowData.address || rowData.Owner || rowData.owner || rowData.User || rowData.user;
-    
+
     // If still not found, check if there's an address in the ID or other fields
     if (!address && rowData.ID && rowData.ID.includes('_')) {
       // ID format might be "address_mintId"
@@ -982,19 +1104,44 @@ function updateXENTotalBadge() {
         address = parts[0];
       }
     }
-    
+
     // Normalize address to lowercase to avoid duplicates due to case differences
     address = address ? address.toLowerCase() : 'Unknown';
-    
+
     if (!addressBreakdown[address]) {
       addressBreakdown[address] = {
         xen: 0n,
-        count: 0
+        count: 0,
+        walletBalance: 0n
       };
     }
     addressBreakdown[address].xen += BigInt(xenValue);
     addressBreakdown[address].count++;
   });
+
+  // Add wallet balances if requested
+  if (includeWalletBalances) {
+    try {
+      const walletBalances = await fetchAllWalletBalances();
+
+      Object.entries(walletBalances).forEach(([address, balanceWei]) => {
+        if (!addressBreakdown[address]) {
+          addressBreakdown[address] = {
+            xen: 0n,
+            count: 0,
+            walletBalance: 0n
+          };
+        }
+        // Convert from wei to tokens (divide by 10^18)
+        const balanceWeiBI = BigInt(balanceWei || '0');
+        const balanceTokens = balanceWeiBI / BigInt('1000000000000000000'); // 10^18
+        addressBreakdown[address].walletBalance = balanceTokens;
+        total += balanceTokens;
+      });
+    } catch (e) {
+      console.error('[XEN-TOTAL] Failed to include wallet balances:', e);
+    }
+  }
 
   badge.textContent = formatNumberForMobile(total);
   renderXenUsdEstimate(total);   // ← NEW: show "($226.45)" style USD next to the total
@@ -1004,7 +1151,8 @@ function updateXENTotalBadge() {
     Object.entries(addressBreakdown).map(([address, data]) => ({
       address,
       xen: data.xen.toString(),
-      count: data.count
+      count: data.count,
+      walletBalance: data.walletBalance.toString()
     }))
   );
   

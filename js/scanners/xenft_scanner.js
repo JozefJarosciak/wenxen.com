@@ -102,6 +102,9 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
+        if (!db.objectStoreNames.contains("processProgress")) {
+          db.createObjectStore("processProgress", { keyPath: "address" });
+        }
       };
       request.onsuccess = e => resolve(e.target.result);
       request.onerror = e => reject(e.target.error);
@@ -173,6 +176,37 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     return new Promise((resolve, reject) => {
       const tx = db.transaction("scanState", "readwrite");
       tx.objectStore("scanState").delete(address.toLowerCase()).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  // Process progress tracking for crash recovery
+  async function getProcessProgress(db, address) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("processProgress", "readonly");
+      tx.objectStore("processProgress").get(address.toLowerCase()).onsuccess = e => resolve(e.target.result || null);
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async function saveProcessProgress(db, address, lastProcessedTokenId, totalProcessed) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("processProgress", "readwrite");
+      const progress = {
+        address: address.toLowerCase(),
+        lastProcessedTokenId: String(lastProcessedTokenId),
+        totalProcessed: Number(totalProcessed) || 0,
+        updatedAt: Date.now()
+      };
+      tx.objectStore("processProgress").put(progress).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async function clearProcessProgress(db, address) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("processProgress", "readwrite");
+      tx.objectStore("processProgress").delete(address.toLowerCase()).onsuccess = () => resolve();
       tx.onerror = e => reject(e.target.error);
     });
   }
@@ -372,7 +406,14 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       console.log(`📡 XENFT Scanner - Fetching ${currentChain} transfers via Etherscan V2 API...`);
       console.log(`🔗 Contract: ${xenftContractAddress}`);
 
-      const response = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(url, {
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
       if (!response.ok) {
         throw new Error(`BaseScan API error: ${response.status}`);
       }
@@ -497,10 +538,30 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
       if (progress) { progress.max = tokenIds.length || 100; progress.value = 0; }
 
-      let processed = 0;
+      // Get process progress for crash recovery
+      let processProgress = null;
+      const forceRescan = !!document.getElementById('forceRescan')?.checked;
+      if (!forceRescan) {
+        processProgress = await getProcessProgress(db, addr);
+      } else {
+        await clearProcessProgress(db, addr);
+        console.log(`[XENFT] Force rescan enabled - cleared process progress for ${addr}`);
+      }
+
+      let startFromIndex = 0;
+      if (processProgress && processProgress.lastProcessedTokenId) {
+        const resumeIndex = tokenIds.findIndex(id => String(id) === String(processProgress.lastProcessedTokenId));
+        if (resumeIndex !== -1) {
+          startFromIndex = resumeIndex + 1; // Start after the last processed token
+          console.log(`[XENFT] Resuming from token ${startFromIndex}/${tokenIds.length} (ID: ${processProgress.lastProcessedTokenId})`);
+        }
+      }
+
+      const tokensToProcess = tokenIds.slice(startFromIndex);
+      let processed = startFromIndex;
       let _startedAt = Date.now();
       let _lastUi = 0;
-      for (const tokenId of tokenIds) {
+      for (const tokenId of tokensToProcess) {
         try {
           const existing = await getByTokenId(db, tokenId);
 
@@ -653,6 +714,8 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               // default actions container
               if (!Array.isArray(detail.actions)) detail.actions = [];
               await save(db, detail);
+              // Save progress after each token for crash recovery
+              await saveProcessProgress(db, addr, tokenId, processed + 1);
               break;
             } catch {}
           }
@@ -681,6 +744,12 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       try { await window.refreshUnified(); } catch {}
     }
 
+    // Clear process progress on successful completion
+    for (let i = 0; i < addresses.length; i++) {
+      const addr = addresses[i];
+      await clearProcessProgress(db, addr);
+    }
+    console.log(`[XENFT] Scan completed successfully for all addresses - cleared process progress`);
 
     tokenProgressText.textContent = "Address scanning complete.";
     setTimeout(() => {

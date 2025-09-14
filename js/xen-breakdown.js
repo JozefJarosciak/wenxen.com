@@ -33,10 +33,12 @@ function initializeXenTotalBreakdown() {
       
       breakdown.forEach(item => {
         const xenAmount = BigInt(item.xen);
-        totalXen += xenAmount;
-        const xenTokens = Number(xenAmount);
-        const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) 
-          ? xenTokens * xenUsdPrice 
+        const walletBalance = BigInt(item.walletBalance || '0');
+        const totalForAddress = xenAmount + walletBalance;
+        totalXen += totalForAddress;
+        const xenTokens = Number(totalForAddress);
+        const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0)
+          ? xenTokens * xenUsdPrice
           : 0;
         totalUsd += usdValue;
       });
@@ -90,7 +92,7 @@ function initializeXenTotalBreakdown() {
           <td style="padding: ${padding}; text-align: right; font-weight: bold;">${totals.totalXenFormatted}</td>
           <td style="padding: ${padding}; text-align: right; font-weight: bold;" class="usd-value">${totals.totalUsdFormatted}</td>
           <td style="padding: 2px 4px; text-align: right; white-space: nowrap;">
-            <button id="refreshXenBtn" class="refresh-btn" title="Refresh XEN price & cRank" style="padding: ${buttonPadding}; font-size: ${buttonSize};">⟳</button>
+            <button id="refreshXenBtn" class="refresh-btn" title="Refresh XEN price & balances" style="padding: ${buttonPadding}; font-size: ${buttonSize};">⟳</button>
             <button id="toggleXenBreakdown" class="toggle-btn" title="Show breakdown by address" style="padding: ${buttonPadding}; font-size: ${buttonSize};">+</button>
           </td>
         </tr>
@@ -111,10 +113,10 @@ function initializeXenTotalBreakdown() {
         return '<p style="padding: 10px;">No data available</p>';
       }
       
-      // Sort by XEN amount descending
+      // Sort by total XEN amount descending (mints + wallet balance)
       breakdown.sort((a, b) => {
-        const xenA = BigInt(a.xen);
-        const xenB = BigInt(b.xen);
+        const xenA = BigInt(a.xen) + BigInt(a.walletBalance || '0');
+        const xenB = BigInt(b.xen) + BigInt(b.walletBalance || '0');
         return xenB > xenA ? 1 : xenB < xenA ? -1 : 0;
       });
       
@@ -122,7 +124,9 @@ function initializeXenTotalBreakdown() {
       let html = '<table style="border-collapse: collapse; font-size: 12px;">';
       html += '<thead><tr>';
       html += '<th style="text-align: left; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Address</th>';
-      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">XEN</th>';
+      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Mints</th>';
+      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Wallet</th>';
+      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Total</th>';
       html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Value</th>';
       html += '<th style="width: 50px;"></th>'; // Space for buttons
       html += '</tr></thead><tbody>';
@@ -132,23 +136,38 @@ function initializeXenTotalBreakdown() {
       
       breakdown.forEach(item => {
         const xenAmount = BigInt(item.xen);
-        totalXen += xenAmount;
-        
-        // Format XEN amount with thousand separators (no decimals)
+        const walletBalance = BigInt(item.walletBalance || '0');
+        const totalForAddress = xenAmount + walletBalance;
+        totalXen += totalForAddress;
+
+        // Format amounts with thousand separators (no decimals)
         const xenTokens = Number(xenAmount);
-        const xenFormatted = xenTokens.toLocaleString(undefined, {
+        const walletTokens = Number(walletBalance);
+        const totalTokens = Number(totalForAddress);
+
+        const xenFormatted = xenTokens > 0 ? xenTokens.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }) : '-';
+
+        const walletFormatted = walletTokens > 0 ? walletTokens.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }) : '-';
+
+        const totalFormatted = totalTokens.toLocaleString(undefined, {
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         });
-        
-        // Calculate USD value
-        const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) 
-          ? xenTokens * xenUsdPrice 
+
+        // Calculate USD value for total
+        const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0)
+          ? totalTokens * xenUsdPrice
           : 0;
         totalUsd += usdValue;
-        
+
         // Format USD
-        const usdFormatted = usdValue > 0 
+        const usdFormatted = usdValue > 0
           ? usdValue.toLocaleString(undefined, {
               style: 'currency',
               currency: 'USD',
@@ -156,10 +175,12 @@ function initializeXenTotalBreakdown() {
               maximumFractionDigits: 2
             })
           : '-';
-        
+
         html += '<tr>';
         html += `<td style="padding: 2px 6px; opacity: 0.8;">${formatAddress(item.address)}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right;">${xenFormatted}</td>`;
+        html += `<td style="padding: 2px 6px; text-align: right; opacity: 0.9;">${xenFormatted}</td>`;
+        html += `<td style="padding: 2px 6px; text-align: right; opacity: 0.9;">${walletFormatted}</td>`;
+        html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalFormatted}</td>`;
         html += `<td style="padding: 2px 6px; text-align: right;" class="usd-value">${usdFormatted}</td>`;
         html += '<td></td>';
         html += '</tr>';
@@ -183,10 +204,12 @@ function initializeXenTotalBreakdown() {
       
       html += '<tr style="border-top: 1px solid rgba(128,128,128,0.3);">';
       html += '<td style="padding: 2px 6px; font-weight: bold;">Total</td>';
-      html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`;
+      html += '<td style="padding: 2px 6px; text-align: right; font-weight: bold;">-</td>'; // Mints column placeholder
+      html += '<td style="padding: 2px 6px; text-align: right; font-weight: bold;">-</td>'; // Wallet column placeholder
+      html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`; // Total column
       html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;" class="usd-value">${totalUsdFormatted}</td>`;
       html += '<td style="padding: 2px 4px; text-align: right;">';
-      html += '<button id="refreshXenBtn2" class="refresh-btn" title="Refresh XEN price & cRank" style="padding: 2px 6px; font-size: 12px;">⟳</button>';
+      html += '<button id="refreshXenBtn2" class="refresh-btn" title="Refresh XEN price & balances" style="padding: 2px 6px; font-size: 12px;">⟳</button>';
       html += '<button id="toggleXenBreakdown2" class="toggle-btn active" title="Hide breakdown" style="padding: 2px 6px; font-size: 12px;">−</button>';
       html += '</td>';
       html += '</tr>';
@@ -224,11 +247,12 @@ function initializeXenTotalBreakdown() {
         refreshBtn.classList.add('refreshing');
         
         try {
-          // Refresh both XEN price and crank data
+          // Refresh XEN price, crank data, and wallet balances
           await Promise.all([
             Promise.all([
               typeof fetchXenUsdPrice === 'function' ? fetchXenUsdPrice() : Promise.resolve(),
-              typeof fetchXenGlobalRank === 'function' ? fetchXenGlobalRank() : Promise.resolve()
+              typeof fetchXenGlobalRank === 'function' ? fetchXenGlobalRank() : Promise.resolve(),
+              typeof updateXENTotalBadge === 'function' ? updateXENTotalBadge(true) : Promise.resolve()
             ]),
             new Promise(resolve => setTimeout(resolve, 1000))
           ]);

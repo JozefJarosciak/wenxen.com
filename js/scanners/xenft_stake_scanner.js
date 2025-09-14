@@ -133,6 +133,9 @@
         if (!db.objectStoreNames.contains(STORE_STATE)) {
           db.createObjectStore(STORE_STATE, { keyPath: "address" });
         }
+        if (!db.objectStoreNames.contains("processProgress")) {
+          db.createObjectStore("processProgress", { keyPath: "address" });
+        }
       };
       req.onsuccess = e => resolve(e.target.result);
       req.onerror   = e => reject(e.target.error);
@@ -191,6 +194,38 @@
     });
   }
 
+  // Process progress tracking for crash recovery
+  async function getProcessProgress(db, address) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("processProgress", "readonly");
+      tx.objectStore("processProgress").get(cleanHexAddr(address)).onsuccess = e => resolve(e.target.result || null);
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async function saveProcessProgress(db, address, lastProcessedTxIndex, lastProcessedTxHash, totalProcessed) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("processProgress", "readwrite");
+      const progress = {
+        address: cleanHexAddr(address),
+        lastProcessedTxIndex: Number(lastProcessedTxIndex) || 0,
+        lastProcessedTxHash: String(lastProcessedTxHash || ""),
+        totalProcessed: Number(totalProcessed) || 0,
+        updatedAt: Date.now()
+      };
+      tx.objectStore("processProgress").put(progress).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async function clearProcessProgress(db, address) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("processProgress", "readwrite");
+      tx.objectStore("processProgress").delete(cleanHexAddr(address)).onsuccess = () => resolve();
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
 
   // --- Explorer helper: Fetch NFT transfers in a specific block range ---
   async function fetchStakeTxsInRange(userAddress, apiKey, startBlock, endBlock) {
@@ -203,7 +238,14 @@
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const res = await fetch(url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const res = await fetch(url, {
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
         if (!res.ok) {
           throw new Error(`Etherscan API returned status ${res.status}`);
         }
@@ -300,10 +342,28 @@
 
         if (tokenBar) { tokenBar.value = 0; tokenBar.max = Math.max(1, newTxs.length); }
         if (tokenTxt) tokenTxt.textContent = `Found ${newTxs.length} new transactions. Processing…`;
+
+        // Get process progress for crash recovery
+        let processProgress = null;
+        let startFromIndex = 0;
+        if (!forceRescan) {
+          processProgress = await getProcessProgress(db, addr);
+          if (processProgress && processProgress.lastProcessedTxHash) {
+            const resumeIndex = newTxs.findIndex(tx => tx.hash === processProgress.lastProcessedTxHash);
+            if (resumeIndex !== -1) {
+              startFromIndex = resumeIndex + 1; // Start after the last processed transaction
+              console.log(`[XENFT Stake] Resuming from transaction ${startFromIndex}/${newTxs.length} (hash: ${processProgress.lastProcessedTxHash.slice(0,10)}...)`);
+            }
+          }
+        } else {
+          await clearProcessProgress(db, addr);
+          console.log(`[XENFT Stake] Force rescan enabled - cleared process progress for ${addr}`);
+        }
+
         let _startedAt = Date.now();
         let _lastUi = 0;
 
-        for (let i=0; i < newTxs.length; i++) {
+        for (let i=startFromIndex; i < newTxs.length; i++) {
           const tx = newTxs[i];
           const tokenId = String(tx.tokenID);
 
@@ -372,6 +432,8 @@
                 actions: []
               };
               await save(db, newRow);
+              // Save progress after each transaction for crash recovery
+              await saveProcessProgress(db, addr, i, tx.hash, i + 1);
 
             } catch (e) {
               console.error(`[StakeXENFT] Failed to process new mint for token #${tokenId}.`, e);
@@ -384,13 +446,23 @@
               existing.actions.push(claimAction);
             }
             await save(db, existing);
+            // Save progress after each transaction for crash recovery
+            await saveProcessProgress(db, addr, i, tx.hash, i + 1);
           } else if (isTransferOut && existing && existing.owner.toLowerCase() === addr.toLowerCase()) {
             existing.owner = cleanHexAddr(tx.to);
             await save(db, existing);
+            // Save progress after each transaction for crash recovery
+            await saveProcessProgress(db, addr, i, tx.hash, i + 1);
             if (tokenTxt) tokenTxt.textContent = `Token #${tokenId} transferred to ${existing.owner.slice(0,6)}...`;
+          } else {
+            // Save progress even for transactions that don't result in changes
+            await saveProcessProgress(db, addr, i, tx.hash, i + 1);
           }
         }
         await putScanState(db, addr, latestBlock);
+        // Clear progress on successful completion of address scanning
+        await clearProcessProgress(db, addr);
+        console.log(`[XENFT Stake] Scan completed successfully for ${addr} - cleared process progress`);
       } catch (error) {
         console.error(`Failed to complete scan for address ${addr}:`, error);
         if (tokenTxt) tokenTxt.textContent = `Error scanning ${addr.slice(0,6)}... See console.`;
