@@ -164,7 +164,7 @@
   // --- Fast XEN Stakes scanning using unified method for all chains ---
   async function scanStakesEventBased(addr, etherscanApiKey) {
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    console.log(`🚀 XEN Stakes Scanner - Using unified event-based scanning for ${currentChain} address ${addr}`);
+    // Starting event-based scanning
 
     try {
       // Use exact same Web3 instance creation as working scanner
@@ -208,7 +208,7 @@
           topic1: userAddressTopic
         }, sinkStaked);
 
-        console.log(`XEN Stakes Scanner - found ${sinkStaked.length} Staked events for ${addr} on ${currentChain}`);
+        // Processing staked events
 
         for (const event of sinkStaked) {
           // Decode the event data like the working scanner does
@@ -238,9 +238,9 @@
               const dt = window.luxon.DateTime.fromSeconds(maturityTs);
               Maturity_Date_Fmt = dt.toFormat("yyyy LLL dd, hh:mm a");
               maturityDateOnly = dt.toFormat("yyyy-MM-dd");
-              console.log(`XEN Stakes Scanner - Using Luxon formatting: ${Maturity_Date_Fmt} | ${maturityDateOnly}`);
+              // Using Luxon formatting
             } else {
-              console.log(`XEN Stakes Scanner - Luxon not available, using manual fallback formatting`);
+              // Luxon not available, using manual fallback
               // Manual fallback to match other scanners' format exactly
               const d = new Date(maturityTs * 1000);
               const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -252,7 +252,7 @@
 
               Maturity_Date_Fmt = `${d.getFullYear()} ${months[d.getMonth()]} ${day}, ${String(hour).padStart(2, "0")}:${minute} ${ampm}`;
               maturityDateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${day}`;
-              console.log(`XEN Stakes Scanner - Manual fallback formatting: ${Maturity_Date_Fmt} | ${maturityDateOnly}`);
+              // Manual fallback formatting complete
             }
           } catch (e) {
             console.warn(`XEN Stakes Scanner - Date formatting error:`, e);
@@ -267,7 +267,7 @@
 
             Maturity_Date_Fmt = `${d.getFullYear()} ${months[d.getMonth()]} ${day}, ${String(hour).padStart(2, "0")}:${minute} ${ampm}`;
             maturityDateOnly = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${day}`;
-            console.log(`XEN Stakes Scanner - Error fallback formatting: ${Maturity_Date_Fmt} | ${maturityDateOnly}`);
+            // Error fallback formatting complete
           }
 
           const stakeRow = {
@@ -303,7 +303,7 @@
           topic1: userAddressTopic
         }, sinkWithdrawn);
 
-        console.log(`XEN Stakes Scanner - found ${sinkWithdrawn.length} Withdrawn events for ${addr} on ${currentChain}`);
+        // Processing withdrawn events
 
         // Process Withdrawn events and update corresponding stakes
         for (const event of sinkWithdrawn) {
@@ -335,7 +335,7 @@
         return null; // Signal fallback needed
       }
 
-      console.log(`XEN Stakes Scanner - Event-based scan complete: ${stakes.length} stakes found for ${addr} on ${currentChain}`);
+      // Event scan complete
       return stakes;
 
     } catch (error) {

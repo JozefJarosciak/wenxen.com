@@ -992,7 +992,7 @@ async function fetchAllWalletBalances() {
           availableRpcs.push({ provider: window.web3Wallet, name: 'wallet' });
         }
       } catch (e) {
-        console.debug('[WALLET-BALANCE] Wallet not available for balance checks');
+        // Wallet not available
       }
     }
 
@@ -1028,18 +1028,13 @@ async function fetchAllWalletBalances() {
           const token = new provider.eth.Contract(window.xenAbi, xenAddress);
           const balance = await token.methods.balanceOf(address).call();
 
-          if (retry > 0) {
-            console.debug(`[WALLET-BALANCE] Successfully fetched balance for ${address} using ${name}`);
-          }
+          // Balance fetched successfully
 
           return balance;
         } catch (e) {
           const isRateLimit = e?.message?.includes('request limit') || e?.message?.includes('rate limit');
 
-          // Reduced console spam - only log first retry
-          if (retry === 0) {
-            console.warn(`[WALLET-BALANCE] ${name} failed for ${address}: ${e?.message || e}`);
-          }
+          // Silent retry - reduce console noise
 
           // If this was the last retry, return 0
           if (retry === maxRetries - 1) {
@@ -1078,7 +1073,7 @@ async function fetchAllWalletBalances() {
     return balances;
 
   } catch (e) {
-    console.error('[WALLET-BALANCE] Failed to fetch wallet balances:', e);
+    // Silent fail - wallet balances are not critical
     return balances;
   }
 }

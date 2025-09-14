@@ -499,15 +499,12 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         }
 
         if (data.status === "1" && Array.isArray(data.result)) {
-          console.debug(`[XENFT] Fetched ${data.result.length} transfers for blocks ${startBlock}-${endBlock}`);
           return data.result;
         }
 
         throw new Error(`Unexpected API response: ${JSON.stringify(data)}`);
 
       } catch (error) {
-        console.warn(`[XENFT] Attempt ${attempt} failed for ${userAddress} blocks ${startBlock}-${endBlock}:`, error.message);
-
         if (attempt === MAX_ATTEMPTS) {
           throw error; // Last attempt, re-throw
         }
@@ -515,7 +512,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         // Handle rate limits with exponential backoff
         if (error.message.includes('RATE_LIMIT') || error.message.includes('rate limit')) {
           const backoffTime = Math.min(5000, 1000 * Math.pow(2, attempt));
-          console.log(`[XENFT] Rate limit hit, backing off for ${backoffTime}ms...`);
           await new Promise(resolve => setTimeout(resolve, backoffTime));
         } else {
           // Regular backoff for other errors
@@ -528,7 +524,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   // --- Improved XENFT scanning using chunked incremental approach ---
   async function scanEventBased(addr, etherscanApiKey, forceRescan = false) {
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    console.log(`🚀 XENFT Scanner - Using chunked incremental scanning for ${currentChain} address ${addr}`);
+    // Starting chunked incremental scan
 
     const db = await openDB();
     const CHUNK_SIZE = 50000; // Process 50k blocks at a time
@@ -539,7 +535,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       if (forceRescan) {
         await saveScanState(db, addr, 0, 0);
         await clearProcessProgress(db, addr);
-        console.log(`[XENFT] Force rescan enabled - cleared progress for ${addr}`);
+        // Force rescan - cleared progress
       }
 
       // Get scan state for incremental scanning
@@ -660,7 +656,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       }
 
       const tokenIds = Array.from(ownedTokens);
-      console.log(`🎉 XENFT Scanner - Incremental scan complete: ${tokenIds.length} tokens owned by ${addr} on ${currentChain}: [${tokenIds.join(', ')}]`);
 
       // Clear process progress on successful completion
       await clearProcessProgress(db, addr);
@@ -668,7 +663,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       return tokenIds.sort((a, b) => Number(a) - Number(b));
 
     } catch (error) {
-      console.error(`XENFT Scanner - Chunked scanning failed for ${addr} on ${currentChain}:`, error);
       return null; // Signal fallback needed
     }
   }
