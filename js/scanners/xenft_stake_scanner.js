@@ -137,7 +137,26 @@
           db.createObjectStore("processProgress", { keyPath: "address" });
         }
       };
-      req.onsuccess = e => resolve(e.target.result);
+      req.onsuccess = e => {
+        const db = e.target.result;
+        // Verify that the stakes store has the correct keyPath
+        if (db.objectStoreNames.contains(STORE_STAKES)) {
+          const transaction = db.transaction(STORE_STAKES, 'readonly');
+          const store = transaction.objectStore(STORE_STAKES);
+          if (store.keyPath !== 'tokenId') {
+            console.warn(`[XENFT Stake] Database has wrong keyPath for stakes store: ${store.keyPath}, expected 'tokenId'. Recreating database...`);
+            db.close();
+            // Delete and recreate database with correct schema
+            const deleteReq = indexedDB.deleteDatabase(dbName);
+            deleteReq.onsuccess = () => {
+              openDB().then(resolve).catch(reject);
+            };
+            deleteReq.onerror = () => reject(deleteReq.error);
+            return;
+          }
+        }
+        resolve(db);
+      };
       req.onerror   = e => reject(e.target.error);
     });
   }
@@ -150,9 +169,24 @@
   }
   function getAll(db){
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_STAKES, "readonly");
-      tx.objectStore(STORE_STAKES).getAll().onsuccess = e => resolve(e.target.result || []);
-      tx.onerror = e => reject(e);
+      try {
+        // Check if the store exists before creating transaction
+        if (!db.objectStoreNames.contains(STORE_STAKES)) {
+          console.error(`[XENFT Stake] Store '${STORE_STAKES}' not found in database. Available stores:`, Array.from(db.objectStoreNames));
+          resolve([]); // Return empty array instead of failing
+          return;
+        }
+
+        const tx = db.transaction(STORE_STAKES, "readonly");
+        tx.objectStore(STORE_STAKES).getAll().onsuccess = e => resolve(e.target.result || []);
+        tx.onerror = e => {
+          console.error(`[XENFT Stake] Error reading from '${STORE_STAKES}' store:`, e);
+          resolve([]); // Return empty array instead of failing
+        };
+      } catch (error) {
+        console.error(`[XENFT Stake] Error accessing store '${STORE_STAKES}':`, error);
+        resolve([]); // Return empty array instead of failing
+      }
     });
   }
   function getByTokenId(db, tokenId){
@@ -197,32 +231,68 @@
   // Process progress tracking for crash recovery
   async function getProcessProgress(db, address) {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction("processProgress", "readonly");
-      tx.objectStore("processProgress").get(cleanHexAddr(address)).onsuccess = e => resolve(e.target.result || null);
-      tx.onerror = e => reject(e.target.error);
+      // Check if the processProgress object store exists before attempting transaction
+      if (!db.objectStoreNames.contains("processProgress")) {
+        console.warn("[XENFT Stake Scanner] processProgress object store not found, returning null progress");
+        resolve(null);
+        return;
+      }
+
+      try {
+        const tx = db.transaction("processProgress", "readonly");
+        tx.objectStore("processProgress").get(cleanHexAddr(address)).onsuccess = e => resolve(e.target.result || null);
+        tx.onerror = e => reject(e.target.error);
+      } catch (error) {
+        console.warn("[XENFT Stake Scanner] Error getting process progress:", error);
+        resolve(null); // Return null progress if unable to read
+      }
     });
   }
 
   async function saveProcessProgress(db, address, lastProcessedTxIndex, lastProcessedTxHash, totalProcessed) {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction("processProgress", "readwrite");
-      const progress = {
-        address: cleanHexAddr(address),
-        lastProcessedTxIndex: Number(lastProcessedTxIndex) || 0,
-        lastProcessedTxHash: String(lastProcessedTxHash || ""),
-        totalProcessed: Number(totalProcessed) || 0,
-        updatedAt: Date.now()
-      };
-      tx.objectStore("processProgress").put(progress).onsuccess = () => resolve();
-      tx.onerror = e => reject(e.target.error);
+      // Check if the processProgress object store exists before attempting transaction
+      if (!db.objectStoreNames.contains("processProgress")) {
+        console.warn("[XENFT Stake Scanner] processProgress object store not found, skipping save operation");
+        resolve();
+        return;
+      }
+
+      try {
+        const tx = db.transaction("processProgress", "readwrite");
+        const progress = {
+          address: cleanHexAddr(address),
+          lastProcessedTxIndex: Number(lastProcessedTxIndex) || 0,
+          lastProcessedTxHash: String(lastProcessedTxHash || ""),
+          totalProcessed: Number(totalProcessed) || 0,
+          updatedAt: Date.now()
+        };
+        tx.objectStore("processProgress").put(progress).onsuccess = () => resolve();
+        tx.onerror = e => reject(e.target.error);
+      } catch (error) {
+        console.warn("[XENFT Stake Scanner] Error saving process progress:", error);
+        resolve(); // Don't fail the entire scan if progress saving fails
+      }
     });
   }
 
   async function clearProcessProgress(db, address) {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction("processProgress", "readwrite");
-      tx.objectStore("processProgress").delete(cleanHexAddr(address)).onsuccess = () => resolve();
-      tx.onerror = e => reject(e.target.error);
+      // Check if the processProgress object store exists before attempting transaction
+      if (!db.objectStoreNames.contains("processProgress")) {
+        console.warn("[XENFT Stake Scanner] processProgress object store not found, skipping clear operation");
+        resolve();
+        return;
+      }
+
+      try {
+        const tx = db.transaction("processProgress", "readwrite");
+        tx.objectStore("processProgress").delete(cleanHexAddr(address)).onsuccess = () => resolve();
+        tx.onerror = e => reject(e.target.error);
+      } catch (error) {
+        console.warn("[XENFT Stake Scanner] Error clearing process progress:", error);
+        resolve(); // Don't fail the entire scan if progress clearing fails
+      }
     });
   }
 
