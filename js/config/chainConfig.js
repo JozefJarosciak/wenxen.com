@@ -78,8 +78,9 @@ export const SUPPORTED_CHAINS = {
       fallback: [
         'https://mainnet.base.org',
         'https://base.gateway.tenderly.co',
-        'https://rpc.ankr.com/base',
-        'https://base.blockpi.network/v1/rpc/public'
+        'https://base.blockpi.network/v1/rpc/public',
+        'https://1rpc.io/base',
+        'https://base.meowrpc.com'
       ]
     },
     explorer: {

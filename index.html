@@ -566,17 +566,26 @@
 
       <!-- Danger Zone -->
       <div class="settings-card danger">
-        <h3>Danger Zone</h3>
-        <p class="settings-note">Deletes local app data or local settings.</p><br>
-        <div style="margin-top:4px; margin-bottom:8px;">
-          <label for="resetDbSelect" class="settings-note" style="display:block; margin-bottom:6px;">Delete target</label>
-          <select id="resetDbSelect" aria-label="Select which database(s) to delete" style="width:100%;">
+        <h3>⚠️ Danger Zone</h3>
+        <p class="settings-note">Permanently delete data for the current network. Use with caution!</p>
+
+        <div style="margin-top:16px; margin-bottom:8px;">
+          <label for="resetDbSelect" class="settings-note" style="display:block; margin-bottom:8px; font-weight:bold;">What to delete:</label>
+          <select id="resetDbSelect" aria-label="Select what data to delete" style="width:100%; padding:8px; font-size:14px;">
             <!-- Options will be dynamically populated based on current chain -->
             <option value="all-with-storage">Loading...</option>
           </select>
-          <small class="settings-note" style="display:block; margin-top:6px;">This action is permanent for the selected item.</small>
+
+          <div id="dangerZoneDescription" class="settings-note" style="display:block; margin-top:8px; padding:8px; background:rgba(255,0,0,0.1); border-radius:4px; font-style:italic; min-height:20px;">
+            Select an option to see what will be deleted.
+          </div>
+
+          <div class="settings-note" style="display:block; margin-top:8px; color:#ff4444; font-weight:bold;">
+            ⚠️ This action cannot be undone!
+          </div>
         </div>
-        <button id="resetBtn" type="button" class="secondary">Reset</button>
+
+        <button id="resetBtn" type="button" class="secondary" style="background:#ff4444; color:white; font-weight:bold;">🗑️ Delete Selected Data</button>
       </div>
 
     </div>
@@ -788,7 +797,7 @@
   import { networkSelector } from './js/ui/networkSelectorWorking.js';
   import { chainStorage, migrateExistingData } from './js/utils/chainStorageUtils.js';
   import { migrateOldLocalStorage } from './js/utils/migrationUtils.js';
-  import { superSafeMigrator as dbMigrator } from './js/utils/databaseMigrationSuperSafe.js';
+  import { dbMigrator } from './js/utils/databaseMigration.js';
   import { chainMismatchHandler } from './js/utils/chainMismatchHandler.js';
   import { dangerZoneHandler } from './js/utils/dangerZoneHandler.js';
   import { dangerZoneDropdown } from './js/utils/dangerZoneDropdown.js';
@@ -800,8 +809,17 @@
     try {
       // 1. Migrate localStorage from old format to chain-specific
       migrateOldLocalStorage();
-      
-      // 2. Migrate databases from old names to chain-specific
+
+      // 2. Check for incompatible migration flags and clear them
+      const currentFlag = localStorage.getItem('dbMigrationCompleted');
+      if (currentFlag && currentFlag !== 'v3') {
+        console.log(`Clearing incompatible migration flag: ${currentFlag}`);
+        localStorage.removeItem('dbMigrationCompleted');
+        localStorage.removeItem('ETH_dbMigrationCompleted');
+        localStorage.removeItem('BASE_dbMigrationCompleted');
+      }
+
+      // 3. Migrate databases from old names to chain-specific
       await dbMigrator.migrate();
       
       // 3. Initialize chain system FIRST

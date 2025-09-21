@@ -2,16 +2,24 @@
 export class DangerZoneDropdown {
   constructor() {
     this.dropdown = null;
+    this.descriptionDiv = null;
     this.currentChain = null;
+    this.currentOptions = [];
   }
 
   initialize() {
     this.dropdown = document.getElementById('resetDbSelect');
+    this.descriptionDiv = document.getElementById('dangerZoneDescription');
     if (!this.dropdown) return;
-    
+
     // Update dropdown when chain changes
     this.updateDropdown();
-    
+
+    // Update description when selection changes
+    this.dropdown.addEventListener('change', () => {
+      this.updateDescription();
+    });
+
     // Listen for chain changes
     window.addEventListener('chainChanged', () => {
       this.updateDropdown();
@@ -38,46 +46,57 @@ export class DangerZoneDropdown {
     // Clear existing options
     this.dropdown.innerHTML = '';
     
-    // Add options based on current chain
+    // Add options based on current chain with user-friendly descriptions
     const options = [
       {
         value: 'all-with-storage',
-        text: `All Data + Local Storage (${chainName})`
+        text: `🔥 Everything (All ${chainName} data + settings)`,
+        description: `Deletes all scan data, settings, and preferences for ${chainName}`
       },
       {
         value: 'all',
-        text: `All Data (${chainName} databases)`
+        text: `📊 All Scan Data (${chainName})`,
+        description: `Keeps settings but deletes all mints, NFTs, and stakes for ${chainName}`
       },
       {
         value: `${prefix}DB_Cointool`,
-        text: `${prefix}DB_Cointool (${chainName} mints)`
+        text: `🪙 Cointool Mints (${chainName})`,
+        description: `Only deletes Cointool mint records for ${chainName}`
       },
       {
         value: `${prefix}DB_Xenft`,
-        text: `${prefix}DB_Xenft (${chainName} NFTs)`
+        text: `🎨 XENFT Collection (${chainName})`,
+        description: `Only deletes XENFT/NFT scan data for ${chainName}`
       },
       {
         value: `${prefix}DB_XenftStake`,
-        text: `${prefix}DB_XenftStake (${chainName} XENFT stakes)`
+        text: `🔒 XENFT Stakes (${chainName})`,
+        description: `Only deletes XENFT staking records for ${chainName}`
       },
       {
         value: `${prefix}DB_XenStake`,
-        text: `${prefix}DB_XenStake (${chainName} XEN stakes)`
+        text: `💎 XEN Stakes (${chainName})`,
+        description: `Only deletes regular XEN staking records for ${chainName}`
       },
       {
         value: 'storage-only',
-        text: `Local Storage Only (${chainName})`
+        text: `⚙️ Settings Only (${chainName})`,
+        description: `Only deletes local settings and preferences for ${chainName}`
       }
     ];
-    
-    // Add options to dropdown
+
+    // Store options for description lookup
+    this.currentOptions = options;
+
+    // Add options to dropdown with descriptions as tooltips
     options.forEach(opt => {
       const option = document.createElement('option');
       option.value = opt.value;
       option.textContent = opt.text;
+      option.title = opt.description;
       this.dropdown.appendChild(option);
     });
-    
+
     // Try to restore previous selection if it's still valid
     const validValues = options.map(o => o.value);
     if (validValues.includes(currentValue)) {
@@ -86,8 +105,24 @@ export class DangerZoneDropdown {
       // Default to 'all-with-storage'
       this.dropdown.value = 'all-with-storage';
     }
-    
+
+    // Update description for current selection
+    this.updateDescription();
+
     // Danger Zone dropdown updated
+  }
+
+  updateDescription() {
+    if (!this.descriptionDiv || !this.dropdown) return;
+
+    const selectedValue = this.dropdown.value;
+    const selectedOption = this.currentOptions.find(opt => opt.value === selectedValue);
+
+    if (selectedOption) {
+      this.descriptionDiv.textContent = selectedOption.description;
+    } else {
+      this.descriptionDiv.textContent = 'Select an option to see what will be deleted.';
+    }
   }
 }
 

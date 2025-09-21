@@ -1078,15 +1078,40 @@ async function fetchAllWalletBalances() {
   }
 }
 
+// Set page load time for timing checks
+window.pageLoadTime = Date.now();
+
+// Debounce XEN total updates to prevent rapid successive calls
+let xenBadgeUpdateTimeout = null;
+
 // Throttle wallet balance updates to prevent spam
 let lastWalletBalanceUpdate = 0;
 const WALLET_BALANCE_THROTTLE_MS = 30000; // Only update every 30 seconds
 
 async function updateXENTotalBadge(includeWalletBalances = true) {
-  const badge = document.getElementById("estXenTotal");
-  if (!badge || typeof cointoolTable === 'undefined' || !cointoolTable) return;
+  // Debounce rapid calls
+  if (xenBadgeUpdateTimeout) {
+    clearTimeout(xenBadgeUpdateTimeout);
+  }
 
-  const activeData = cointoolTable.getData("active");
+  xenBadgeUpdateTimeout = setTimeout(async () => {
+    const badge = document.getElementById("estXenTotal");
+    if (!badge || typeof cointoolTable === 'undefined' || !cointoolTable) return;
+
+    const activeData = cointoolTable.getData("active");
+
+    // During initial load, wait for substantial data before updating
+    // But allow updates after initial load period regardless of size (for filtering)
+    const timeSinceLoad = Date.now() - window.pageLoadTime;
+    const isInitialLoadPeriod = timeSinceLoad < 45000;
+    const hasSubstantialData = activeData.length > 2000; // Assuming you have 2500+ mints
+
+    if (isInitialLoadPeriod && !hasSubstantialData) { // Only block during initial load with small data
+      console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Skipping update - only ${activeData.length} active rows (waiting for full load)`);
+      return;
+    }
+
+    console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} active rows, includeWalletBalances: ${includeWalletBalances}`);
   let total = 0n;
   const addressBreakdown = {};
 
@@ -1176,10 +1201,11 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     }))
   );
   
-  // If tooltip is visible (either modal or hover), update it
-  if (window._xenTooltipRefresh) {
-    window._xenTooltipRefresh();
-  }
+    // Trigger breakdown display refresh
+    if (window._xenTooltipRefresh) {
+      window._xenTooltipRefresh();
+    }
+  }, 100); // 100ms debounce delay
 }
 
 // Initialize inline expandable breakdown for estXenTotal
@@ -1384,8 +1410,7 @@ function initializeXenTotalTooltip() {
     }
   }
   
-  // Register global refresh function
-  window._xenTooltipRefresh = refreshTooltip;
+  // Note: _xenTooltipRefresh is now handled by xen-breakdown.js
   
   // Add hover listeners (only work when not in modal mode)
   badge.style.cursor = 'help';
@@ -1566,7 +1591,7 @@ async function fetchXenUsdPrice(){
       xenPriceLast = { ok: false, price: null, ts: Date.now(), source: 'Dexscreener/CoinGecko' };
     }
   }
-  updateXENTotalBadge();
+  updateXENTotalBadge(false); // Don't include wallet balances on price update
   updateXenPriceStatus();
   try { updateVmuChart(); } catch {}
 }
@@ -2958,108 +2983,177 @@ function normalizeSalt(s) {
 }
 
 document.getElementById("resetBtn").addEventListener("click", async function () {
-  function friendlyDbName(id){
-    // Handle both legacy and chain-specific database names
-    const baseName = id.replace(/^(ETHEREUM_|BASE_)/, '');
-    switch(baseName){
-      case 'DB_Cointool': return 'Cointool (mints)';
-      case 'DB_Xenft': return 'XENFT (NFT scans)';
-      case 'ETH_DB_XenftStake':
-      case 'BASE_DB_XenftStake': 
-      case 'DB_XenftStake': return 'XENFT Stake (stakes)';
-      case 'ETH_DB_XenStake':
-      case 'BASE_DB_XenStake':
-      case 'DB_XenStake': return 'XEN Stake (regular)';
-      default: return id;
-    }
-  }
   const sel = document.getElementById("resetDbSelect");
-  const choice = (sel && sel.value) ? sel.value : "all";
+  const choice = (sel && sel.value) ? sel.value : "all-with-storage";
 
-  if (choice === "all") {
-    const confirmed = confirm(
-      "Are you sure you want to delete all saved data? Your input fields will not be affected. This action cannot be undone."
-    );
-    if (!confirmed) return;
+  // Get current chain info for better messaging
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainName = currentChain === 'ETHEREUM' ? 'Ethereum' : 'Base';
 
-    // Close any open connections we can reach
-    try { if (window.dbInstance) window.dbInstance.close(); } catch {}
-    try {
-      if (window.xenft?.openDB) {
-        const xf = await window.xenft.openDB();
-        try { xf.close(); } catch {}
-      }
-    } catch {}
-    try {
-      if (window.xenftStake?.openDB) {
-        const stakeDb = await window.xenftStake.openDB();
-        try { stakeDb.close(); } catch {}
-      }
-    } catch {}
-    try {
-      if (window.xenStake?.openDB) {                 // ✅ close XEN Stake DB
-        const xsDb = await window.xenStake.openDB();
-        try { xsDb.close(); } catch {}
-      }
-    } catch {}
+  // Get user-friendly description from the dropdown
+  const selectedOption = sel.options[sel.selectedIndex];
+  const optionText = selectedOption?.textContent || 'selected data';
+  const optionDescription = selectedOption?.title || 'No description available';
 
-    // Delete all four DBs
-    const results = await Promise.allSettled([
-      deleteDatabaseByName("DB_Cointool"),
-      deleteDatabaseByName("DB_Xenft"),
-      deleteDatabaseByName("DB_XenftStake"),
-      deleteDatabaseByName("DB_XenStake")          // ✅ regular stakes DB
-    ]);
-
-    const blocked = results.some(r => r.status === 'fulfilled' && r.value === 'blocked');
-    if (blocked) {
-      alert("Some data could not be deleted because another tab or window is using it. Please close other tabs using this app and try again.");
-      return;
-    }
-
-    window.location.reload();
-    return;
-  }
-
-  // Single DB deletion path
+  // Enhanced confirmation message
   const confirmed = confirm(
-    `Are you sure you want to delete only ${friendlyDbName(choice)}? Your input fields will not be affected. This action cannot be undone.`
+    `🗑️ DELETE CONFIRMATION\n\n` +
+    `You are about to delete: ${optionText}\n\n` +
+    `Description: ${optionDescription}\n\n` +
+    `⚠️ This action cannot be undone!\n\n` +
+    `Are you sure you want to continue?`
   );
   if (!confirmed) return;
 
-  // Close the specific DB if open
-  try {
-    if (choice === "DB_Cointool" && window.dbInstance) {
-      window.dbInstance.close();
+  if (choice === "all-with-storage") {
+    console.log(`[Reset] Deleting all data + storage for ${chainName}`);
+    await deleteAllDataWithStorage(currentChain, chainName);
+  } else if (choice === "all") {
+    console.log(`[Reset] Deleting all scan data for ${chainName}`);
+    await deleteAllScanData(currentChain, chainName);
+  } else if (choice === "storage-only") {
+    console.log(`[Reset] Deleting settings only for ${chainName}`);
+    await deleteStorageOnly(currentChain, chainName);
+  } else {
+    console.log(`[Reset] Deleting specific database: ${choice}`);
+    await deleteSpecificDatabase(choice, chainName);
+  }
+});
+
+// Helper functions for different reset operations
+async function deleteAllDataWithStorage(currentChain, chainName) {
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+
+  // Close open connections
+  await closeOpenConnections();
+
+  // Delete all databases for current chain
+  const chainDatabases = [
+    `${chainPrefix}DB_Cointool`,
+    `${chainPrefix}DB_Xenft`,
+    `${chainPrefix}DB_XenftStake`,
+    `${chainPrefix}DB_XenStake`
+  ];
+
+  // Also delete legacy databases
+  const legacyDatabases = ['DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'];
+  const allDatabases = [...chainDatabases, ...legacyDatabases];
+
+  const results = await Promise.allSettled(
+    allDatabases.map(db => deleteDatabaseByName(db))
+  );
+
+  const blocked = results.some(r => r.status === 'fulfilled' && r.value === 'blocked');
+  if (blocked) {
+    alert("⚠️ Some data could not be deleted because another tab is using it. Please close other tabs and try again.");
+    return;
+  }
+
+  // Clear chain-specific localStorage
+  const chainKeys = Object.keys(localStorage).filter(key =>
+    key.startsWith(currentChain + '_') ||
+    (currentChain === 'ETHEREUM' && !key.includes('_'))
+  );
+
+  // Preserve critical settings
+  const preserveKeys = ['selectedChain', 'privacyAccepted', 'onboardingDismissed'];
+  chainKeys.forEach(key => {
+    if (!preserveKeys.includes(key)) {
+      localStorage.removeItem(key);
     }
-  } catch {}
+  });
+
+  alert(`✅ All ${chainName} data and settings have been deleted successfully.`);
+  window.location.reload();
+}
+
+async function deleteAllScanData(currentChain, chainName) {
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+
+  await closeOpenConnections();
+
+  const databases = [
+    `${chainPrefix}DB_Cointool`,
+    `${chainPrefix}DB_Xenft`,
+    `${chainPrefix}DB_XenftStake`,
+    `${chainPrefix}DB_XenStake`
+  ];
+
+  const results = await Promise.allSettled(
+    databases.map(db => deleteDatabaseByName(db))
+  );
+
+  const blocked = results.some(r => r.status === 'fulfilled' && r.value === 'blocked');
+  if (blocked) {
+    alert("⚠️ Some data could not be deleted. Please close other tabs and try again.");
+    return;
+  }
+
+  alert(`✅ All ${chainName} scan data has been deleted. Settings were preserved.`);
+  window.location.reload();
+}
+
+async function deleteStorageOnly(currentChain, chainName) {
+  // Clear only localStorage for current chain
+  const chainKeys = Object.keys(localStorage).filter(key =>
+    key.startsWith(currentChain + '_') ||
+    (currentChain === 'ETHEREUM' && !key.includes('_'))
+  );
+
+  const preserveKeys = ['selectedChain', 'privacyAccepted', 'onboardingDismissed'];
+  chainKeys.forEach(key => {
+    if (!preserveKeys.includes(key)) {
+      localStorage.removeItem(key);
+    }
+  });
+
+  alert(`✅ ${chainName} settings have been cleared. Scan data was preserved.`);
+  window.location.reload();
+}
+
+async function deleteSpecificDatabase(dbName, chainName) {
+  await closeOpenConnections();
+
+  const result = await deleteDatabaseByName(dbName);
+  if (result === 'blocked') {
+    alert("⚠️ Database could not be deleted. Please close other tabs and try again.");
+    return;
+  }
+
+  // Get friendly name for confirmation
+  const friendlyName = dbName.includes('Cointool') ? 'Cointool mints' :
+                      dbName.includes('Xenft') && dbName.includes('Stake') ? 'XENFT stakes' :
+                      dbName.includes('Xenft') ? 'XENFT collection' :
+                      dbName.includes('XenStake') ? 'XEN stakes' : 'selected data';
+
+  alert(`✅ ${friendlyName} for ${chainName} have been deleted successfully.`);
+  window.location.reload();
+}
+
+async function closeOpenConnections() {
+  // Close any open connections we can reach
+  try { if (window.dbInstance) window.dbInstance.close(); } catch {}
   try {
-    if (choice === "DB_Xenft" && window.xenft?.openDB) {
+    if (window.xenft?.openDB) {
       const xf = await window.xenft.openDB();
       try { xf.close(); } catch {}
     }
   } catch {}
   try {
-    if ((choice === "DB_XenftStake" || choice.endsWith("_DB_XenftStake")) && window.xenftStake?.openDB) {
+    if (window.xenftStake?.openDB) {
       const stakeDb = await window.xenftStake.openDB();
       try { stakeDb.close(); } catch {}
     }
   } catch {}
   try {
-    if ((choice === "DB_XenStake" || choice.endsWith("_DB_XenStake")) && window.xenStake?.openDB) {
+    if (window.xenStake?.openDB) {
       const xsDb = await window.xenStake.openDB();
       try { xsDb.close(); } catch {}
     }
   } catch {}
+}
 
-  const result = await deleteDatabaseByName(choice);
-  if (result === 'blocked') {
-    alert("The selected database could not be deleted because another tab or window is using it. Please close other tabs using this app and try again.");
-    return;
-  }
-
-  window.location.reload();
-});
+// Old reset code has been replaced with improved chain-specific functionality above
 
 // Parse inputs like ">= 1M", "10k-50k", "<250000", or "500000"
 function matchesNumberQuery(value, raw){
@@ -5991,48 +6085,27 @@ function clearStore(db, storeName) {
   });
 }
 
-// bulk put with error handling
+// Fast bulk put - simple and efficient
 function bulkPut(db, storeName, items) {
   return new Promise((resolve, reject) => {
     if (!Array.isArray(items) || items.length === 0) return resolve();
+
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
+
+    // Process all items in a single transaction (much faster)
     for (const item of items) {
-      try {
-        // Ensure the item has the required key field
-        if (storeName === "xenfts") {
-          // XENFTs use Xenft_id as key
-          if (!item.Xenft_id && item.tokenId) {
-            item.Xenft_id = item.tokenId;
-          }
-          if (!item.Xenft_id && item.ID) {
-            item.Xenft_id = item.ID;
-          }
-          if (!item.Xenft_id) {
-            console.warn(`[Import] Skipping XENFT without Xenft_id:`, item);
-            errorCount++;
-            continue;
-          }
-        }
-        
-        const req = store.put(item);
-        req.onsuccess = () => successCount++;
-        req.onerror = (e) => {
-          console.warn(`[Import] Failed to import item in ${storeName}:`, e);
-          errorCount++;
-        };
-      } catch (e) {
-        console.warn(`[Import] Error processing item for ${storeName}:`, e, item);
-        errorCount++;
+      // Quick fix for XENFT keyPath if needed
+      if (storeName === "xenfts" && !item.Xenft_id) {
+        if (item.tokenId) item.Xenft_id = item.tokenId;
+        else if (item.ID) item.Xenft_id = item.ID;
       }
+
+      store.put(item);
     }
-    
+
     tx.oncomplete = () => {
-      console.log(`[Import] ${storeName}: imported ${successCount} items, ${errorCount} errors`);
+      console.log(`[Import] ${storeName}: imported ${items.length} items`);
       resolve();
     };
     tx.onerror = e => reject(e);
@@ -6522,17 +6595,31 @@ async function checkIfMigrationNeeded() {
 
 // Import: supports new "wenxen-backup" AND legacy "cointool-backup"
 async function importBackupFromFile(file) {
+  console.log('[Import] Function called with file:', file?.name);
   if (!file) return;
 
+  console.log('[Import] Reading file text...');
   const text = await file.text();
+  console.log('[Import] File text read, length:', text.length);
+
   let data;
-  try { data = JSON.parse(text); }
-  catch { alert("Invalid backup file."); return; }
+  try {
+    console.log('[Import] Parsing JSON...');
+    data = JSON.parse(text);
+    console.log('[Import] JSON parsed successfully, version:', data?.version, 'fileType:', data?.fileType);
+  }
+  catch {
+    console.error('[Import] JSON parse failed');
+    alert("Invalid backup file.");
+    return;
+  }
 
   // For version 6+ backups (all chains), delete ALL databases
   const isAllChainsBackup = data?.version >= 6 && data?.exportedChain === 'ALL';
-  
+  console.log('[Import] isAllChainsBackup:', isAllChainsBackup);
+
   if (isAllChainsBackup) {
+    console.log('[Import] Deleting all databases for complete restore...');
     // Delete all chain-specific databases for complete restore
     const allDatabases = [
       'ETH_DB_Cointool', 'BASE_DB_Cointool',
@@ -6542,15 +6629,17 @@ async function importBackupFromFile(file) {
       // Also legacy names that might exist
       'DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'
     ];
-    
+
     for (const dbName of allDatabases) {
       try {
+        console.log(`[Import] Deleting database: ${dbName}`);
         await deleteDatabaseByName(dbName);
         console.log(`[Import] Deleted database: ${dbName}`);
       } catch (e) {
-        // Database might not exist, that's ok
+        console.log(`[Import] Database ${dbName} might not exist:`, e);
       }
     }
+    console.log('[Import] Database deletion completed');
   } else {
     // Old behavior for single-chain backups
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
@@ -6592,18 +6681,22 @@ async function importBackupFromFile(file) {
 
   // New multi-DB format (supports both "wenxen-backup" and legacy "mintscanner-backup")
   if (data && (data.fileType === "wenxen-backup" || data.fileType === "mintscanner-backup") && Array.isArray(data.databases)) {
+    console.log('[Import] Processing multi-DB format, databases count:', data.databases.length);
+    console.log('[Import] Applying settings snapshot...');
     applySettingsSnapshot(data.settings || {}); // settings first
+    console.log('[Import] Settings applied');
 
+    console.log('[Import] Processing databases...');
     for (const dbDef of data.databases) {
       const name = dbDef?.name;
       const stores = dbDef?.stores || {};
-      const chain = dbDef?.chain; // Get chain info from backup
+      const chain = dbDef?.chain;
 
       // Check if this is an old database name or legacy chain
-      const isOldDatabase = name === "DB_Cointool" || name === "DB_Xenft" || 
+      const isOldDatabase = name === "DB_Cointool" || name === "DB_Xenft" ||
                            name === "DB_XenftStake" || name === "DB_XenStake" ||
                            chain === "LEGACY";
-      
+
       if (isOldDatabase) {
         importedOldDatabases = true;
         console.log(`[Import] Found old/legacy database: ${name}`);
@@ -6611,6 +6704,7 @@ async function importBackupFromFile(file) {
 
       // For version 6+ backups, directly import to the specified database
       if (data.version >= 6 && !isOldDatabase) {
+
         // Import directly to the chain-specific database
         if (name.endsWith("DB_Cointool")) {
           const db = await openDatabaseByName(name);
@@ -6626,10 +6720,9 @@ async function importBackupFromFile(file) {
         }
 
         else if (name.endsWith("DB_Xenft")) {
-          // Import XENFT database
           const db = await openDatabaseByName(name);
           await clearStore(db, "xenfts").catch(()=>{});
-          
+
           const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
           // Ensure each item has Xenft_id field (the correct keyPath)
           const processedData = xenftData.map(item => {
@@ -6641,14 +6734,13 @@ async function importBackupFromFile(file) {
             }
             return item;
           }).filter(item => item.Xenft_id);
-          
+
           if (processedData.length > 0) {
             await bulkPut(db, "xenfts", processedData);
             console.log(`[Import] Imported ${processedData.length} XENFTs to ${name}`);
           }
         }
         else if (name.endsWith("DB_XenftStake")) {
-          // Import XENFT Stake database
           const db = await openDatabaseByName(name);
           await clearStore(db, "stakes").catch(() => {});
           await clearStore(db, "scanState").catch(() => {});
@@ -6657,7 +6749,6 @@ async function importBackupFromFile(file) {
           console.log(`[Import] Imported ${(stores.stakes || []).length} XENFT stakes to ${name}`);
         }
         else if (name.endsWith("DB_XenStake")) {
-          // Import XEN Stake database
           const db = await openDatabaseByName(name);
           await clearStore(db, "stakes").catch(() => {});
           await clearStore(db, "scanState").catch(() => {});
@@ -6665,7 +6756,7 @@ async function importBackupFromFile(file) {
           await bulkPut(db, "scanState", stores.scanState || []);
           console.log(`[Import] Imported ${(stores.stakes || []).length} XEN stakes to ${name}`);
         }
-        
+
         continue; // Skip old import logic for v6+ backups
       }
       
@@ -6797,7 +6888,7 @@ function openDatabaseByName(name) {
     // Determine version and schema based on database name
     let version = 1;
     if (name.includes("Cointool")) version = 3;
-    else if (name.includes("Xenft-Stake")) version = 2;
+    else if (name.includes("XenftStake")) version = 2;
     
     const request = indexedDB.open(name, version);
     
@@ -6815,7 +6906,7 @@ function openDatabaseByName(name) {
         if (!db.objectStoreNames.contains("actionsCache")) {
           db.createObjectStore("actionsCache", { keyPath: "address" });
         }
-      } else if (name.includes("Xenft") && name.includes("Stake")) {
+      } else if (name.includes("XenftStake")) {
         if (!db.objectStoreNames.contains("stakes")) {
           db.createObjectStore("stakes", { keyPath: "tokenId" });
         }
@@ -6826,7 +6917,7 @@ function openDatabaseByName(name) {
         if (!db.objectStoreNames.contains("xenfts")) {
           db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
         }
-      } else if (name.includes("Xen-Stake")) {
+      } else if (name.includes("XenStake")) {
         if (!db.objectStoreNames.contains("stakes")) {
           const store = db.createObjectStore("stakes", { keyPath: "id" });
           store.createIndex("byOwner", "owner", { unique: false });
@@ -6885,9 +6976,25 @@ function openDatabaseByName(name) {
     importInput.addEventListener("change", async () => {
       const file = importInput.files && importInput.files[0];
       if (file) {
-        // Don't clear data here - let importBackupFromFile handle it
-        // This ensures old databases are preserved for migration
-        await importBackupFromFile(file);
+        try {
+          console.log('[Import] Starting import process...');
+
+          // Add timeout protection to prevent hanging (increased for large datasets)
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Import timeout after 120 seconds')), 120000);
+          });
+
+          // Race between import and timeout
+          await Promise.race([
+            importBackupFromFile(file),
+            timeoutPromise
+          ]);
+
+          console.log('[Import] Import process completed successfully');
+        } catch (error) {
+          console.error('[Import] Import failed:', error);
+          alert(`Import failed: ${error.message || 'Unknown error'}`);
+        }
       }
       // Reset the input so the user can select the same file again if needed.
       importInput.value = "";

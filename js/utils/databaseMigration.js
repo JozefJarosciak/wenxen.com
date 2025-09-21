@@ -72,21 +72,27 @@ export class DatabaseMigrator {
     console.log(`Checking database: ${oldName} → ${newName}`);
     
     try {
-      // First check if the new database already exists
+      // First check if the new database already exists AND has data
       const newDb = await this.openDatabase(newName);
       if (newDb) {
+        const hasData = await this.hasDataInDatabase(newDb, newName);
         newDb.close();
-        console.log(`Target database ${newName} already exists`);
-        
-        // Now check if old database still exists and delete it
-        const oldDb = await this.openDatabase(oldName);
-        if (oldDb) {
-          oldDb.close();
-          await this.deleteDatabase(oldName);
-          console.log(`Deleted legacy database ${oldName}`);
-          return true;
+
+        if (hasData) {
+          console.log(`Target database ${newName} already exists with data`);
+          // Check if old database still exists and delete it
+          const oldDb = await this.openDatabase(oldName);
+          if (oldDb) {
+            oldDb.close();
+            await this.deleteDatabase(oldName);
+            console.log(`Deleted legacy database ${oldName}`);
+            return true;
+          }
+          return false;
+        } else {
+          console.log(`Target database ${newName} exists but is empty, will migrate data`);
+          // Continue with migration to populate the empty database
         }
-        return false;
       }
       
       // Open the old database
@@ -194,6 +200,35 @@ export class DatabaseMigrator {
         reject(event.target.error);
       };
     });
+  }
+
+  // Check if database has any data
+  async hasDataInDatabase(db, dbName) {
+    try {
+      const objectStoreNames = Array.from(db.objectStoreNames);
+
+      for (const storeName of objectStoreNames) {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const countRequest = store.count();
+
+        const count = await new Promise((resolve, reject) => {
+          countRequest.onsuccess = () => resolve(countRequest.result);
+          countRequest.onerror = () => reject(countRequest.error);
+        });
+
+        if (count > 0) {
+          console.log(`Database ${dbName} has ${count} items in ${storeName}`);
+          return true;
+        }
+      }
+
+      console.log(`Database ${dbName} appears to be empty`);
+      return false;
+    } catch (error) {
+      console.warn(`Error checking if database ${dbName} has data:`, error);
+      return false;
+    }
   }
 
   // Copy all data from one object store to another
