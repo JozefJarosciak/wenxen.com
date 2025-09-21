@@ -1081,6 +1081,96 @@ async function fetchAllWalletBalances() {
 // Set page load time for timing checks
 window.pageLoadTime = Date.now();
 
+// Import Progress Manager
+class ImportProgressManager {
+  constructor() {
+    this.splash = null;
+    this.progressBar = null;
+    this.stepText = null;
+    this.currentProgress = 0;
+    this.isActive = false;
+  }
+
+  show() {
+    this.splash = document.getElementById('importProgressSplash');
+    this.progressBar = document.getElementById('importProgressBar');
+    this.stepText = document.getElementById('importProgressStep');
+
+    if (this.splash) {
+      this.splash.classList.add('active');
+      this.isActive = true;
+
+      // Prevent page refresh/close
+      this.enablePageProtection();
+
+      // Disable scrolling
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  hide() {
+    if (this.splash && this.isActive) {
+      this.splash.classList.remove('active');
+      this.isActive = false;
+
+      // Re-enable page interactions
+      this.disablePageProtection();
+      document.body.style.overflow = '';
+    }
+  }
+
+  updateProgress(percent, stepText) {
+    this.currentProgress = Math.max(0, Math.min(100, percent));
+
+    if (this.progressBar) {
+      this.progressBar.style.width = `${this.currentProgress}%`;
+    }
+
+    if (this.stepText && stepText) {
+      this.stepText.textContent = stepText;
+    }
+  }
+
+  enablePageProtection() {
+    // Prevent beforeunload
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+
+    // Prevent common keyboard shortcuts
+    document.addEventListener('keydown', this.keydownHandler);
+  }
+
+  disablePageProtection() {
+    window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+    document.removeEventListener('keydown', this.keydownHandler);
+  }
+
+  beforeUnloadHandler = (e) => {
+    if (this.isActive) {
+      e.preventDefault();
+      e.returnValue = 'Import in progress. Leaving now will cancel the process.';
+      return 'Import in progress. Leaving now will cancel the process.';
+    }
+  };
+
+  keydownHandler = (e) => {
+    if (this.isActive) {
+      // Prevent F5, Ctrl+R, Ctrl+F5
+      if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || (e.ctrlKey && e.key === 'F5')) {
+        e.preventDefault();
+        return false;
+      }
+      // Prevent Ctrl+W (close tab)
+      if (e.ctrlKey && e.key === 'w') {
+        e.preventDefault();
+        return false;
+      }
+    }
+  };
+}
+
+// Global import progress manager
+window.importProgress = new ImportProgressManager();
+
 // Debounce XEN total updates to prevent rapid successive calls
 let xenBadgeUpdateTimeout = null;
 
@@ -6121,34 +6211,37 @@ function getGasRefreshMs() {
 // collect all settings on the Settings tab (+ optional throttle)
 function collectSettingsSnapshot() {
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-  
-  const settings = {
+
+  // Collect ALL localStorage data for complete backup
+  const allLocalStorage = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) {
+      allLocalStorage[key] = localStorage.getItem(key);
+    }
+  }
+
+  // Also collect current form values
+  const formSettings = {
     ethAddress: (document.getElementById("ethAddress")?.value ?? "").trim(),
-    customRPC: (function(){
-      const val = document.getElementById("customRPC")?.value;
-      if (val) return val.trim();
-      // Load chain-specific customRPC
-      if (window.chainManager) {
-        const rpcs = window.chainManager.getRPCEndpoints();
-        return rpcs.join('\n');
-      }
-      return (localStorage.getItem(chainPrefix + "customRPC") || "").trim();
-    })(),
+    customRPC: (document.getElementById("customRPC")?.value ?? "").trim(),
     etherscanApiKey: (document.getElementById("etherscanApiKey")?.value ?? "").trim(),
     chunkSize: (document.getElementById("chunkSize")?.value ?? "").trim(),
     cointoolBatchSize: (document.getElementById("cointoolBatchSize")?.value ?? "").trim(),
     cointoolBatchDelay: (document.getElementById("cointoolBatchDelay")?.value ?? "").trim(),
     gasRefreshSeconds: (document.getElementById("gasRefreshSeconds")?.value ?? "").trim(),
-    mintTermDays: (function(){
-      const val = document.getElementById("mintTermDays")?.value;
-      if (val) return val.trim();
-      // Load chain-specific mintTermDays
-      return (localStorage.getItem(chainPrefix + "mintTermDays") || "").trim();
-    })(),
-    theme: (function(){ try { return getStoredTheme(); } catch { return (localStorage.getItem("theme") || "system"); } })(),
-    vmuChartExpanded: (localStorage.getItem("vmuChartExpanded") || '0'),
-    // Persist the last active tab id (Dashboard/Mint/Settings/About)
+    mintTermDays: (document.getElementById("mintTermDays")?.value ?? "").trim()
+  };
+
+  const settings = {
+    // Complete localStorage backup
+    localStorage: allLocalStorage,
+
+    // Current form values (might differ from localStorage)
+    formValues: formSettings,
+
+    // Current state
+    selectedChain: currentChain,
     activeTab: (function(){
       try {
         const stored = localStorage.getItem('activeTabId');
@@ -6160,15 +6253,19 @@ function collectSettingsSnapshot() {
       } catch {}
       return 'tab-dashboard';
     })(),
-    // New: persist show/mask states (default API key visible on first run)
-    etherscanApiKeyVisible: (function(){ const v=localStorage.getItem("etherscanApiKeyVisible"); return v==null?'1':v; })(),
-    ethAddressMasked: (localStorage.getItem("ethAddressMasked") || '0'),
-    connectWalletMasked: (localStorage.getItem("connectWalletMasked") || '0'),
-    summaryCollapsed: (localStorage.getItem("summaryCollapsed") || 'false'),
-    xenBreakdownExpanded: (localStorage.getItem("xenBreakdownExpanded") || 'false'),
-    // Chain-specific settings
-    onboardingDismissed: (localStorage.getItem(chainPrefix + "onboardingDismissed") || '0'),
-    selectedChain: currentChain
+
+    // Capture current theme state
+    theme: (function(){
+      try {
+        return window.getStoredTheme?.() || localStorage.getItem("theme") || "system";
+      } catch {
+        return localStorage.getItem("theme") || "system";
+      }
+    })(),
+
+    // Export timestamp for reference
+    exportedAt: new Date().toISOString(),
+    exportedChain: currentChain
   };
   const throttle = localStorage.getItem("etherscanThrottleMs");
   if (throttle) settings.etherscanThrottleMs = throttle;
@@ -6177,11 +6274,56 @@ function collectSettingsSnapshot() {
 
 function applySettingsSnapshot(settings) {
   if (!settings || typeof settings !== "object") return;
-  
-  // Determine which chain the settings are for
+
+  console.log('[Settings] Applying settings snapshot...');
+
+  // Handle new comprehensive format (v6+)
+  if (settings.localStorage && typeof settings.localStorage === 'object') {
+    console.log('[Settings] Restoring complete localStorage data...');
+
+    // Restore ALL localStorage data
+    Object.entries(settings.localStorage).forEach(([key, value]) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch (e) {
+        console.warn(`[Settings] Failed to restore localStorage key: ${key}`, e);
+      }
+    });
+
+    // Apply form values if available
+    if (settings.formValues) {
+      const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el && v !== undefined && v !== null) el.value = v;
+      };
+      setVal("ethAddress", settings.formValues.ethAddress);
+      setVal("customRPC", settings.formValues.customRPC);
+      setVal("etherscanApiKey", settings.formValues.etherscanApiKey);
+      setVal("chunkSize", settings.formValues.chunkSize);
+      setVal("cointoolBatchSize", settings.formValues.cointoolBatchSize);
+      setVal("cointoolBatchDelay", settings.formValues.cointoolBatchDelay);
+      setVal("gasRefreshSeconds", settings.formValues.gasRefreshSeconds);
+      setVal("mintTermDays", settings.formValues.mintTermDays);
+    }
+
+    // Apply theme if specified
+    if (settings.theme && window.setTheme) {
+      try {
+        window.setTheme(settings.theme);
+      } catch (e) {
+        console.warn('[Settings] Failed to apply theme:', e);
+      }
+    }
+
+    console.log('[Settings] Complete settings restoration finished');
+    return;
+  }
+
+  // Handle legacy format (backward compatibility)
+  console.log('[Settings] Applying legacy settings format...');
   const targetChain = settings.selectedChain || window.chainManager?.getCurrentChain() || 'ETHEREUM';
   const chainPrefix = targetChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-  
+
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
   setVal("ethAddress", settings.ethAddress);
   setVal("customRPC", settings.customRPC);
@@ -6598,48 +6740,81 @@ async function importBackupFromFile(file) {
   console.log('[Import] Function called with file:', file?.name);
   if (!file) return;
 
-  console.log('[Import] Reading file text...');
-  const text = await file.text();
-  console.log('[Import] File text read, length:', text.length);
+  // Show progress splash immediately
+  window.importProgress.show();
+  window.importProgress.updateProgress(5, 'Reading backup file...');
 
-  let data;
   try {
-    console.log('[Import] Parsing JSON...');
-    data = JSON.parse(text);
-    console.log('[Import] JSON parsed successfully, version:', data?.version, 'fileType:', data?.fileType);
-  }
-  catch {
-    console.error('[Import] JSON parse failed');
-    alert("Invalid backup file.");
-    return;
-  }
+    console.log('[Import] Reading file text...');
+    const text = await file.text();
+    console.log('[Import] File text read, length:', text.length);
 
-  // For version 6+ backups (all chains), delete ALL databases
-  const isAllChainsBackup = data?.version >= 6 && data?.exportedChain === 'ALL';
-  console.log('[Import] isAllChainsBackup:', isAllChainsBackup);
+    window.importProgress.updateProgress(10, 'Parsing backup data...');
 
-  if (isAllChainsBackup) {
-    console.log('[Import] Deleting all databases for complete restore...');
-    // Delete all chain-specific databases for complete restore
-    const allDatabases = [
-      'ETH_DB_Cointool', 'BASE_DB_Cointool',
-      'ETH_DB_Xenft', 'BASE_DB_Xenft',
-      'ETH_DB_XenftStake', 'BASE_DB_XenftStake',
-      'ETH_DB_XenStake', 'BASE_DB_XenStake',
-      // Also legacy names that might exist
-      'DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'
-    ];
-
-    for (const dbName of allDatabases) {
-      try {
-        console.log(`[Import] Deleting database: ${dbName}`);
-        await deleteDatabaseByName(dbName);
-        console.log(`[Import] Deleted database: ${dbName}`);
-      } catch (e) {
-        console.log(`[Import] Database ${dbName} might not exist:`, e);
-      }
+    let data;
+    try {
+      console.log('[Import] Parsing JSON...');
+      data = JSON.parse(text);
+      console.log('[Import] JSON parsed successfully, version:', data?.version, 'fileType:', data?.fileType);
+      window.importProgress.updateProgress(15, 'Backup file validated successfully');
     }
-    console.log('[Import] Database deletion completed');
+    catch {
+      console.error('[Import] JSON parse failed');
+      window.importProgress.hide();
+      alert("Invalid backup file.");
+      return;
+    }
+
+    // For version 6+ backups (all chains), delete ALL databases
+    const isAllChainsBackup = data?.version >= 6 && data?.exportedChain === 'ALL';
+    console.log('[Import] isAllChainsBackup:', isAllChainsBackup);
+
+    if (isAllChainsBackup) {
+      window.importProgress.updateProgress(20, 'Preparing for complete data restore...');
+      console.log('[Import] Deleting all databases for complete restore...');
+
+      // First, close all open database connections
+      console.log('[Import] Closing all open database connections...');
+      window.importProgress.updateProgress(25, 'Closing database connections...');
+      await closeOpenConnections();
+
+      // Wait a moment for connections to fully close
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[Import] Waiting for connections to close...');
+
+      // Delete all chain-specific databases for complete restore
+      window.importProgress.updateProgress(30, 'Clearing existing databases...');
+      const allDatabases = [
+        'ETH_DB_Cointool', 'BASE_DB_Cointool',
+        'ETH_DB_Xenft', 'BASE_DB_Xenft',
+        'ETH_DB_XenftStake', 'BASE_DB_XenftStake',
+        'ETH_DB_XenStake', 'BASE_DB_XenStake',
+        // Also legacy names that might exist
+        'DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'
+      ];
+
+      for (let i = 0; i < allDatabases.length; i++) {
+        const dbName = allDatabases[i];
+        const progress = 30 + (i / allDatabases.length) * 20; // 30-50%
+        window.importProgress.updateProgress(progress, `Deleting database: ${dbName.split('_').pop()}`);
+
+        try {
+          console.log(`[Import] Deleting database: ${dbName}`);
+
+          // Add timeout to prevent hanging
+          const deletePromise = deleteDatabaseByName(dbName);
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Database deletion timeout')), 10000);
+          });
+
+          const result = await Promise.race([deletePromise, timeoutPromise]);
+          console.log(`[Import] Deleted database: ${dbName} (result: ${result})`);
+        } catch (e) {
+          console.log(`[Import] Database ${dbName} deletion failed or timeout:`, e.message || e);
+          // Continue with next database even if one fails
+        }
+      }
+      console.log('[Import] Database deletion completed');
   } else {
     // Old behavior for single-chain backups
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
@@ -6679,15 +6854,23 @@ async function importBackupFromFile(file) {
   // Track if we imported any old databases
   let importedOldDatabases = false;
 
-  // New multi-DB format (supports both "wenxen-backup" and legacy "mintscanner-backup")
-  if (data && (data.fileType === "wenxen-backup" || data.fileType === "mintscanner-backup") && Array.isArray(data.databases)) {
-    console.log('[Import] Processing multi-DB format, databases count:', data.databases.length);
-    console.log('[Import] Applying settings snapshot...');
-    applySettingsSnapshot(data.settings || {}); // settings first
-    console.log('[Import] Settings applied');
+    // New multi-DB format (supports both "wenxen-backup" and legacy "mintscanner-backup")
+    if (data && (data.fileType === "wenxen-backup" || data.fileType === "mintscanner-backup") && Array.isArray(data.databases)) {
+      console.log('[Import] Processing multi-DB format, databases count:', data.databases.length);
 
-    console.log('[Import] Processing databases...');
-    for (const dbDef of data.databases) {
+      window.importProgress.updateProgress(50, 'Restoring settings and preferences...');
+      console.log('[Import] Applying settings snapshot...');
+      applySettingsSnapshot(data.settings || {}); // settings first
+      console.log('[Import] Settings applied');
+
+      window.importProgress.updateProgress(55, 'Importing database content...');
+      console.log('[Import] Processing databases...');
+
+      for (let dbIndex = 0; dbIndex < data.databases.length; dbIndex++) {
+        const dbDef = data.databases[dbIndex];
+        const dbProgress = 55 + (dbIndex / data.databases.length) * 35; // 55-90%
+        const dbName = dbDef?.name || `Database ${dbIndex + 1}`;
+        window.importProgress.updateProgress(dbProgress, `Importing ${dbName.split('_').pop() || dbName}...`);
       const name = dbDef?.name;
       const stores = dbDef?.stores || {};
       const chain = dbDef?.chain;
@@ -6810,35 +6993,39 @@ async function importBackupFromFile(file) {
       }
     }
 
-    // Force migration if we imported old databases or if old databases exist
-    if (importedOldDatabases || await checkIfMigrationNeeded()) {
-      alert("Backup imported. Old data detected - migration will run on reload.");
-      console.log("[Import] Forcing migration on reload due to old databases");
-      // Clear ALL migration flags to force migration
-      localStorage.removeItem('dbMigrationCompleted');
-      localStorage.removeItem('ETH_dbMigrationCompleted');
-      localStorage.removeItem('BASE_dbMigrationCompleted');
-      localStorage.removeItem('localStorageMigrated');
-      localStorage.removeItem('ETH_localStorageMigrated');
-      localStorage.removeItem('BASE_localStorageMigrated');
-    } else {
-      alert("Backup imported successfully.");
-    }
-    
-    // Navigate to dashboard
-    setTimeout(() => {
-      // Use URL with hash to go directly to dashboard
-      window.location.href = window.location.origin + window.location.pathname + '#dashboard';
-      window.location.reload();
-    }, 100);
-    return;
-  }
+      // Force migration if we imported old databases or if old databases exist
+      window.importProgress.updateProgress(90, 'Finalizing import...');
 
-  // Legacy single-DB format (always uses old DB_Cointool)
-  if (!data || data.fileType !== "cointool-backup" || !data.stores) {
-    alert("Invalid backup structure.");
-    return;
-  }
+      if (importedOldDatabases || await checkIfMigrationNeeded()) {
+        window.importProgress.updateProgress(95, 'Preparing data migration...');
+        console.log("[Import] Forcing migration on reload due to old databases");
+        // Clear ALL migration flags to force migration
+        localStorage.removeItem('dbMigrationCompleted');
+        localStorage.removeItem('ETH_dbMigrationCompleted');
+        localStorage.removeItem('BASE_dbMigrationCompleted');
+        localStorage.removeItem('localStorageMigrated');
+        localStorage.removeItem('ETH_localStorageMigrated');
+        localStorage.removeItem('BASE_localStorageMigrated');
+      }
+
+      window.importProgress.updateProgress(100, 'Import completed! Reloading application...');
+
+      // Navigate to dashboard after a brief delay to show completion
+      setTimeout(() => {
+        window.importProgress.hide();
+        // Use URL with hash to go directly to dashboard
+        window.location.href = window.location.origin + window.location.pathname + '#dashboard';
+        window.location.reload();
+      }, 1500); // Give user time to see completion
+      return;
+    }
+
+    // Legacy single-DB format (always uses old DB_Cointool)
+    if (!data || data.fileType !== "cointool-backup" || !data.stores) {
+      window.importProgress.hide();
+      alert("Invalid backup structure.");
+      return;
+    }
 
   // Import to legacy DB_Cointool database
   const legacyDb = await openDatabaseByName("DB_Cointool");
@@ -6862,21 +7049,50 @@ async function importBackupFromFile(file) {
   
   // Navigate to dashboard
   setTimeout(() => {
+    window.importProgress.hide();
     // Use URL with hash to go directly to dashboard
     window.location.href = window.location.origin + window.location.pathname + '#dashboard';
     window.location.reload();
   }, 100);
+
+  } catch (error) {
+    console.error('[Import] Import failed:', error);
+    window.importProgress.hide();
+    alert(`Import failed: ${error.message || 'Unknown error'}`);
+    throw error; // Re-throw for the outer handler
+  }
 }
 
-// Promise-based DB deletion with blocked handling
+// Promise-based DB deletion with blocked handling and timeout
 function deleteDatabaseByName(name) {
   return new Promise((resolve, reject) => {
     try {
+      console.log(`[DB Delete] Attempting to delete database: ${name}`);
       const req = indexedDB.deleteDatabase(name);
-      req.onsuccess = () => resolve('success');
-      req.onerror   = (e) => reject(e.target?.error || new Error('delete failed'));
-      req.onblocked = () => resolve('blocked'); // another tab holds it open
+
+      req.onsuccess = () => {
+        console.log(`[DB Delete] Successfully deleted: ${name}`);
+        resolve('success');
+      };
+
+      req.onerror = (e) => {
+        console.warn(`[DB Delete] Error deleting ${name}:`, e.target?.error?.message || 'Unknown error');
+        reject(e.target?.error || new Error('delete failed'));
+      };
+
+      req.onblocked = () => {
+        console.warn(`[DB Delete] Deletion blocked for ${name} (another tab has it open)`);
+        resolve('blocked'); // another tab holds it open
+      };
+
+      // Add internal timeout for this specific operation
+      setTimeout(() => {
+        console.warn(`[DB Delete] Internal timeout for ${name}`);
+        resolve('timeout');
+      }, 8000);
+
     } catch (e) {
+      console.warn(`[DB Delete] Exception deleting ${name}:`, e.message || e);
       resolve('success'); // if deleteDatabase throws (rare), treat as best-effort
     }
   });

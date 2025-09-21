@@ -49,6 +49,25 @@
 
 </head>
 <body>
+
+<!-- Import Progress Splash Screen -->
+<div id="importProgressSplash">
+  <div class="import-progress-content">
+    <div class="import-progress-icon">📦</div>
+    <h2 class="import-progress-title">Importing Backup</h2>
+    <p class="import-progress-subtitle">Please wait while we restore your data and settings. This may take several minutes.</p>
+
+    <div class="import-progress-bar-container">
+      <div class="import-progress-bar" id="importProgressBar"></div>
+    </div>
+
+    <div class="import-progress-step" id="importProgressStep">Preparing import...</div>
+
+    <div class="import-progress-warning">
+      <strong>⚠️ Important:</strong> Do not close this tab or refresh the page during the import process. Your data restoration is in progress.
+    </div>
+  </div>
+</div>
 <div class="header-controls">
   <div class="wallet-container">
     <button id="githubBtn" class="github-btn" title="Fork me on GitHub" aria-label="Open GitHub repository">
