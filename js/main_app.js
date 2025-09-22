@@ -7272,6 +7272,109 @@ function openDatabaseByName(name) {
   });
 }
 
+// Filter button functionality
+(function wireFilterButtons(){
+  function initializeFilterButtons() {
+    const filterButtons = document.querySelectorAll('.chip[data-filter]');
+
+    filterButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // Remove active class from all filter buttons
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+
+        // Add active class to clicked button
+        button.classList.add('active');
+
+        // Get the filter value
+        const filterValue = button.getAttribute('data-filter');
+
+        // Apply the filter to the table
+        applyTableFilter(filterValue);
+      });
+    });
+  }
+
+  // Initialize immediately if DOM is ready, or wait for DOMContentLoaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeFilterButtons);
+  } else {
+    initializeFilterButtons();
+  }
+
+  function applyTableFilter(filterValue) {
+    if (!window.cointoolTable) return;
+
+    // Clear existing filters
+    window.cointoolTable.clearFilter();
+
+    if (!filterValue) {
+      // "All" - no filter needed
+      return;
+    }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+
+    switch (filterValue) {
+      case 'all-maturing':
+        // Show only items with status "Maturing"
+        window.cointoolTable.setFilter('Status', '=', 'Maturing');
+        break;
+
+      case 'this-month':
+        // Show items maturing this month
+        window.cointoolTable.setFilter([
+          {field: 'Status', type: '=', value: 'Maturing'},
+          {field: 'maturityDateOnly', type: 'regex', value: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-`}
+        ]);
+        break;
+
+      case 'next-month':
+        // Show items maturing next month
+        const nextMonth = new Date(currentYear, currentMonth + 1, 1);
+        const nextMonthStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-`;
+        window.cointoolTable.setFilter([
+          {field: 'Status', type: '=', value: 'Maturing'},
+          {field: 'maturityDateOnly', type: 'regex', value: nextMonthStr}
+        ]);
+        break;
+
+      case 'this-year':
+        // Show items maturing this year
+        window.cointoolTable.setFilter([
+          {field: 'Status', type: '=', value: 'Maturing'},
+          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear}-`}
+        ]);
+        break;
+
+      case 'next-year':
+        // Show items maturing next year
+        window.cointoolTable.setFilter([
+          {field: 'Status', type: '=', value: 'Maturing'},
+          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear + 1}-`}
+        ]);
+        break;
+
+      case 'year-plus-2':
+        // Show items maturing in year +2
+        window.cointoolTable.setFilter([
+          {field: 'Status', type: '=', value: 'Maturing'},
+          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear + 2}-`}
+        ]);
+        break;
+
+      case 'year-plus-3':
+        // Show items maturing in year +3
+        window.cointoolTable.setFilter([
+          {field: 'Status', type: '=', value: 'Maturing'},
+          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear + 3}-`}
+        ]);
+        break;
+    }
+  }
+})();
+
 // Backup & Restore wiring (runs after DOM is available)
 (function wireBackupRestore(){
   const exportBtn  = document.getElementById("exportBackupBtn");
