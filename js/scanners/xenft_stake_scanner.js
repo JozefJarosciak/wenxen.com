@@ -48,7 +48,14 @@
 
   function getRpcList(){
     const ta = document.getElementById("customRPC");
-    const raw = (ta && ta.value.trim()) || (localStorage.getItem("customRPC") || DEFAULT_RPC);
+    if (ta && ta.value.trim()) {
+      return String(ta.value.trim()).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
+    }
+    if (window.chainManager) {
+      const rpcs = window.chainManager.getRPCEndpoints();
+      return rpcs.length > 0 ? rpcs : [DEFAULT_RPC];
+    }
+    const raw = DEFAULT_RPC;
     return String(raw).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
   }
 

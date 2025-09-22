@@ -37,9 +37,10 @@ function updateChainSpecificLabels() {
   // Update RPC textarea with chain-specific data
   const rpcTextarea = document.getElementById('customRPC');
   if (rpcTextarea && window.chainManager) {
+    const actualChain = window.chainManager.getCurrentChain();
     const chainRPCs = window.chainManager.getRPCEndpoints();
     rpcTextarea.value = chainRPCs.join('\n');
-    console.log(`Updated RPC textarea for ${chainName} with ${chainRPCs.length} RPCs`);
+    console.log(`[Chain UI] Updated RPC textarea for ${chainName} (actual chain: ${actualChain}) with ${chainRPCs.length} RPCs:`, chainRPCs.slice(0, 2));
   }
 
   // Note: Mint tab button stays as "Mint/Stake" - not chain-specific
@@ -505,14 +506,17 @@ async function importAndRankRPCs() {
   // 5) Write back to textarea (fastest -> slowest), persist, update UI
   const sorted = reachable.map(r => r.url);
   ta.value = sorted.join("\n");
-  try { 
+  try {
     // Save to chain-specific key
     if (window.chainManager) {
       window.chainManager.saveRPCEndpoints(sorted);
+      console.log(`[RPC Save] Saved ${sorted.length} RPCs to chain-specific storage for ${window.chainManager.getCurrentChain()}`);
     } else {
-      localStorage.setItem("customRPC", ta.value);
+      console.warn(`[RPC Save] Chain manager not available, RPCs not saved`);
     }
-  } catch {}
+  } catch (e) {
+    console.error('[RPC Save] Error saving RPCs:', e);
+  }
   showImportStatus(`Imported ${sorted.length} ${chainName} RPCs. Fastest is ~${reachable[0].ms} ms.`, "success");
 
   // Re-validate the required field & any feature depending on RPC list
@@ -719,12 +723,22 @@ let __crankLast = { ok:false, value:null, ts:0, err:null };
 const GLOBAL_RANK_SELECTOR = "0x1c244082"; // globalRank()
 
 function getRpcList() {
-  // Prefer Settings textarea; fall back to localStorage or DEFAULT_RPC
+  // Prefer Settings textarea; fall back to chain-specific RPCs or DEFAULT_RPC
   const ta = document.getElementById("customRPC");
-  const raw = (ta && ta.value.trim())
-    || (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : 
-        (localStorage.getItem("customRPC") || DEFAULT_RPC));
-  return String(raw).split("\n").map(s => s.trim()).filter(Boolean);
+  if (ta && ta.value.trim()) {
+    return String(ta.value.trim()).split("\n").map(s => s.trim()).filter(Boolean);
+  }
+
+  // Use chain-specific RPCs if available
+  if (window.chainManager) {
+    const rpcs = window.chainManager.getRPCEndpoints();
+    console.log(`[getRpcList] Using ${rpcs.length} chain-specific RPCs for ${window.chainManager.getCurrentChain()}`);
+    return rpcs.length > 0 ? rpcs : [DEFAULT_RPC];
+  }
+
+  // Final fallback to DEFAULT_RPC only
+  console.log(`[getRpcList] Using DEFAULT_RPC fallback`);
+  return [DEFAULT_RPC];
 }
 
 function updateCrankStatus(){
@@ -743,9 +757,10 @@ async function fetchXenGlobalRank(){
 
   // Debug logging for chain-specific data
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  console.log(`[Rank] Fetching global rank for ${currentChain}, XEN contract: ${XEN_CRYPTO_ADDRESS}, using ${rpcs.length} RPCs`);
+  console.log(`[Rank] Fetching global rank for ${currentChain}, XEN contract: ${XEN_CRYPTO_ADDRESS}, using ${rpcs.length} RPCs:`, rpcs.slice(0, 3));
 
   for (const rpc of rpcs) {
+    console.log(`[Rank] Trying RPC: ${rpc}`);
     try {
       const body = {
         jsonrpc: "2.0",
@@ -759,12 +774,15 @@ async function fetchXenGlobalRank(){
         body: JSON.stringify(body)
       });
       const json = await res.json();
+      console.log(`[Rank] RPC ${rpc} response:`, json?.result ? `Success (${json.result})` : `Error: ${json?.error?.message || 'Unknown'}`);
+
       if (json?.result) {
         const num = parseInt(json.result, 16);
         if (Number.isFinite(num)) {
           window.__xenGlobalRank = num;
           __crankLast = { ok:true, value:num, ts:Date.now(), err:null };
           updateCrankStatus();
+          console.log(`[Rank] Successfully fetched ${currentChain} rank: ${num.toLocaleString()} from ${rpc}`);
           // re-render table estimates
           try { window.cointoolTable?.redraw?.(true); } catch {}
           try { updateXENTotalBadge(); } catch {}
@@ -774,9 +792,13 @@ async function fetchXenGlobalRank(){
       throw new Error(json?.error?.message || "Bad RPC response");
     } catch (e) {
       lastErr = e;
+      console.log(`[Rank] RPC ${rpc} failed:`, e.message);
       // try next RPC
     }
   }
+
+  // All RPCs failed
+  console.error(`[Rank] Failed to fetch globalRank for ${currentChain} from ${rpcs.length} RPCs. Last error:`, lastErr);
   __crankLast = { ok:false, value:null, ts:Date.now(), err:lastErr?.message || "all RPCs failed" };
   updateCrankStatus();
 }
@@ -828,6 +850,8 @@ let XEN_CRYPTO_ADDRESS = '0x06450dee7fd2fb8e39061434babcfc05599a6fb8';
 // Function to update config values when chain changes
 function updateChainConfig() {
   const config = window.getChainConfig();
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+
   DEFAULT_RPC = config.rpcUrls.default;
   CONTRACT_ADDRESS = config.contracts.COINTOOL;
   EVENT_TOPIC = config.events.COINTOOL_MINT_TOPIC;
@@ -837,6 +861,8 @@ function updateChainConfig() {
   COINTOOL_MAIN = config.contracts.COINTOOL;
   XEN_ETH = config.contracts.XEN_CRYPTO;
   ETHERSCAN_CHAIN_ID = config.id || 1;
+
+  console.log(`[Config] Updated chain config for ${currentChain}: XEN_CRYPTO_ADDRESS=${XEN_CRYPTO_ADDRESS}, DEFAULT_RPC=${DEFAULT_RPC}`);
 }
 
 // Update config when chain manager is ready
@@ -4252,8 +4278,9 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
   if (window.chainManager) {
     const rpcList = customRPC.split('\n').filter(Boolean);
     window.chainManager.saveRPCEndpoints(rpcList);
+    console.log(`[User Prefs] Saved ${rpcList.length} RPCs to chain-specific storage for ${window.chainManager.getCurrentChain()}`);
   } else {
-    localStorage.setItem("customRPC", customRPC);
+    console.warn(`[User Prefs] Chain manager not available, RPCs not saved`);
   }
   
   // Save Etherscan API key (works for all chains)
@@ -4312,13 +4339,16 @@ function loadUserPreferences() {
   
   document.getElementById("ethAddress").value = addresses;
   
-  // Load chain-specific RPC - empty for Base unless user has saved
+  // Load chain-specific RPC
   let rpcValue = "";
   if (window.chainManager) {
     const rpcs = window.chainManager.getRPCEndpoints();
     rpcValue = rpcs.join('\n');
+    console.log(`[Load User Prefs] Loaded ${rpcs.length} RPCs for ${window.chainManager.getCurrentChain()}`);
   } else {
-    rpcValue = localStorage.getItem("customRPC") || DEFAULT_RPC;
+    // No fallback to global customRPC - use DEFAULT_RPC only
+    rpcValue = DEFAULT_RPC;
+    console.log(`[Load User Prefs] Chain manager not available, using DEFAULT_RPC`);
   }
   document.getElementById("customRPC").value = rpcValue;
   
@@ -5107,10 +5137,17 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   const rpcInput = document.getElementById("customRPC");
   if (rpcInput) {
     // Load chain-specific RPC
-    const saved = window.chainManager ? 
-      window.chainManager.getRPCEndpoints().join('\n') : 
-      localStorage.getItem("customRPC");
-    if (saved) rpcInput.value = saved;
+    const currentChain = window.chainManager?.getCurrentChain() || 'Unknown';
+    if (window.chainManager) {
+      const rpcs = window.chainManager.getRPCEndpoints();
+      if (rpcs.length > 0) {
+        const saved = rpcs.join('\n');
+        rpcInput.value = saved;
+        console.log(`[Initial Load] Loaded ${rpcs.length} RPCs for ${currentChain}:`, rpcs.slice(0, 2));
+      }
+    } else {
+      console.log(`[Initial Load] Chain manager not available for ${currentChain}`);
+    }
   }
 
   // Load Etherscan API Key
@@ -6035,7 +6072,7 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   // Track last saved values and blur timestamps to prevent duplicates
   const fieldState = {
     customRPC: {
-      lastValue: (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : localStorage.getItem("customRPC")) || "",
+      lastValue: (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : "") || "",
       lastBlurTime: 0,
       saveTimer: null
     },
@@ -7858,9 +7895,9 @@ updateDownloadButtonsVisibility();
       const rpcs = window.chainManager.getRPCEndpoints();
       return rpcs.length > 0 ? rpcs : [DEFAULT_RPC];
     }
-    // Fallback to old method if chainManager not available
-    const customRPC = document.getElementById("customRPC")?.value || localStorage.getItem("customRPC") || DEFAULT_RPC;
-    return customRPC.split("\n").map(s => s.trim()).filter(Boolean);
+    // Fallback to DEFAULT_RPC if chainManager not available
+    console.log(`[RPC Util] Chain manager not available, using DEFAULT_RPC`);
+    return [DEFAULT_RPC];
   }
 
   function switchRpc() {

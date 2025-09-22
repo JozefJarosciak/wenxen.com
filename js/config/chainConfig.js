@@ -178,15 +178,18 @@ class ChainManager {
 
     const previousChain = this.currentChain;
     this.currentChain = chainKey;
-    
+
+    console.log(`[Chain Manager] Switching from ${previousChain} to ${chainKey}`);
+
     // Save to localStorage
     localStorage.setItem('selectedChain', chainKey);
-    
+
     // Trigger listeners if chain actually changed
     if (triggerListeners && previousChain !== chainKey) {
+      console.log(`[Chain Manager] Notifying ${this.listeners.size} listeners of chain change`);
       this.notifyListeners(previousChain, chainKey);
     }
-    
+
     return true;
   }
 
@@ -243,20 +246,25 @@ class ChainManager {
   getRPCEndpoints() {
     const config = this.getCurrentConfig();
     const chain = this.getCurrentChain();
-    
+
     // Check for user-configured RPCs for this chain
     const customRPCKey = `${chain}_customRPC`;
     const customRPCs = localStorage.getItem(customRPCKey);
-    
+
+    console.log(`[Chain RPC] Getting RPCs for ${chain}, customRPCKey: ${customRPCKey}, found custom: ${!!customRPCs}`);
+
     if (customRPCs) {
       const rpcList = customRPCs.split('\n').map(s => s.trim()).filter(Boolean);
       if (rpcList.length > 0) {
+        console.log(`[Chain RPC] Using ${rpcList.length} custom RPCs for ${chain}:`, rpcList.slice(0, 3));
         return rpcList;
       }
     }
-    
+
     // Return default RPCs for all chains if no custom RPCs are configured
-    return [config.rpcUrls.default, ...config.rpcUrls.fallback];
+    const defaultRPCs = [config.rpcUrls.default, ...config.rpcUrls.fallback];
+    console.log(`[Chain RPC] Using ${defaultRPCs.length} default RPCs for ${chain}:`, defaultRPCs.slice(0, 3));
+    return defaultRPCs;
   }
 
   // Save chain-specific RPC endpoints

@@ -118,7 +118,7 @@
   });}
 
   // Web3 + RPC
-  function getRpcList(){const ta=document.getElementById("customRPC"); const raw=(ta&&ta.value.trim())||localStorage.getItem("customRPC")||DEFAULT_RPC; return raw.split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);}
+  function getRpcList(){const ta=document.getElementById("customRPC"); if(ta&&ta.value.trim()){return ta.value.trim().split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);} if(window.chainManager){const rpcs=window.chainManager.getRPCEndpoints(); return rpcs.length>0?rpcs:[DEFAULT_RPC];} return [DEFAULT_RPC];}
   function newWeb3(){const list=getRpcList(); const provider=new window.Web3.providers.HttpProvider(list[0]); const w3=new window.Web3(provider); w3.__rpcList=list; w3.__rpcIndex=0; return w3;}
   function rotateRpc(w3){ if(!w3.__rpcList||!w3.__rpcList.length) return; w3.__rpcIndex=(w3.__rpcIndex+1)%w3.__rpcList.length; const next=w3.__rpcList[w3.__rpcIndex]; try{w3.setProvider(new window.Web3.providers.HttpProvider(next));}catch{} const stat=document.getElementById("rpcStatus"); if(stat) stat.textContent=` via ${next}`; }
 
