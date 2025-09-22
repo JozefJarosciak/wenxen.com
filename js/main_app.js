@@ -1201,7 +1201,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
       return;
     }
 
-    console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} active rows, includeWalletBalances: ${includeWalletBalances}`);
+    console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} active rows, includeWalletBalances: ${typeof includeWalletBalances}`);
   let total = 0n;
   const addressBreakdown = {};
 
@@ -3160,7 +3160,11 @@ async function deleteAllDataWithStorage(currentChain, chainName) {
 async function deleteAllScanData(currentChain, chainName) {
   const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
 
+  // More aggressive connection closing
   await closeOpenConnections();
+
+  // Wait a bit longer for connections to fully close
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
   const databases = [
     `${chainPrefix}DB_Cointool`,
@@ -3173,9 +3177,28 @@ async function deleteAllScanData(currentChain, chainName) {
     databases.map(db => deleteDatabaseByName(db))
   );
 
-  const blocked = results.some(r => r.status === 'fulfilled' && r.value === 'blocked');
-  if (blocked) {
-    alert("⚠️ Some data could not be deleted. Please close other tabs and try again.");
+  // Check for blocked databases and provide specific feedback
+  const blockedDbs = [];
+  const failedDbs = [];
+
+  databases.forEach((db, index) => {
+    const result = results[index];
+    if (result.status === 'fulfilled' && result.value === 'blocked') {
+      blockedDbs.push(db);
+    } else if (result.status === 'rejected') {
+      failedDbs.push(db);
+    }
+  });
+
+  if (blockedDbs.length > 0) {
+    const dbNames = blockedDbs.map(db => db.split('_').pop()).join(', ');
+    alert(`⚠️ Some databases could not be deleted because they are in use: ${dbNames}.\n\nPlease:\n1. Close all other tabs with WenXen.com open\n2. Wait 10 seconds\n3. Try again`);
+    return;
+  }
+
+  if (failedDbs.length > 0) {
+    const dbNames = failedDbs.map(db => db.split('_').pop()).join(', ');
+    alert(`⚠️ Some databases failed to delete: ${dbNames}.\n\nTry refreshing the page and attempting deletion again.`);
     return;
   }
 
@@ -3221,26 +3244,61 @@ async function deleteSpecificDatabase(dbName, chainName) {
 }
 
 async function closeOpenConnections() {
-  // Close any open connections we can reach
-  try { if (window.dbInstance) window.dbInstance.close(); } catch {}
+  console.log('[DB] Closing all open database connections...');
+
+  // Close main app database instances
+  try {
+    if (window.dbInstance) {
+      console.log('[DB] Closing main dbInstance');
+      window.dbInstance.close();
+      window.dbInstance = null;
+    }
+  } catch (e) { console.log('[DB] Error closing dbInstance:', e.message); }
+
+  // Close scanner database instances
   try {
     if (window.xenft?.openDB) {
+      console.log('[DB] Closing XENFT database');
       const xf = await window.xenft.openDB();
       try { xf.close(); } catch {}
     }
-  } catch {}
+  } catch (e) { console.log('[DB] Error closing XENFT database:', e.message); }
+
   try {
     if (window.xenftStake?.openDB) {
+      console.log('[DB] Closing XENFT Stake database');
       const stakeDb = await window.xenftStake.openDB();
       try { stakeDb.close(); } catch {}
     }
-  } catch {}
+  } catch (e) { console.log('[DB] Error closing XENFT Stake database:', e.message); }
+
   try {
     if (window.xenStake?.openDB) {
+      console.log('[DB] Closing XEN Stake database');
       const xsDb = await window.xenStake.openDB();
       try { xsDb.close(); } catch {}
     }
-  } catch {}
+  } catch (e) { console.log('[DB] Error closing XEN Stake database:', e.message); }
+
+  // Also close any scanner-related connections
+  try {
+    if (window.cointoolScanner?.db) {
+      console.log('[DB] Closing Cointool scanner database');
+      window.cointoolScanner.db.close();
+      window.cointoolScanner.db = null;
+    }
+  } catch (e) { console.log('[DB] Error closing Cointool scanner database:', e.message); }
+
+  // Close any Tabulator table connections (they might hold DB refs)
+  try {
+    if (window.cointoolTable) {
+      console.log('[DB] Destroying Tabulator table');
+      window.cointoolTable.destroy();
+      window.cointoolTable = null;
+    }
+  } catch (e) { console.log('[DB] Error destroying Tabulator table:', e.message); }
+
+  console.log('[DB] Database connection cleanup completed');
 }
 
 // Old reset code has been replaced with improved chain-specific functionality above
@@ -6081,7 +6139,13 @@ function setMaturityHeaderFilterText(text) {
 // Delete ALL IndexedDBs completely (including new chain-specific ones)
 async function clearAllAppData() {
   console.log("Clearing all app data and databases...");
-  
+
+  // More aggressive connection closing
+  await closeOpenConnections();
+
+  // Wait a bit longer for connections to fully close
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   // List of all possible databases (old and new)
   const allDatabases = [
     // Legacy databases
@@ -6090,16 +6154,37 @@ async function clearAllAppData() {
     "ETH_DB_Cointool", "ETH_DB_Xenft", "ETH_DB_XenStake", "ETH_DB_XenftStake",
     "BASE_DB_Cointool", "BASE_DB_Xenft", "BASE_DB_XenStake", "BASE_DB_XenftStake"
   ];
-  
-  // Delete all databases
-  const deletePromises = allDatabases.map(dbName => 
-    deleteDatabaseByName(dbName).catch(e => {
-      console.log(`Could not delete ${dbName}:`, e);
-      return 'failed';
-    })
+
+  // Delete all databases with proper error tracking
+  const results = await Promise.allSettled(
+    allDatabases.map(db => deleteDatabaseByName(db))
   );
-  
-  const results = await Promise.allSettled(deletePromises);
+
+  // Check for blocked databases and provide specific feedback
+  const blockedDbs = [];
+  const failedDbs = [];
+
+  allDatabases.forEach((db, index) => {
+    const result = results[index];
+    if (result.status === 'fulfilled' && result.value === 'blocked') {
+      blockedDbs.push(db);
+    } else if (result.status === 'rejected') {
+      failedDbs.push(db);
+    }
+  });
+
+  if (blockedDbs.length > 0) {
+    const dbNames = blockedDbs.map(db => db.includes('_') ? db.split('_').pop() : db).join(', ');
+    alert(`⚠️ Some databases could not be deleted because they are in use: ${dbNames}.\n\nPlease:\n1. Close all other tabs with WenXen.com open\n2. Wait 10 seconds\n3. Try again`);
+    return;
+  }
+
+  if (failedDbs.length > 0) {
+    const dbNames = failedDbs.map(db => db.includes('_') ? db.split('_').pop() : db).join(', ');
+    alert(`⚠️ Some databases failed to delete: ${dbNames}.\n\nTry refreshing the page and attempting deletion again.`);
+    return;
+  }
+
   console.log("Database deletion results:", results);
   
   // Reset migration flags so old backups can be migrated
@@ -6524,14 +6609,28 @@ async function exportBackup() {
             if (window.chainManager?.setChain) {
               window.chainManager.setChain(chain, false);
             }
-            
+
             try {
               db = await window.xenft.openDB();
+
+              // Export all stores for XENFT database
               storeData.xenfts = await window.xenft.getAll(db);
+
+              // Also export scanState and processProgress
+              for (const storeName of ['scanState', 'processProgress']) {
+                try {
+                  storeData[storeName] = await getAllFromStore(db, storeName);
+                } catch {
+                  storeData[storeName] = [];
+                }
+              }
             } catch {
+              // Initialize with empty data if database doesn't exist
               storeData.xenfts = [];
+              storeData.scanState = [];
+              storeData.processProgress = [];
             }
-            
+
             // Restore original chain
             if (originalChain && window.chainManager?.setChain) {
               window.chainManager.setChain(originalChain, false);
@@ -6655,6 +6754,8 @@ async function exportBackup() {
   const fileName = formatBackupFileName(new Date());
 
   // save picker → web share → anchor fallback
+  // Note: File System Access API (showSaveFilePicker) saves directly to user's chosen location
+  // and won't appear in Chrome's Downloads list - this is correct behavior
   if (typeof window.showSaveFilePicker === "function") {
     try {
       const handle = await window.showSaveFilePicker({
@@ -6905,6 +7006,8 @@ async function importBackupFromFile(file) {
         else if (name.endsWith("DB_Xenft")) {
           const db = await openDatabaseByName(name);
           await clearStore(db, "xenfts").catch(()=>{});
+          await clearStore(db, "scanState").catch(()=>{});
+          await clearStore(db, "processProgress").catch(()=>{});
 
           const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
           // Ensure each item has Xenft_id field (the correct keyPath)
@@ -6920,16 +7023,20 @@ async function importBackupFromFile(file) {
 
           if (processedData.length > 0) {
             await bulkPut(db, "xenfts", processedData);
-            console.log(`[Import] Imported ${processedData.length} XENFTs to ${name}`);
           }
+          await bulkPut(db, "scanState", stores.scanState || []);
+          await bulkPut(db, "processProgress", stores.processProgress || []);
+          console.log(`[Import] Imported ${processedData.length} XENFTs to ${name} with scan state`);
         }
         else if (name.endsWith("DB_XenftStake")) {
           const db = await openDatabaseByName(name);
           await clearStore(db, "stakes").catch(() => {});
           await clearStore(db, "scanState").catch(() => {});
+          await clearStore(db, "processProgress").catch(() => {});
           await bulkPut(db, "stakes", stores.stakes || []);
           await bulkPut(db, "scanState", stores.scanState || []);
-          console.log(`[Import] Imported ${(stores.stakes || []).length} XENFT stakes to ${name}`);
+          await bulkPut(db, "processProgress", stores.processProgress || []);
+          console.log(`[Import] Imported ${(stores.stakes || []).length} XENFT stakes to ${name} with scan state`);
         }
         else if (name.endsWith("DB_XenStake")) {
           const db = await openDatabaseByName(name);
@@ -6961,7 +7068,9 @@ async function importBackupFromFile(file) {
           const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
           const legacyDb = await openDatabaseByName("DB_Xenft");
           await clearStore(legacyDb, "xenfts").catch(()=>{});
-          
+          await clearStore(legacyDb, "scanState").catch(()=>{});
+          await clearStore(legacyDb, "processProgress").catch(()=>{});
+
           const processedData = xenftData.map(item => {
             if (!item.Xenft_id && item.tokenId) {
               return { ...item, Xenft_id: item.tokenId };
@@ -6971,17 +7080,21 @@ async function importBackupFromFile(file) {
             }
             return item;
           }).filter(item => item.Xenft_id);
-          
+
           if (processedData.length > 0) {
             await bulkPut(legacyDb, "xenfts", processedData);
           }
+          await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          await bulkPut(legacyDb, "processProgress", stores.processProgress || []);
         }
         else if (name === "DB_XenftStake") {
           const legacyDb = await openDatabaseByName("DB_XenftStake");
           await clearStore(legacyDb, "stakes").catch(() => {});
           await clearStore(legacyDb, "scanState").catch(() => {});
+          await clearStore(legacyDb, "processProgress").catch(() => {});
           await bulkPut(legacyDb, "stakes", stores.stakes || []);
           await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          await bulkPut(legacyDb, "processProgress", stores.processProgress || []);
         }
         else if (name === "DB_XenStake") {
           const legacyDb = await openDatabaseByName("DB_XenStake");
@@ -7105,6 +7218,7 @@ function openDatabaseByName(name) {
     let version = 1;
     if (name.includes("Cointool")) version = 3;
     else if (name.includes("XenftStake")) version = 2;
+    else if (name.includes("Xenft")) version = 3; // Updated for scanState and processProgress stores
     
     const request = indexedDB.open(name, version);
     
@@ -7129,9 +7243,18 @@ function openDatabaseByName(name) {
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
+        if (!db.objectStoreNames.contains("processProgress")) {
+          db.createObjectStore("processProgress", { keyPath: "id" });
+        }
       } else if (name.includes("Xenft")) {
         if (!db.objectStoreNames.contains("xenfts")) {
           db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+        }
+        if (!db.objectStoreNames.contains("scanState")) {
+          db.createObjectStore("scanState", { keyPath: "address" });
+        }
+        if (!db.objectStoreNames.contains("processProgress")) {
+          db.createObjectStore("processProgress", { keyPath: "id" });
         }
       } else if (name.includes("XenStake")) {
         if (!db.objectStoreNames.contains("stakes")) {
