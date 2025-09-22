@@ -1191,17 +1191,53 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     const activeData = cointoolTable.getData("active");
 
     // During initial load, wait for substantial data before updating
-    // But allow updates after initial load period regardless of size (for filtering)
+    // But allow updates immediately if filters are active (user interaction)
     const timeSinceLoad = Date.now() - window.pageLoadTime;
     const isInitialLoadPeriod = timeSinceLoad < 45000;
     const hasSubstantialData = activeData.length > 2000; // Assuming you have 2500+ mints
 
-    if (isInitialLoadPeriod && !hasSubstantialData) { // Only block during initial load with small data
-      console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Skipping update - only ${activeData.length} active rows (waiting for full load)`);
+    // Check if any filters are currently active (check both programmatic and header filters)
+    let hasActiveFilters = false;
+    if (cointoolTable) {
+      // Check programmatic filters
+      const programmaticFilters = cointoolTable.getFilters && cointoolTable.getFilters().length > 0;
+
+      // Check header filters by looking at DOM elements
+      const statusFilter = document.querySelector('.tabulator-col[tabulator-field="Status"] .tabulator-header-filter input');
+      const maturityFilter = document.querySelector('.tabulator-col[tabulator-field="Maturity_Date_Fmt"] .tabulator-header-filter input');
+      const typeFilter = document.querySelector('.tabulator-col[tabulator-field="SourceType"] .tabulator-header-filter input');
+
+      const hasStatusFilter = statusFilter && statusFilter.value && statusFilter.value.trim() !== '' && statusFilter.value.trim() !== 'All';
+      const hasMaturityFilter = maturityFilter && maturityFilter.value && maturityFilter.value.trim() !== '' && maturityFilter.value.trim() !== 'All';
+      const hasTypeFilter = typeFilter && typeFilter.value && typeFilter.value.trim() !== '' && typeFilter.value.trim() !== 'All';
+
+      hasActiveFilters = programmaticFilters || hasStatusFilter || hasMaturityFilter || hasTypeFilter;
+    }
+
+    // Only block if it's initial load period, has small data, AND no active filters
+    if (isInitialLoadPeriod && !hasSubstantialData && !hasActiveFilters) {
+      console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Skipping update - only ${activeData.length} active rows (waiting for full load, no filters active)`);
       return;
     }
 
-    console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} active rows, includeWalletBalances: ${typeof includeWalletBalances}`);
+    // Build detailed filter info for logging
+    let filterInfo = '(no filters)';
+    if (hasActiveFilters) {
+      const filterTypes = [];
+      const programmaticCount = cointoolTable.getFilters ? cointoolTable.getFilters().length : 0;
+      if (programmaticCount > 0) filterTypes.push(`${programmaticCount} programmatic`);
+
+      const statusFilter = document.querySelector('.tabulator-col[tabulator-field="Status"] .tabulator-header-filter input');
+      const maturityFilter = document.querySelector('.tabulator-col[tabulator-field="Maturity_Date_Fmt"] .tabulator-header-filter input');
+      const typeFilter = document.querySelector('.tabulator-col[tabulator-field="SourceType"] .tabulator-header-filter input');
+
+      if (statusFilter?.value?.trim() && statusFilter.value.trim() !== 'All') filterTypes.push(`Status: ${statusFilter.value}`);
+      if (maturityFilter?.value?.trim() && maturityFilter.value.trim() !== 'All') filterTypes.push(`Maturity: ${maturityFilter.value}`);
+      if (typeFilter?.value?.trim() && typeFilter.value.trim() !== 'All') filterTypes.push(`Type: ${typeFilter.value}`);
+
+      filterInfo = `(${filterTypes.join(', ')})`;
+    }
+    console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} active/filtered rows (all pages) ${filterInfo}, includeWalletBalances: ${typeof includeWalletBalances}`);
   let total = 0n;
   const addressBreakdown = {};
 
@@ -3887,7 +3923,12 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
     }
   });
 
-  cointoolTable.on("tableBuilt",     updateXENTotalBadge);
+  cointoolTable.on("tableBuilt", () => {
+    updateXENTotalBadge();
+    // Signal that filter buttons are now ready to work
+    window.tableReady = true;
+    console.log('[Filter] Table built - filter buttons now ready');
+  });
   cointoolTable.on("dataLoaded",     updateXENTotalBadge);
   cointoolTable.on("dataProcessed",  updateXENTotalBadge);
   cointoolTable.on("dataFiltered",   updateXENTotalBadge);
@@ -7272,107 +7313,201 @@ function openDatabaseByName(name) {
   });
 }
 
-// Filter button functionality
-(function wireFilterButtons(){
-  function initializeFilterButtons() {
-    const filterButtons = document.querySelectorAll('.chip[data-filter]');
+// --- STATUS CHIP FILTERING ---
+function setStatusHeaderFilter(statusText) {
+  // 1. Update the UI to show which chip is active. This should run for every click.
+  document.querySelectorAll('.filter-chips .chip').forEach(chip => {
+    chip.classList.toggle('active', (chip.dataset.filter || '') === (statusText || ''));
+  });
 
-    filterButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        // Remove active class from all filter buttons
-        filterButtons.forEach(btn => btn.classList.remove('active'));
+  // 2. Find the select (new) or input (fallback) for the Status header filter.
+  const statusFilterRoot = document.querySelector('.tabulator-col[tabulator-field="Status"] .tabulator-header-filter');
+  if (!statusFilterRoot) {
+    if (window.cointoolTable) setTimeout(() => setStatusHeaderFilter(statusText), 200);
+    return;
+  }
+  const selectEl = statusFilterRoot.querySelector('select');
+  const inputEl  = statusFilterRoot.querySelector('input');
 
-        // Add active class to clicked button
-        button.classList.add('active');
+  // 3. Set the status filter value and trigger Tabulator to re-filter.
+  // An empty string for statusText (from the "All" chip) will clear this specific filter
+  // without affecting other filters like the date.
+  const value = statusText || "";
+  if (selectEl) {
+    selectEl.value = value;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+  } else if (inputEl) {
+    inputEl.value = value;
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
+  }
 
-        // Get the filter value
-        const filterValue = button.getAttribute('data-filter');
+  // 4. To ensure a consistent view, re-apply a default sort after the filter changes.
+  if (typeof cointoolTable?.setSort === 'function') {
+    try {
+      cointoolTable.setSort("Maturity_Date_Fmt", "asc");
+    } catch (_) {}
+  }
+}
 
-        // Apply the filter to the table
-        applyTableFilter(filterValue);
-      });
+// Wire up the chips once
+(function initStatusChips(){
+  const container = document.querySelector('.filter-chips');
+  if (!container) return;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chip');
+    const downloadOption = e.target.closest('.download-option');
+
+    // Handle download option clicks
+    if (downloadOption && window.innerWidth <= 768) {
+      const action = downloadOption.dataset.action;
+      if (action === 'csv' && window.cointoolTable) {
+        window.cointoolTable.download("csv", "cointool-mints-detailed.csv");
+      } else if (action === 'json' && window.cointoolTable) {
+        window.cointoolTable.download("json", "cointool-mints-detailed.json");
+      }
+      container.classList.remove('expanded');
+      return;
+    }
+
+    if (!btn) return;
+
+    // Check if mobile view and handle dropdown
+    if (window.innerWidth <= 768) {
+      const currentActive = container.querySelector('.chip.active');
+      if (btn === currentActive) {
+        // Toggle dropdown
+        container.classList.toggle('expanded');
+
+        if (container.classList.contains('expanded')) {
+          updateMobileDropdownContent();
+        }
+        return;
+      } else if (container.classList.contains('expanded')) {
+        // Select option and close dropdown
+        container.classList.remove('expanded');
+      }
+    }
+
+    // Toggle active highlight
+    container.querySelectorAll('.chip').forEach(chip => {
+      chip.classList.toggle('active', chip === btn);
+      // Remove mobile-visible class since we now have an active chip
+      if (chip !== btn) {
+        chip.classList.remove('mobile-visible');
+      }
     });
-  }
 
-  // Initialize immediately if DOM is ready, or wait for DOMContentLoaded
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeFilterButtons);
-  } else {
-    initializeFilterButtons();
-  }
+    const action = btn.dataset.filter || '';
 
-  function applyTableFilter(filterValue) {
-    if (!window.cointoolTable) return;
-
-    // Clear existing filters
-    window.cointoolTable.clearFilter();
-
-    if (!filterValue) {
-      // "All" - no filter needed
+    if (action === '') {
+      // All: clear all header filters and ensure Status is set to All
+      if (window.cointoolTable && window.tableReady) {
+        window.cointoolTable.clearHeaderFilter();
+        try { window.cointoolTable.setHeaderFilterValue('Status', ''); } catch (_) {}
+        try { window.cointoolTable.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
+        console.log('[Filter] Applied "All" filter immediately');
+        // Force immediate XEN badge update
+        setTimeout(() => updateXENTotalBadge(), 100);
+      } else {
+        console.log('[Filter] Table not ready - queueing "All" filter');
+        // Queue the action to run when table is ready
+        setTimeout(() => {
+          if (window.cointoolTable && window.tableReady) {
+            window.cointoolTable.clearHeaderFilter();
+            try { window.cointoolTable.setHeaderFilterValue('Status', ''); } catch (_) {}
+            try { window.cointoolTable.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
+            console.log('[Filter] Applied queued "All" filter');
+            // Force immediate XEN badge update
+            setTimeout(() => updateXENTotalBadge(), 100);
+          }
+        }, 500);
+      }
       return;
     }
 
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-indexed
+    let y = now.getFullYear();
+    let m = now.getMonth(); // 0..11
+    let maturityValue;
+    let statusValue = ''; // Default to no status filter
 
-    switch (filterValue) {
+    switch (action) {
       case 'all-maturing':
-        // Show only items with status "Maturing"
-        window.cointoolTable.setFilter('Status', '=', 'Maturing');
+        maturityValue = ''; // No date filter
+        statusValue = 'Maturing';
         break;
-
       case 'this-month':
-        // Show items maturing this month
-        window.cointoolTable.setFilter([
-          {field: 'Status', type: '=', value: 'Maturing'},
-          {field: 'maturityDateOnly', type: 'regex', value: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-`}
-        ]);
+        maturityValue = `${y} ${MONTHS[m]}`;
+        statusValue = 'Maturing';
         break;
-
       case 'next-month':
-        // Show items maturing next month
-        const nextMonth = new Date(currentYear, currentMonth + 1, 1);
-        const nextMonthStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-`;
-        window.cointoolTable.setFilter([
-          {field: 'Status', type: '=', value: 'Maturing'},
-          {field: 'maturityDateOnly', type: 'regex', value: nextMonthStr}
-        ]);
+        m = (m + 1) % 12;
+        if (m === 0) y += 1;
+        maturityValue = `${y} ${MONTHS[m]}`;
         break;
-
       case 'this-year':
-        // Show items maturing this year
-        window.cointoolTable.setFilter([
-          {field: 'Status', type: '=', value: 'Maturing'},
-          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear}-`}
-        ]);
+        maturityValue = String(y);
+        statusValue = 'Maturing';
         break;
-
       case 'next-year':
-        // Show items maturing next year
-        window.cointoolTable.setFilter([
-          {field: 'Status', type: '=', value: 'Maturing'},
-          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear + 1}-`}
-        ]);
+        maturityValue = String(y + 1);
         break;
-
       case 'year-plus-2':
-        // Show items maturing in year +2
-        window.cointoolTable.setFilter([
-          {field: 'Status', type: '=', value: 'Maturing'},
-          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear + 2}-`}
-        ]);
+        maturityValue = String(y + 2);
         break;
-
       case 'year-plus-3':
-        // Show items maturing in year +3
-        window.cointoolTable.setFilter([
-          {field: 'Status', type: '=', value: 'Maturing'},
-          {field: 'maturityDateOnly', type: 'regex', value: `^${currentYear + 3}-`}
-        ]);
+        maturityValue = String(y + 3);
         break;
+      default:
+        maturityValue = '';
     }
-  }
+
+    // Apply the maturity filter (month/year or year only; no day part)
+    if (window.tableReady) {
+      setMaturityHeaderFilterText(maturityValue);
+      // Apply the status filter
+      try { window.cointoolTable?.setHeaderFilterValue('Status', statusValue); } catch (_) {}
+      // For 'this-year' filter, also reset Type to 'All'
+      if (action === 'this-year') {
+        try { window.cointoolTable?.setHeaderFilterValue('SourceType', ''); } catch (_) {}
+      }
+      try { window.cointoolTable?.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
+      console.log(`[Filter] Applied "${btn.textContent.trim()}" filter immediately`);
+      // Force immediate XEN badge update
+      setTimeout(() => updateXENTotalBadge(), 100);
+    } else {
+      console.log(`[Filter] Table not ready - queueing "${btn.textContent.trim()}" filter`);
+      // Queue the action to run when table is ready
+      setTimeout(() => {
+        if (window.tableReady) {
+          setMaturityHeaderFilterText(maturityValue);
+          try { window.cointoolTable?.setHeaderFilterValue('Status', statusValue); } catch (_) {}
+          if (action === 'this-year') {
+            try { window.cointoolTable?.setHeaderFilterValue('SourceType', ''); } catch (_) {}
+          }
+          try { window.cointoolTable?.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
+          console.log(`[Filter] Applied queued "${btn.textContent.trim()}" filter`);
+          // Force immediate XEN badge update
+          setTimeout(() => updateXENTotalBadge(), 100);
+        }
+      }, 500);
+    }
+  });
+
+  // Handle window resize to close mobile dropdown when switching to desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+      container.classList.remove('expanded');
+      // Remove download options when switching to desktop
+      container.querySelectorAll('.download-option').forEach(option => option.remove());
+    }
+    initMobileState();
+  });
 })();
 
 // Backup & Restore wiring (runs after DOM is available)
@@ -7449,207 +7584,6 @@ function openDatabaseByName(name) {
 
 try { updateNetworkBadge(); } catch {}
 document.getElementById('connectWalletBtn')?.addEventListener('click', handleWalletConnectClick);
-
-// Wire up the chips once
-(function initStatusChips(){
-  const container = document.querySelector('.filter-chips');
-  if (!container) return;
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  container.addEventListener('click', (e) => {
-    const btn = e.target.closest('.chip');
-    const downloadOption = e.target.closest('.download-option');
-    
-    // Handle download option clicks
-    if (downloadOption && window.innerWidth <= 768) {
-      const action = downloadOption.dataset.action;
-      if (action === 'csv' && window.cointoolTable) {
-        window.cointoolTable.download("csv", "cointool-mints-detailed.csv");
-      } else if (action === 'json' && window.cointoolTable) {
-        window.cointoolTable.download("json", "cointool-mints-detailed.json");
-      }
-      container.classList.remove('expanded');
-      return;
-    }
-    
-    if (!btn) return;
-
-    // Check if mobile view and handle dropdown
-    if (window.innerWidth <= 768) {
-      const currentActive = container.querySelector('.chip.active');
-      if (btn === currentActive) {
-        // Toggle dropdown
-        container.classList.toggle('expanded');
-        
-        if (container.classList.contains('expanded')) {
-          updateMobileDropdownContent();
-        }
-        return;
-      } else if (container.classList.contains('expanded')) {
-        // Select option and close dropdown
-        container.classList.remove('expanded');
-      }
-    }
-
-    // Toggle active highlight
-    container.querySelectorAll('.chip').forEach(chip => {
-      chip.classList.toggle('active', chip === btn);
-      // Remove mobile-visible class since we now have an active chip
-      if (chip !== btn) {
-        chip.classList.remove('mobile-visible');
-      }
-    });
-
-    const action = btn.dataset.filter || '';
-
-    if (action === '') {
-      // All: clear all header filters and ensure Status is set to All
-      if (window.cointoolTable) {
-        window.cointoolTable.clearHeaderFilter();
-        try { window.cointoolTable.setHeaderFilterValue('Status', ''); } catch (_) {}
-        try { window.cointoolTable.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
-      }
-      return;
-    }
-
-    const now = new Date();
-    let y = now.getFullYear();
-    let m = now.getMonth(); // 0..11
-    let maturityValue;
-    let statusValue = ''; // Default to no status filter
-
-    switch (action) {
-      case 'all-maturing':
-        maturityValue = ''; // No date filter
-        statusValue = 'Maturing';
-        break;
-      case 'this-month':
-        maturityValue = `${y} ${MONTHS[m]}`;
-        statusValue = 'Maturing';
-        break;
-      case 'next-month':
-        m = (m + 1) % 12;
-        if (m === 0) y += 1;
-        maturityValue = `${y} ${MONTHS[m]}`;
-        break;
-      case 'this-year':
-        maturityValue = String(y);
-        statusValue = 'Maturing';
-        break;
-      case 'next-year':
-        maturityValue = String(y + 1);
-        break;
-      case 'year-plus-2':
-        maturityValue = String(y + 2);
-        break;
-      case 'year-plus-3':
-        maturityValue = String(y + 3);
-        break;
-      default:
-        maturityValue = '';
-    }
-
-    // Apply the maturity filter (month/year or year only; no day part)
-    setMaturityHeaderFilterText(maturityValue);
-
-    // Apply the status filter
-    try { window.cointoolTable?.setHeaderFilterValue('Status', statusValue); } catch (_) {}
-    
-    // For 'this-year' filter, also reset Type to 'All'
-    if (action === 'this-year') {
-      try { window.cointoolTable?.setHeaderFilterValue('SourceType', ''); } catch (_) {}
-    }
-    
-    try { window.cointoolTable?.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
-  });
-  
-  // Handle window resize to close mobile dropdown when switching to desktop
-  window.addEventListener('resize', () => {
-    if (window.innerWidth > 768) {
-      container.classList.remove('expanded');
-      // Remove download options when switching to desktop
-      container.querySelectorAll('.download-option').forEach(option => option.remove());
-    }
-    initMobileState();
-  });
-  
-  // Initialize mobile state
-  function initMobileState() {
-    const tableActions = container.querySelector('.table-actions');
-    
-    if (window.innerWidth <= 768) {
-      const activeChip = container.querySelector('.chip.active');
-      const firstChip = container.querySelector('.chip');
-      
-      // Remove any existing mobile-visible class
-      container.querySelectorAll('.chip.mobile-visible').forEach(chip => {
-        chip.classList.remove('mobile-visible');
-      });
-      
-      // If no active chip exists, make the first chip visible for mobile
-      if (!activeChip && firstChip) {
-        firstChip.classList.add('mobile-visible');
-      }
-      
-      // Move table-actions to bottom in mobile
-      if (tableActions) {
-        tableActions.classList.add('mobile-below-table');
-      }
-    } else {
-      // Remove mobile-visible class for desktop
-      container.querySelectorAll('.chip.mobile-visible').forEach(chip => {
-        chip.classList.remove('mobile-visible');
-      });
-      
-      // Remove mobile positioning for desktop
-      if (tableActions) {
-        tableActions.classList.remove('mobile-below-table');
-      }
-    }
-  }
-  
-  // Initialize mobile state on load
-  initMobileState();
-  
-  // Function to update mobile dropdown content with download options
-  function updateMobileDropdownContent() {
-    if (window.innerWidth > 768) return;
-    
-    // Check if download options already exist
-    const existingCsv = container.querySelector('.download-option[data-action="csv"]');
-    const existingJson = container.querySelector('.download-option[data-action="json"]');
-    
-    const hasData = window.cointoolTable && window.cointoolTable.getDataCount("active") > 0;
-    
-    if (hasData && !existingCsv && !existingJson) {
-      // Create download options if they don't exist and we have data
-      const csvOption = document.createElement('div');
-      csvOption.className = 'download-option';
-      csvOption.dataset.action = 'csv';
-      csvOption.textContent = '📊 Download CSV';
-      
-      const jsonOption = document.createElement('div');
-      jsonOption.className = 'download-option';
-      jsonOption.dataset.action = 'json';
-      jsonOption.textContent = '📄 Download JSON';
-      
-      // Find where to insert (after the last visible chip)
-      const chips = Array.from(container.querySelectorAll('.chip'));
-      const lastChip = chips[chips.length - 1];
-      
-      if (lastChip) {
-        lastChip.insertAdjacentElement('afterend', csvOption);
-        csvOption.insertAdjacentElement('afterend', jsonOption);
-      }
-    } else if (!hasData) {
-      // Remove download options if no data
-      container.querySelectorAll('.download-option').forEach(option => option.remove());
-    }
-  }
-  
-  // Make function globally accessible
-  window.updateMobileDropdownContent = updateMobileDropdownContent;
-})();
 
 /* === AUTO-CONNECT WALLET ON PAGE LOAD (added by optimizer) === */
 (function() {
