@@ -33,7 +33,15 @@ function updateChainSpecificLabels() {
   // Update RPC label to be chain-specific
   const rpcLabel = document.querySelector('label[for="customRPC"]');
   if (rpcLabel) rpcLabel.textContent = `Custom ${chainName} RPCs (one per line)`;
-  
+
+  // Update RPC textarea with chain-specific data
+  const rpcTextarea = document.getElementById('customRPC');
+  if (rpcTextarea && window.chainManager) {
+    const chainRPCs = window.chainManager.getRPCEndpoints();
+    rpcTextarea.value = chainRPCs.join('\n');
+    console.log(`Updated RPC textarea for ${chainName} with ${chainRPCs.length} RPCs`);
+  }
+
   // Note: Mint tab button stays as "Mint/Stake" - not chain-specific
   
   // Update Mint tab platform selector label if present
@@ -412,8 +420,8 @@ async function importAndRankRPCs() {
   const chainId = chainConfig.id || (currentChain === 'BASE' ? 8453 : 1);
   const chainName = chainConfig.name || (currentChain === 'BASE' ? 'Base' : 'Ethereum');
   
-  console.log(`Importing RPCs for chain: ${chainName} (ID: ${chainId}), currentChain: ${currentChain}`);
-  
+  console.log(`[RPC Import] Importing RPCs for chain: ${chainName} (ID: ${chainId}), currentChain: ${currentChain}`);
+
   showImportStatus(`Fetching public ${chainName} RPC list…`);
 
   // 1) Fetch public RPCs (Chainlist). Fallback to a small known set if needed.
@@ -441,13 +449,17 @@ async function importAndRankRPCs() {
         "https://base.publicnode.com",
         "https://base.meowrpc.com"
       ];
+      console.log(`[RPC Import] Using Base fallback RPCs: ${candidates.length} candidates`);
     } else { // Ethereum
       candidates = [
         "https://cloudflare-eth.com",
         "https://rpc.ankr.com/eth",
         "https://ethereum.publicnode.com"
       ];
+      console.log(`[RPC Import] Using Ethereum fallback RPCs: ${candidates.length} candidates`);
     }
+  } else {
+    console.log(`[RPC Import] Found ${candidates.length} RPCs from chainlist for ${chainName}`);
   }
 
   // 2) Merge with user-provided list
@@ -728,6 +740,10 @@ function updateCrankStatus(){
 async function fetchXenGlobalRank(){
   const rpcs = getRpcList();
   let lastErr = null;
+
+  // Debug logging for chain-specific data
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  console.log(`[Rank] Fetching global rank for ${currentChain}, XEN contract: ${XEN_CRYPTO_ADDRESS}, using ${rpcs.length} RPCs`);
 
   for (const rpc of rpcs) {
     try {
@@ -6347,10 +6363,11 @@ function collectSettingsSnapshot() {
     }
   }
 
-  // Also collect current form values
+  // Collect current form values with chain-aware RPC handling
   const formSettings = {
     ethAddress: (document.getElementById("ethAddress")?.value ?? "").trim(),
-    customRPC: (document.getElementById("customRPC")?.value ?? "").trim(),
+    // Don't export current RPC form value - let chain-specific localStorage handle it
+    // customRPC: (document.getElementById("customRPC")?.value ?? "").trim(),
     etherscanApiKey: (document.getElementById("etherscanApiKey")?.value ?? "").trim(),
     chunkSize: (document.getElementById("chunkSize")?.value ?? "").trim(),
     cointoolBatchSize: (document.getElementById("cointoolBatchSize")?.value ?? "").trim(),
@@ -6407,13 +6424,37 @@ function applySettingsSnapshot(settings) {
   if (settings.localStorage && typeof settings.localStorage === 'object') {
     console.log('[Settings] Restoring complete localStorage data...');
 
-    // Restore ALL localStorage data
+    // Restore localStorage data, but preserve ALL existing chain-specific RPC data
+    const allChains = ['ETHEREUM', 'BASE'];
+    const preservedRPCs = {};
+
+    // Preserve ALL chain-specific RPC data before restore
+    allChains.forEach(chain => {
+      const rpcKey = `${chain}_customRPC`;
+      const existingRPCs = localStorage.getItem(rpcKey);
+      if (existingRPCs) {
+        preservedRPCs[rpcKey] = existingRPCs;
+        console.log(`[Settings] Preserving existing ${chain} RPC data`);
+      }
+    });
+
     Object.entries(settings.localStorage).forEach(([key, value]) => {
       try {
+        // Skip restoring ANY chain-specific RPC data to prevent cross-contamination
+        if (key.endsWith('_customRPC')) {
+          console.log(`[Settings] Skipping restore of ${key} to prevent cross-contamination`);
+          return;
+        }
         localStorage.setItem(key, value);
       } catch (e) {
         console.warn(`[Settings] Failed to restore localStorage key: ${key}`, e);
       }
+    });
+
+    // Restore all preserved RPC data
+    Object.entries(preservedRPCs).forEach(([rpcKey, rpcData]) => {
+      localStorage.setItem(rpcKey, rpcData);
+      console.log(`[Settings] Restored preserved RPC data for ${rpcKey}`);
     });
 
     // Apply form values if available
@@ -6423,7 +6464,8 @@ function applySettingsSnapshot(settings) {
         if (el && v !== undefined && v !== null) el.value = v;
       };
       setVal("ethAddress", settings.formValues.ethAddress);
-      setVal("customRPC", settings.formValues.customRPC);
+      // Don't restore customRPC form field - let chain manager load chain-specific RPCs
+      // setVal("customRPC", settings.formValues.customRPC);
       setVal("etherscanApiKey", settings.formValues.etherscanApiKey);
       setVal("chunkSize", settings.formValues.chunkSize);
       setVal("cointoolBatchSize", settings.formValues.cointoolBatchSize);
@@ -6442,6 +6484,26 @@ function applySettingsSnapshot(settings) {
     }
 
     console.log('[Settings] Complete settings restoration finished');
+
+    // Ensure RPC textarea and rank are loaded with chain-specific data after import
+    setTimeout(() => {
+      if (window.chainManager) {
+        const currentChainName = window.chainManager.getCurrentConfig()?.name || 'Unknown';
+        const rpcTextarea = document.getElementById('customRPC');
+        if (rpcTextarea) {
+          const chainRPCs = window.chainManager.getRPCEndpoints();
+          rpcTextarea.value = chainRPCs.join('\n');
+          console.log(`[Import] Loaded ${chainRPCs.length} ${currentChainName} RPCs into textarea after import`);
+        }
+
+        // Force refresh of chain-specific global rank to prevent cross-contamination
+        if (typeof fetchXenGlobalRank === 'function') {
+          console.log(`[Import] Refreshing ${currentChainName} global rank after import`);
+          fetchXenGlobalRank().catch(e => console.warn('Failed to refresh rank after import:', e));
+        }
+      }
+    }, 100);
+
     return;
   }
 
@@ -6452,7 +6514,8 @@ function applySettingsSnapshot(settings) {
 
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
   setVal("ethAddress", settings.ethAddress);
-  setVal("customRPC", settings.customRPC);
+  // Don't restore customRPC form field for legacy format either
+  // setVal("customRPC", settings.customRPC);
   setVal("etherscanApiKey", settings.etherscanApiKey);
   setVal("chunkSize", settings.chunkSize);
   setVal("cointoolBatchSize", settings.cointoolBatchSize);
@@ -6581,6 +6644,25 @@ function applySettingsSnapshot(settings) {
     if (document.getElementById('ethAddress')) setEthAddressMasked(addrMask);
     if (document.getElementById('connectWalletBtn')) setConnectWalletMasked(walletMask);
   } catch(_) {}
+
+  // Ensure RPC textarea and rank are loaded with chain-specific data after legacy import
+  setTimeout(() => {
+    if (window.chainManager) {
+      const currentChainName = window.chainManager.getCurrentConfig()?.name || 'Unknown';
+      const rpcTextarea = document.getElementById('customRPC');
+      if (rpcTextarea) {
+        const chainRPCs = window.chainManager.getRPCEndpoints();
+        rpcTextarea.value = chainRPCs.join('\n');
+        console.log(`[Import Legacy] Loaded ${chainRPCs.length} ${currentChainName} RPCs into textarea after legacy import`);
+      }
+
+      // Force refresh of chain-specific global rank to prevent cross-contamination
+      if (typeof fetchXenGlobalRank === 'function') {
+        console.log(`[Import Legacy] Refreshing ${currentChainName} global rank after legacy import`);
+        fetchXenGlobalRank().catch(e => console.warn('Failed to refresh rank after legacy import:', e));
+      }
+    }
+  }, 100);
 }
 
 // Export: bundles CointoolDB + DB_Xenft + Settings
