@@ -5709,10 +5709,19 @@ function updateCalendar() {
       }
     }
 
+    // Preserve the current month/year view before destroying
+    let preservedYear = null;
+    let preservedMonth = null;
+    if (calendarPicker && calendarPicker.currentYear !== undefined && calendarPicker.currentMonth !== undefined) {
+      // Store the currently displayed month/year
+      preservedYear = calendarPicker.currentYear;
+      preservedMonth = calendarPicker.currentMonth;
+    }
+
     if (calendarPicker) calendarPicker.destroy();
     document.getElementById("calendar").style.display = 'block';
 
-    calendarPicker = flatpickr("#calendar", {
+    const calendarOptions = {
       inline: true,
       onDayCreate: function(dObj, dStr, fp, dayElem) {
         const dateStr = dayElem.dateObj ? getLocalDateString(dayElem.dateObj) : "";
@@ -5734,10 +5743,19 @@ function updateCalendar() {
         }
       }
       ,
-      onReady: function(selectedDates, dateStr, instance){ __fixFlatpickrHeader(instance); },
+      onReady: function(selectedDates, dateStr, instance){
+        __fixFlatpickrHeader(instance);
+        // Restore preserved month/year after initialization
+        if (preservedYear !== null && preservedMonth !== null) {
+          instance.changeMonth(preservedMonth, false);
+          instance.changeYear(preservedYear);
+        }
+      },
       onMonthChange: function(selectedDates, dateStr, instance){ __fixFlatpickrHeader(instance); },
       onYearChange: function(selectedDates, dateStr, instance){ __fixFlatpickrHeader(instance); }
-    });
+    };
+
+    calendarPicker = flatpickr("#calendar", calendarOptions);
 
     // keep the global pointer fresh
     window._calendar = calendarPicker;
@@ -5912,20 +5930,60 @@ async function connectWallet() {
       '0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC';
 
     try {
-      // Add endStake method to ABI if not present
-      const stakeAbi = window.xenftStakeAbi || [];
-      const hasEndStake = stakeAbi.some(item => item.type === 'function' && item.name === 'endStake');
-      if (!hasEndStake) {
-        stakeAbi.push({
-          "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
-          "name": "endStake",
-          "outputs": [],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        });
+      // Use the correct Stake XENFT ABI - must include endStake method
+      let stakeAbi = window.xenftStakeAbi;
+
+      // If ABI is not loaded or incomplete, use a complete fallback ABI
+      if (!stakeAbi || !Array.isArray(stakeAbi) || stakeAbi.length === 0) {
+        console.warn('Stake XENFT ABI not loaded, using fallback ABI');
+        // Complete minimal ABI for Stake XENFT contract including endStake, ownerOf, and essential methods
+        stakeAbi = [
+          {
+            "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+            "name": "endStake",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+            "name": "ownerOf",
+            "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "name": "stakeInfo",
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ];
+      } else {
+        // Verify the ABI has the endStake method
+        const hasEndStake = stakeAbi.some(item => item.type === 'function' && item.name === 'endStake');
+        if (!hasEndStake) {
+          console.error('Stake XENFT ABI is loaded but missing endStake method - using fallback');
+          // Add just the endStake method to the existing ABI
+          stakeAbi = [...stakeAbi, {
+            "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+            "name": "endStake",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }];
+        }
       }
-      
+
       const stake = new w3.eth.Contract(stakeAbi, STAKE_ADDR);
+
+      // Verify the contract methods are available
+      if (!stake.methods.endStake) {
+        console.error('Contract instantiation failed - endStake method not available');
+        alert('Error: Failed to create Stake XENFT contract instance. Please refresh the page.');
+        return;
+      }
       const tx = await executeWithAutoRescan(
         stake.methods.endStake(tokenId).send({ from: connectedAccount }),
         'Stake XENFT end',

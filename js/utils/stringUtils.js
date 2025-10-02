@@ -33,11 +33,13 @@ export const stringUtils = {
   // Format USD currency
   formatUSD(amount) {
     if (!Number.isFinite(amount)) return "$0.00";
+    // Use 2 decimals by default, unless value is <0.01 (which needs more precision)
+    const decimals = (amount > 0 && amount < 0.01) ? 6 : 2;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
-      maximumFractionDigits: 6
+      maximumFractionDigits: decimals
     }).format(amount);
   },
 
