@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head><title>Cleanup RPCs</title></head>
+<body>
+<h2>RPC Cleanup Tool</h2>
+<pre id="before">Loading...</pre>
+<button onclick="cleanup()">Clean Base RPCs from ETHEREUM_customRPC</button>
+<pre id="after"></pre>
+<script>
+function showStatus() {
+  const eth = localStorage.getItem('ETHEREUM_customRPC');
+  const base = localStorage.getItem('BASE_customRPC');
+  const ethKnown = localStorage.getItem('ETHEREUM_customRPC_lastKnown');
+  const baseKnown = localStorage.getItem('BASE_customRPC_lastKnown');
+  return `ETHEREUM_customRPC:\n${eth}\nETHEREUM_customRPC_lastKnown:\n${ethKnown}\n\nBASE_customRPC:\n${base}\nBASE_customRPC_lastKnown:\n${baseKnown}`;
+}
+
+document.getElementById('before').textContent = showStatus();
+
+function cleanup() {
+  // Clear the corrupted ETHEREUM RPCs
+  localStorage.removeItem('ETHEREUM_customRPC');
+  localStorage.removeItem('ETHEREUM_customRPC_source');
+  localStorage.removeItem('ETHEREUM_customRPC_lastKnown');
+  localStorage.removeItem('BASE_customRPC');
+  localStorage.removeItem('BASE_customRPC_source');
+  localStorage.removeItem('BASE_customRPC_lastKnown');
+  document.getElementById('after').textContent = 'Cleaned! Now refresh wenxen.com\n\n' + showStatus();
+}
+</script>
+</body>
+</html>

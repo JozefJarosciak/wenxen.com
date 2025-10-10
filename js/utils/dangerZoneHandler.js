@@ -223,13 +223,16 @@ export class DangerZoneHandler {
     }
     
     // Also include chain-specific keys without database prefix
+    const baseChainPrefix = chainPrefix.replace('_', '');
     const chainSpecificKeys = [
-      `${chainPrefix.replace('_', '')}_ethAddress`,
-      `${chainPrefix.replace('_', '')}_customRPC`,
-      `${chainPrefix.replace('_', '')}_chunkSize`,
-      `${chainPrefix.replace('_', '')}_mintTermDays`,
-      `${chainPrefix.replace('_', '')}_scanMode`,
-      `${chainPrefix.replace('_', '')}_vmuChartExpanded`
+      `${baseChainPrefix}_ethAddress`,
+      `${baseChainPrefix}_customRPC`,
+      `${baseChainPrefix}_customRPC_source`,
+      `${baseChainPrefix}_customRPC_lastKnown`,
+      `${baseChainPrefix}_chunkSize`,
+      `${baseChainPrefix}_mintTermDays`,
+      `${baseChainPrefix}_scanMode`,
+      `${baseChainPrefix}_vmuChartExpanded`
     ];
     
     // Add alternative format keys
@@ -237,6 +240,8 @@ export class DangerZoneHandler {
       chainSpecificKeys.push(
         'ETHEREUM_ethAddress',
         'ETHEREUM_customRPC',
+        'ETHEREUM_customRPC_source',
+        'ETHEREUM_customRPC_lastKnown',
         'ETHEREUM_chunkSize',
         'ETHEREUM_mintTermDays',
         'ETHEREUM_scanMode',
@@ -246,6 +251,8 @@ export class DangerZoneHandler {
       chainSpecificKeys.push(
         'BASE_ethAddress',
         'BASE_customRPC',
+        'BASE_customRPC_source',
+        'BASE_customRPC_lastKnown',
         'BASE_chunkSize',
         'BASE_mintTermDays',
         'BASE_scanMode',

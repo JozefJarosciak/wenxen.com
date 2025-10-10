@@ -249,15 +249,74 @@ class ChainManager {
 
     // Check for user-configured RPCs for this chain
     const customRPCKey = `${chain}_customRPC`;
+    const customRPCSourceKey = `${chain}_customRPC_source`;
+    const lastKnownKey = `${chain}_customRPC_lastKnown`;
     const customRPCs = localStorage.getItem(customRPCKey);
+    const sourceChain = localStorage.getItem(customRPCSourceKey);
+    const lastKnown = localStorage.getItem(lastKnownKey);
 
-    console.log(`[Chain RPC] Getting RPCs for ${chain}, customRPCKey: ${customRPCKey}, found custom: ${!!customRPCs}`);
+    console.log(`[Chain RPC] Getting RPCs for ${chain}, customRPCKey: ${customRPCKey}, found custom: ${!!customRPCs}, source: ${sourceChain || 'none'}`);
 
-    if (customRPCs) {
+    if (customRPCs && (!sourceChain || sourceChain === chain)) {
       const rpcList = customRPCs.split('\n').map(s => s.trim()).filter(Boolean);
+      const joined = rpcList.join('\n');
+
+      if (!sourceChain) {
+        // If we have a last-known value and the stored entry differs, prefer the last-known cache
+        if (lastKnown && lastKnown !== joined) {
+          console.warn(`[Chain RPC] Detected unexpected change to ${chain} RPCs without metadata. Restoring last known value.`);
+          const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+          localStorage.setItem(customRPCKey, lastKnown);
+          localStorage.setItem(customRPCSourceKey, chain);
+          return restored.length ? restored : [config.rpcUrls.default, ...config.rpcUrls.fallback];
+        }
+
+        // Heuristic: if value matches another chain's known list, treat as contamination
+        for (const [otherChain] of Object.entries(SUPPORTED_CHAINS)) {
+          if (otherChain === chain) continue;
+          const otherKnown = localStorage.getItem(`${otherChain}_customRPC_lastKnown`) || localStorage.getItem(`${otherChain}_customRPC`);
+          if (otherKnown && otherKnown === joined) {
+            console.warn(`[Chain RPC] Detected ${chain} RPCs matching ${otherChain} list without metadata. Restoring ${chain} last known value.`);
+            if (lastKnown) {
+              const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+              localStorage.setItem(customRPCKey, lastKnown);
+              localStorage.setItem(customRPCSourceKey, chain);
+              return restored.length ? restored : [config.rpcUrls.default, ...config.rpcUrls.fallback];
+            } else {
+              localStorage.removeItem(customRPCKey);
+              console.log(`[Chain RPC] No lastKnown for ${chain}; falling back to defaults.`);
+              return [config.rpcUrls.default, ...config.rpcUrls.fallback];
+            }
+          }
+        }
+      }
+
       if (rpcList.length > 0) {
         console.log(`[Chain RPC] Using ${rpcList.length} custom RPCs for ${chain}:`, rpcList.slice(0, 3));
+        try {
+          localStorage.setItem(lastKnownKey, joined);
+          if (!sourceChain) {
+            localStorage.setItem(customRPCSourceKey, chain);
+          }
+        } catch (_) {}
         return rpcList;
+      }
+    } else if (customRPCs && sourceChain && sourceChain !== chain) {
+      console.warn(`[Chain RPC] Removing mismatched custom RPC entry for ${customRPCKey} (stored source=${sourceChain})`);
+      localStorage.removeItem(customRPCKey);
+      localStorage.removeItem(customRPCSourceKey);
+      if (lastKnown) {
+        console.log(`[Chain RPC] Restoring ${chain} RPCs from lastKnown after mismatch cleanup.`);
+        const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+        if (restored.length) {
+          return restored;
+        }
+      }
+    } else if (!customRPCs && lastKnown) {
+      console.log(`[Chain RPC] No stored RPCs for ${chain}, using lastKnown cache.`);
+      const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+      if (restored.length) {
+        return restored;
       }
     }
 
@@ -268,15 +327,44 @@ class ChainManager {
   }
 
   // Save chain-specific RPC endpoints
-  saveRPCEndpoints(rpcList) {
-    const chain = this.getCurrentChain();
+  saveRPCEndpoints(rpcList, forceChain = null) {
+    const chain = forceChain || this.getCurrentChain();
     const customRPCKey = `${chain}_customRPC`;
+    const customRPCSourceKey = `${chain}_customRPC_source`;
+    const lastKnownKey = `${chain}_customRPC_lastKnown`;
     
     if (rpcList && rpcList.length > 0) {
       const rpcString = rpcList.join('\n');
+
+      // Guard against accidental cross-chain contamination (e.g., saving Ethereum list onto Base)
+      for (const [otherChain, otherConfig] of Object.entries(SUPPORTED_CHAINS)) {
+        if (otherChain === chain) continue;
+        const otherLastKnown = localStorage.getItem(`${otherChain}_customRPC_lastKnown`);
+        if (otherLastKnown && otherLastKnown === rpcString) {
+          console.warn(`[Chain RPC] Detected RPC list for ${chain} matching ${otherChain}. Ignoring save to prevent cross-contamination.`);
+          return;
+        }
+      }
+
       localStorage.setItem(customRPCKey, rpcString);
+      localStorage.setItem(customRPCSourceKey, chain);
+      localStorage.setItem(lastKnownKey, rpcString);
+      console.log(`[Chain RPC] Saved ${rpcList.length} RPCs for ${chain} into ${customRPCKey}`);
+      try {
+        if (typeof window !== 'undefined' && typeof window.__setRpcLastValueForChain === 'function') {
+          window.__setRpcLastValueForChain(chain, rpcString);
+        }
+      } catch (_) {}
     } else {
       localStorage.removeItem(customRPCKey);
+      localStorage.removeItem(customRPCSourceKey);
+      localStorage.removeItem(lastKnownKey);
+      console.log(`[Chain RPC] Cleared custom RPCs for ${chain} at key ${customRPCKey}`);
+      try {
+        if (typeof window !== 'undefined' && typeof window.__setRpcLastValueForChain === 'function') {
+          window.__setRpcLastValueForChain(chain, '');
+        }
+      } catch (_) {}
     }
   }
 

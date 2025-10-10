@@ -12,6 +12,22 @@ function updateChainSpecificLabels() {
   const chainName = currentChain === 'BASE' ? 'Base' : 'Ethereum';
   const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
   
+  if (!window.__rpcLastValuesByChain) {
+    window.__rpcLastValuesByChain = {};
+  }
+  if (!window.__setRpcLastValueForChain) {
+    window.__setRpcLastValueForChain = (chain, value) => {
+      if (!chain) return;
+      window.__rpcLastValuesByChain[chain] = value;
+      try {
+        localStorage.setItem(`${chain}_customRPC_lastKnown`, value || '');
+        if (value && value.length) {
+          localStorage.setItem(`${chain}_customRPC_source`, chain);
+        }
+      } catch (_) {}
+    };
+  }
+  
   // Update Settings tab labels
   const addressLabel = document.querySelector('#field-ethAddress label[for="ethAddress"]');
   if (addressLabel) addressLabel.textContent = `${chainName} Addresses (one per line)`;
@@ -39,7 +55,12 @@ function updateChainSpecificLabels() {
   if (rpcTextarea && window.chainManager) {
     const actualChain = window.chainManager.getCurrentChain();
     const chainRPCs = window.chainManager.getRPCEndpoints();
-    rpcTextarea.value = chainRPCs.join('\n');
+    const rpcString = chainRPCs.join('\n');
+    rpcTextarea.value = rpcString;
+    window.__setRpcLastValueForChain(actualChain, rpcString);
+    try {
+      localStorage.setItem(`${actualChain}_customRPC_lastKnown`, rpcString);
+    } catch (_) {}
     console.log(`[Chain UI] Updated RPC textarea for ${chainName} (actual chain: ${actualChain}) with ${chainRPCs.length} RPCs:`, chainRPCs.slice(0, 2));
   }
 
@@ -505,12 +526,14 @@ async function importAndRankRPCs() {
 
   // 5) Write back to textarea (fastest -> slowest), persist, update UI
   const sorted = reachable.map(r => r.url);
-  ta.value = sorted.join("\n");
+  const rpcString = sorted.join("\n");
+  ta.value = rpcString;
+  window.__setRpcLastValueForChain?.(currentChain, rpcString);
   try {
     // Save to chain-specific key
     if (window.chainManager) {
-      window.chainManager.saveRPCEndpoints(sorted);
-      console.log(`[RPC Save] Saved ${sorted.length} RPCs to chain-specific storage for ${window.chainManager.getCurrentChain()}`);
+      window.chainManager.saveRPCEndpoints(sorted, currentChain);
+      console.log(`[RPC Save] Saved ${sorted.length} RPCs to chain-specific storage for ${currentChain}`);
     } else {
       console.warn(`[RPC Save] Chain manager not available, RPCs not saved`);
     }
@@ -4277,10 +4300,16 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
   // Save RPC with chain prefix
   if (window.chainManager) {
     const rpcList = customRPC.split('\n').filter(Boolean);
-    window.chainManager.saveRPCEndpoints(rpcList);
-    console.log(`[User Prefs] Saved ${rpcList.length} RPCs to chain-specific storage for ${window.chainManager.getCurrentChain()}`);
+    const currentChain = window.chainManager.getCurrentChain();
+    window.chainManager.saveRPCEndpoints(rpcList, currentChain);
+    window.__setRpcLastValueForChain?.(currentChain, customRPC);
+    console.log(`[User Prefs] Saved ${rpcList.length} RPCs to chain-specific storage for ${currentChain}`);
   } else {
     console.warn(`[User Prefs] Chain manager not available, RPCs not saved`);
+    try {
+      localStorage.setItem('ETHEREUM_customRPC_lastKnown', customRPC);
+      localStorage.setItem('ETHEREUM_customRPC_source', 'ETHEREUM');
+    } catch (_) {}
   }
   
   // Save Etherscan API key (works for all chains)
@@ -4351,6 +4380,15 @@ function loadUserPreferences() {
     console.log(`[Load User Prefs] Chain manager not available, using DEFAULT_RPC`);
   }
   document.getElementById("customRPC").value = rpcValue;
+  if (window.chainManager) {
+    window.__setRpcLastValueForChain?.(window.chainManager.getCurrentChain(), rpcValue);
+    try {
+      localStorage.setItem(`${window.chainManager.getCurrentChain()}_customRPC_lastKnown`, rpcValue);
+    } catch (_) {}
+  } else {
+    window.__setRpcLastValueForChain?.('ETHEREUM', rpcValue);
+    try { localStorage.setItem('ETHEREUM_customRPC_lastKnown', rpcValue); } catch (_) {}
+  }
   
   // API key is global
   // Load Etherscan API key (now works for all chains)
@@ -6128,9 +6166,18 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
 // Individual field save handlers with proper duplicate prevention
 (function() {
   // Track last saved values and blur timestamps to prevent duplicates
+  const rpcLastValuesByChain = window.__rpcLastValuesByChain = window.__rpcLastValuesByChain || {};
+  if (window.chainManager) {
+    const initChain = window.chainManager.getCurrentChain();
+    if (initChain && !(initChain in rpcLastValuesByChain)) {
+      rpcLastValuesByChain[initChain] = window.chainManager.getRPCEndpoints().join('\n');
+    }
+  }
+
   const fieldState = {
     customRPC: {
       lastValue: (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : "") || "",
+      lastValueByChain: rpcLastValuesByChain,
       lastBlurTime: 0,
       saveTimer: null
     },
@@ -6181,6 +6228,19 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
     // Save immediately (no additional delay needed since we're preventing duplicates)
     localStorage.setItem(fieldName, value);
     state.lastValue = value;
+    if (fieldName === 'customRPC') {
+      const chainKey = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+      if (state.lastValueByChain) {
+        state.lastValueByChain[chainKey] = value;
+      }
+      try {
+        localStorage.setItem(`${chainKey}_customRPC_source`, chainKey);
+        localStorage.setItem(`${chainKey}_customRPC_lastKnown`, value);
+      } catch (e) {
+        console.warn('Failed to update custom RPC source metadata:', e);
+      }
+      window.__setRpcLastValueForChain?.(chainKey, value);
+    }
     
     // Show save status
     showSaveStatus(displayName + " saved", true);
@@ -6194,15 +6254,52 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   // Add blur event listeners
   const customRPCField = document.getElementById("customRPC");
   if (customRPCField) {
+    customRPCField.addEventListener("focus", function() {
+      this.dataset.focusChain = window.chainManager?.getCurrentChain() || "";
+      this.dataset.lastManualValue = this.value;
+    });
+
+    customRPCField.addEventListener("input", function() {
+      this.dataset.lastManualValue = this.value;
+    });
+
     customRPCField.addEventListener("blur", function() {
-      // Save chain-specific RPC
+      const hadFocusInfo = Object.prototype.hasOwnProperty.call(this.dataset, 'focusChain');
+      const hadManualValue = Object.prototype.hasOwnProperty.call(this.dataset, 'lastManualValue');
+
+      if (!hadFocusInfo && !hadManualValue) {
+        delete this.dataset.focusChain;
+        delete this.dataset.lastManualValue;
+        return; // Ignore blur events that didn't originate from user focus/input (e.g., programmatic switches)
+      }
+
+      const currentChain = window.chainManager?.getCurrentChain() || "";
+      const focusChain = this.dataset.focusChain || currentChain;
+      const lastManualValue = this.dataset.lastManualValue ?? this.value;
+
+      let valueToPersist = lastManualValue;
+      if (!valueToPersist && this.value) {
+        valueToPersist = this.value;
+      }
+
+      delete this.dataset.focusChain;
+      delete this.dataset.lastManualValue;
+
+      const targetChain = focusChain || currentChain || 'ETHEREUM';
+      const lastKnown = window.__rpcLastValuesByChain?.[targetChain] ?? localStorage.getItem(`${targetChain}_customRPC_lastKnown`) ?? "";
+
+      if (!hadManualValue && valueToPersist === lastKnown) {
+        return; // No change detected
+      }
+
       if (window.chainManager) {
-        const rpcList = this.value.split('\n').filter(Boolean);
-        window.chainManager.saveRPCEndpoints(rpcList);
-        // RPC saved via chainManager
+        const rpcList = valueToPersist.split('\n').map(s => s.trim()).filter(Boolean);
+        window.chainManager.saveRPCEndpoints(rpcList, targetChain);
+        window.__setRpcLastValueForChain?.(targetChain, valueToPersist);
         showSaveStatus("Custom RPCs saved", true);
       } else {
-        saveField("customRPC", this.value, "Custom RPCs");
+        saveField("customRPC", valueToPersist, "Custom RPCs");
+        window.__setRpcLastValueForChain?.(focusChain || 'ETHEREUM', valueToPersist);
       }
     });
   }
@@ -6587,7 +6684,9 @@ function applySettingsSnapshot(settings) {
         const rpcTextarea = document.getElementById('customRPC');
         if (rpcTextarea) {
           const chainRPCs = window.chainManager.getRPCEndpoints();
-          rpcTextarea.value = chainRPCs.join('\n');
+          const rpcString = chainRPCs.join('\n');
+          rpcTextarea.value = rpcString;
+          window.__setRpcLastValueForChain?.(window.chainManager.getCurrentChain(), rpcString);
           console.log(`[Import] Loaded ${chainRPCs.length} ${currentChainName} RPCs into textarea after import`);
         }
 
@@ -6630,9 +6729,14 @@ function applySettingsSnapshot(settings) {
     // Save chain-specific customRPC
     if (window.chainManager) {
       const rpcList = settings.customRPC.split('\n').filter(Boolean);
-      window.chainManager.saveRPCEndpoints(rpcList);
+      window.chainManager.saveRPCEndpoints(rpcList, targetChain);
+      window.__setRpcLastValueForChain?.(targetChain, settings.customRPC);
     } else {
-      localStorage.setItem(chainPrefix + "customRPC", settings.customRPC);
+      const customKey = chainPrefix + "customRPC";
+      localStorage.setItem(customKey, settings.customRPC);
+      localStorage.setItem(`${targetChain}_customRPC_source`, targetChain);
+      localStorage.setItem(`${targetChain}_customRPC_lastKnown`, settings.customRPC);
+      window.__setRpcLastValueForChain?.(targetChain, settings.customRPC);
     }
   }
   if (typeof settings.etherscanApiKey === "string") localStorage.setItem("etherscanApiKey", settings.etherscanApiKey);
@@ -8221,4 +8325,3 @@ window.listAllDatabases = async function() {
     console.error('Error listing databases:', error);
   }
 };
-
