@@ -60,24 +60,21 @@ class NetworkSelectorUI {
         console.log('NetworkSelector: Switching to', chain);
         
         if (chain && chain !== chainManager.getCurrentChain()) {
-          // Save current state
+          // Save current state BEFORE any changes
           this.saveCurrentState();
-          
+
           // Switch chain
           chainManager.setChain(chain);
-          
-          // Update display
-          this.updateDisplay();
-          
+
           // Close dropdown
           dropdown.style.display = 'none';
           selectorBtn.setAttribute('aria-expanded', 'false');
-          
-          // Reload page after a short delay
+
+          // Reload immediately - don't update display as that can trigger unwanted saves
           setTimeout(() => {
             console.log('NetworkSelector: Reloading page');
             window.location.reload();
-          }, 500);
+          }, 100);
         } else {
           // Just close dropdown
           dropdown.style.display = 'none';
@@ -171,11 +168,13 @@ class NetworkSelectorUI {
   }
   
   saveCurrentState() {
+    const currentChain = chainManager.getCurrentChain();
     // Save RPC endpoints
     const rpcInput = document.getElementById('customRPC');
     if (rpcInput && rpcInput.value) {
       const rpcList = rpcInput.value.trim().split('\n').filter(Boolean);
-      chainManager.saveRPCEndpoints(rpcList);
+      // CRITICAL: Force save to current chain BEFORE switch happens
+      chainManager.saveRPCEndpoints(rpcList, currentChain);
     }
     
     // Save addresses

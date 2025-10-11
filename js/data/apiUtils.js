@@ -71,14 +71,17 @@ export const apiUtils = {
 
   // Etherscan API utilities
   etherscan: {
-    // Base URL for Etherscan API
-    BASE_URL: 'https://api.etherscan.io/api',
+    // Dynamic Base URL for current chain's explorer API
+    get BASE_URL() {
+      const config = window.chainManager?.getCurrentConfig();
+      return config?.explorer?.apiUrl || 'https://api.etherscan.io/api';
+    },
 
     // Make rate-limited Etherscan API call
     async apiCall(params, apiKey, ratePerSecond = 5) {
       await apiUtils.rateLimiter.waitForRateLimit('etherscan', ratePerSecond);
-      
-      const url = new URL(apiUtils.etherscan.BASE_URL);
+
+      const url = new URL(this.BASE_URL);
       Object.keys(params).forEach(key => {
         url.searchParams.append(key, params[key]);
       });

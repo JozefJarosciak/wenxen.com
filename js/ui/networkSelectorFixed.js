@@ -194,36 +194,18 @@ class NetworkSelectorUI {
     this.showSwitchingOverlay(newChain);
     
     try {
-      // Save current chain state
+      // Save current chain state BEFORE any changes
       await this.saveCurrentChainState();
-      
-      // Clear current UI
-      await this.clearCurrentChainUI();
-      
+
       // Switch chain in app
       chainManager.setChain(newChain);
-      
-      // Don't force wallet to switch - let user do it manually if they want
-      // Just show a message if wallet is on different chain
-      if (window.ethereum && window.connectedAccount) {
-        const walletChainId = await window.ethereum.request({ method: 'eth_chainId' });
-        const walletChainIdDec = parseInt(walletChainId, 16);
-        const newChainId = SUPPORTED_CHAINS[newChain].id;
-        
-        if (walletChainIdDec !== newChainId) {
-          console.log(`App switched to ${newChain} but wallet is still on chain ${walletChainIdDec}`);
-          // User can manually switch wallet if they want
-        }
-      }
-      
-      // Load new chain data
-      await this.loadNewChainData();
-      
-      // Reload page for clean state
+
+      // Reload immediately - don't clear UI or load new data as that triggers unwanted saves
+      // The reload will load the correct chain data from storage
       setTimeout(() => {
         window.location.reload();
-      }, 500);
-      
+      }, 100);
+
     } catch (error) {
       console.error('NetworkSelector: Error switching network:', error);
       this.hideSwitchingOverlay();
@@ -324,10 +306,12 @@ class NetworkSelectorUI {
   }
 
   async saveCurrentChainState() {
+    const currentChain = chainManager.getCurrentChain();
     const rpcInput = document.getElementById('customRPC');
     if (rpcInput && rpcInput.value) {
       const rpcList = rpcInput.value.trim().split('\n').filter(Boolean);
-      chainManager.saveRPCEndpoints(rpcList);
+      // CRITICAL: Force save to current chain BEFORE switch happens
+      chainManager.saveRPCEndpoints(rpcList, currentChain);
     }
     
     const addressInput = document.getElementById('ethAddress');

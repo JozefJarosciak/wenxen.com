@@ -2,8 +2,11 @@
 import { settingsStorage } from '../utils/storageUtils.js';
 
 export const web3Utils = {
-  // Default RPC endpoint
-  DEFAULT_RPC: 'https://ethereum-rpc.publicnode.com',
+  // Dynamic RPC endpoint based on current chain
+  get DEFAULT_RPC() {
+    return window.chainManager?.getCurrentConfig()?.rpcUrls?.default
+      || 'https://ethereum-rpc.publicnode.com';
+  },
 
   // RPC blacklist management
   _rpcBlacklist: new Map(), // Maps RPC URL to { failureCount, lastFailed, blacklistedUntil }

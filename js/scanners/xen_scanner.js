@@ -6,10 +6,10 @@
   const CONTRACT_ADDRESS = (window.chainManager?.getContractAddress('XEN_CRYPTO') || 
     window.appConfig?.contracts?.XEN_ETH || 
     "0x06450dee7fd2fb8e39061434babcfc05599a6fb8").toLowerCase();
-  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 
-    window.appConfig?.rpc?.DEFAULT_RPC || 
+  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default ||
+    window.appConfig?.rpc?.DEFAULT_RPC ||
     "https://ethereum-rpc.publicnode.com";
-  const MIN_CONTRACT_BLOCK = 15700000;
+  const MIN_CONTRACT_BLOCK = window.chainManager?.getXenDeploymentBlock() || 15704871;
   const SCAN_BACKTRACK_BLOCKS = 1000;
 
   // Throttle (more conservative - 3 req/sec to avoid rate limits)

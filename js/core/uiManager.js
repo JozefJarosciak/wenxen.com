@@ -9,6 +9,16 @@ function updateChainSpecificLabels() {
   const chainName = currentChain === 'BASE' ? 'Base' : 'Ethereum';
   const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
 
+  if (!window.__rpcLastValuesByChain) {
+    window.__rpcLastValuesByChain = {};
+  }
+  if (!window.__setRpcLastValueForChain) {
+    window.__setRpcLastValueForChain = (chain, value) => {
+      if (!chain) return;
+      window.__rpcLastValuesByChain[chain] = value;
+    };
+  }
+
   // Update Settings tab labels
   const addressLabel = document.querySelector('#field-ethAddress label[for="ethAddress"]');
   if (addressLabel) addressLabel.textContent = `${chainName} Addresses (one per line)`;
@@ -30,6 +40,15 @@ function updateChainSpecificLabels() {
   // Update RPC label to be chain-specific
   const rpcLabel = document.querySelector('label[for="customRPC"]');
   if (rpcLabel) rpcLabel.textContent = `Custom ${chainName} RPCs (one per line)`;
+
+  const rpcTextarea = document.getElementById('customRPC');
+  if (rpcTextarea && window.chainManager) {
+    const actualChain = window.chainManager.getCurrentChain();
+    const chainRPCs = window.chainManager.getRPCEndpoints();
+    const rpcString = chainRPCs.join('\n');
+    rpcTextarea.value = rpcString;
+    window.__setRpcLastValueForChain(actualChain, rpcString);
+  }
 
   // Update Mint tab platform selector label if present
   const platformLabel = document.querySelector('label[for="mintPlatform"]');

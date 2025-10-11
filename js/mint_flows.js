@@ -2,9 +2,9 @@
 // Depends on globals from main_app.js & cointool-ABI.js: web3, web3Wallet, connectedAccount,
 // COINTOOL_MAIN, cointoolAbi.
 
-// These are Ethereum defaults, but will be overridden by chainManager
-const XEN_MAIN = '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
-const DEFAULT_RPC_READ = 'https://ethereum-rpc.publicnode.com';
+// Get chain-specific values from chainManager
+const getXenAddress = () => window.chainManager?.getContractAddress('XEN_CRYPTO') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
+const getDefaultRPC = () => window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 'https://ethereum-rpc.publicnode.com';
 
 // fmtTs function now provided by js/utils/dateUtils.js module
 
@@ -163,17 +163,17 @@ async function setMaxTermFromXEN(){
         const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
         rpcFromLs = (localStorage.getItem(chainPrefix + 'customRPC') || '').trim();
       }
-      const rpcList = (rpcFromDom || rpcFromLs || DEFAULT_RPC_READ)
+      const rpcList = (rpcFromDom || rpcFromLs || getDefaultRPC())
         .split(/\r?\n+/)
         .map(s => s.trim())
         .filter(Boolean);
       provider = new Web3(rpcList[0]);
     } catch (_) {
-      provider = new Web3(DEFAULT_RPC_READ);
+      provider = new Web3(getDefaultRPC());
     }
 
     // Get chain-specific XEN contract address
-    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || getXenAddress();
     const xen = new provider.eth.Contract(window.xenAbi, xenAddress);
     const secs = await xen.methods.getCurrentMaxTerm().call();
     const days = Math.max(1, Math.min(999, Math.floor(Number(secs)/86400)));
@@ -361,7 +361,7 @@ async function startStakeFlow(){
 
   try {
     // Get chain-specific XEN contract address
-    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || getXenAddress();
     const xen = new web3Wallet.eth.Contract(window.xenAbi, xenAddress);
     let est = await xen.methods.stake(amountWei, termDays).estimateGas({ from: connectedAccount });
     est = Math.ceil(est * 1.2);
@@ -470,12 +470,12 @@ async function fetchXenBalanceWei(){
     
     if (!provider) {
       // Fallback to chain-specific RPC
-      const rpcList = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC_READ];
+      const rpcList = window.chainManager?.getRPCEndpoints() || [getDefaultRPC()];
       provider = new Web3(rpcList[0]);
     }
 
     // Get chain-specific XEN contract address
-    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || XEN_MAIN;
+    const xenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || getXenAddress();
     const token = new provider.eth.Contract(window.xenAbi, xenAddress);
     const bal = await token.methods.balanceOf(acct).call();
     console.debug('[STAKE] XEN balance (wei):', bal);

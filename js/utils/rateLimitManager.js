@@ -28,9 +28,9 @@ export class RateLimitManager {
     // RPC rate limiting  
     const rpcRate = parseInt(localStorage.getItem('rpcRateLimit')) || this.defaultLimits.rpc.requestsPerSecond;
     
-    // Cointool batch settings
-    const cointoolBatchSize = parseInt(localStorage.getItem('cointoolBatchSize')) || 15;
-    const cointoolBatchDelay = parseInt(localStorage.getItem('cointoolBatchDelay')) || 50;
+    // Cointool batch settings (chain-specific)
+    const cointoolBatchSize = window.chainConfigUtils?.getCointoolBatchSize() || 15;
+    const cointoolBatchDelay = window.chainConfigUtils?.getCointoolBatchDelay() || 50;
     const cointoolRate = cointoolBatchSize / (cointoolBatchDelay / 1000);
     
     // Update default limits with user preferences

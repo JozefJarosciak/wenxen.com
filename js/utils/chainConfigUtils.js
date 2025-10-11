@@ -294,19 +294,21 @@ export function getChunkSize() {
 }
 
 /**
- * Get Cointool batch size setting
+ * Get Cointool batch size setting (chain-specific)
  * @returns {number} Batch size
  */
 export function getCointoolBatchSize() {
-  return parseInt(localStorage.getItem('cointoolBatchSize')) || 15;
+  const key = window.chainManager?.getStorageKey('cointoolBatchSize') || 'cointoolBatchSize';
+  return parseInt(localStorage.getItem(key)) || 15;
 }
 
 /**
- * Get Cointool batch delay setting
+ * Get Cointool batch delay setting (chain-specific)
  * @returns {number} Batch delay in milliseconds
  */
 export function getCointoolBatchDelay() {
-  return parseInt(localStorage.getItem('cointoolBatchDelay')) || 50;
+  const key = window.chainManager?.getStorageKey('cointoolBatchDelay') || 'cointoolBatchDelay';
+  return parseInt(localStorage.getItem(key)) || 50;
 }
 
 /**

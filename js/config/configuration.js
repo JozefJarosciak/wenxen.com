@@ -70,13 +70,14 @@ export const config = new Proxy({}, {
 export const staticConfig = {
   // === CONTRACT ADDRESSES ===
   contracts: {
-    // Main XEN contract
+    // Main XEN contract (canonical Ethereum address)
     XEN_ETH: '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8',
-    
-    // Cointool contract (multiple references found - need to verify which is correct)
-    COINTOOL_MAIN: '0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628', // From main_app.js
-    COINTOOL_LEGACY: '0x0de8bf93da2f7eecb3d9169422413a9bef4ef628', // From main_app.js (different case)
-    COINTOOL_SCANNER: '0x2Ab31426d94496B4C80C60A0e2E4E9B70EB32f18', // From cointool_scanner.js
+
+    // Cointool contract addresses (Ethereum-only legacy config)
+    // CANONICAL: Use COINTOOL_MAIN for all current operations
+    COINTOOL_MAIN: '0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628', // Current production contract
+    COINTOOL_LEGACY: '0x0de8bf93da2f7eecb3d9169422413a9bef4ef628', // Same as MAIN (case difference only) - DEPRECATED
+    COINTOOL_SCANNER: '0x2Ab31426d94496B4C80C60A0e2E4E9B70EB32f18', // OLD contract for historical scans only
     
     // XENFT contracts
     XENFT_TORRENT: '0x0a252663DBCc0b073063D6420a40319e438Cfa59',
@@ -120,9 +121,10 @@ export const staticConfig = {
 
   // === EVENT TOPICS AND SELECTORS ===
   events: {
-    // Cointool events
-    COINTOOL_MINT_TOPIC: '0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37',
-    COINTOOL_MINT_TOPIC_SCANNER: '0x0f6798a560793a54c3bcfe86a93cde1e73087d944c0ea20544137d4121396885',
+    // Cointool mint event topics
+    // NOTE: Two different topics because Cointool has TWO different contracts with different event signatures
+    COINTOOL_MINT_TOPIC: '0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37', // Current contract (COINTOOL_MAIN)
+    COINTOOL_MINT_TOPIC_SCANNER: '0x0f6798a560793a54c3bcfe86a93cde1e73087d944c0ea20544137d4121396885', // Old contract (COINTOOL_SCANNER) for historical data
     
     // XEN staking events
     XEN_STAKE_TOPIC: '0x...', // TODO: Add from xen_scanner.js
@@ -139,17 +141,18 @@ export const staticConfig = {
     // Cointool specific
     SALT_BYTES_TO_QUERY: '0x01',
     COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
-    
-    // XEN calculation constants
-    XEN_GENESIS_TIMESTAMP: 1665187200, // Oct 8, 2022 00:00:00 UTC
-    XEN_GENESIS_DATE_MS: Date.UTC(2022, 9, 8, 0, 0, 0, 0),
-    BASE_AMP: 3000,
-    
+
+    // XEN calculation constants - DO NOT USE THESE, use chainManager.getCurrentConfig().constants instead
+    // These values are WRONG and chain-specific. Kept only for backwards compatibility.
+    // DEPRECATED: XEN_GENESIS_TIMESTAMP: 1665187200, // WRONG - use chainManager
+    // DEPRECATED: XEN_GENESIS_DATE_MS: Date.UTC(2022, 9, 8, 0, 0, 0, 0), // WRONG - use chainManager
+    // DEPRECATED: BASE_AMP: 3000, // WRONG - use chainManager
+
     // Database versions
     DB_VERSION_COINTOOL: 3,
     DB_VERSION_XENFT: 1,
     DB_VERSION_STAKE: 1,
-    
+
     // UI constants
     PROGRESS_UPDATE_INTERVAL: 500, // ms
     DEFAULT_SCAN_TIMEOUT: 120000 // 2 minutes
@@ -157,7 +160,10 @@ export const staticConfig = {
 
   // === PROXY CONTRACT CREATION CODE ===
   bytecode: {
-    // Cointool proxy creation code
+    // Cointool proxy creation code (Ethereum-specific, universal bytecode)
+    // This bytecode is chain-agnostic and works on both Ethereum and Base
+    // Used for detecting Cointool proxy contract deployments
+    // TODO: Verify this works on Base network (likely does, as EVM is compatible)
     COINTOOL_PROXY_CREATION_CODE: '60806040523480156200001157600080fd5b5060405162000b5f38038062000b5f8339818101604052810190620000379190620001a3565b81600160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555080600281905550620000936200009960201b60201c565b50620002ac565b600160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1663313ce5676040518163ffffffff1660e01b8152600401602060405180830381865afa15801562000108573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906200012e919062000214565b600060146101000a81548160ff021916908360ff1602179055565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b60006200017c8262000151565b9050919050565b6200018e816200016f565b81146200019a57600080fd5b50565b600081519050620001ae8162000183565b92915050565b6000819050919050565b620001c981620001b4565b8114620001d557600080fd5b50565b600081519050620001e981620001be565b92915050565b6000604082840312156200020857620002076200014c565b5b81019150620002188262000199565b92915050620002298262000209565b92915050620002388262000209565b92915050620002478262000209565b92915050620002568262000209565b92915050620002658262000209565b92915050620002748262000209565b92915050620002838262000209565b92915050620002928262000209565b92915050620002a18262000209565b92915050620002b08262000209565b92915050'
   },
 
@@ -247,12 +253,35 @@ export function getRPCEndpoints() {
 // Expose config globally for non-module scripts
 window.appConfig = config;
 
-// Legacy compatibility - expose global constants
-window.DEFAULT_RPC = config.rpc.DEFAULT_RPC;
-window.CONTRACT_ADDRESS = config.contracts.COINTOOL_MAIN;
-window.EVENT_TOPIC = config.events.COINTOOL_MINT_TOPIC;
-window.SALT_BYTES_TO_QUERY = config.constants.SALT_BYTES_TO_QUERY;
-window.REMINT_SELECTOR = config.events.REMINT_SELECTOR;
-window.XEN_CRYPTO_ADDRESS = config.contracts.XEN_ETH;
+// Legacy compatibility - DEPRECATED globals with warnings
+// These always use Ethereum values and will break on Base network
+// Use window.chainManager or window.appConfig instead
+let _deprecationWarningsShown = new Set();
+
+function createDeprecatedGlobal(name, value, replacement) {
+  let _value = value;
+  Object.defineProperty(window, name, {
+    get() {
+      if (!_deprecationWarningsShown.has(name)) {
+        console.warn(
+          `[DEPRECATED] window.${name} is deprecated and uses Ethereum values only.\n` +
+          `Use ${replacement} instead for multi-chain support.`
+        );
+        _deprecationWarningsShown.add(name);
+      }
+      return _value;
+    },
+    set(newValue) {
+      _value = newValue;
+    }
+  });
+}
+
+createDeprecatedGlobal('DEFAULT_RPC', config.rpc.DEFAULT_RPC, 'window.chainManager.getCurrentConfig().rpcUrls.default');
+createDeprecatedGlobal('CONTRACT_ADDRESS', config.contracts.COINTOOL_MAIN, 'window.chainManager.getContractAddress("COINTOOL")');
+createDeprecatedGlobal('EVENT_TOPIC', config.events.COINTOOL_MINT_TOPIC, 'window.chainManager.getCurrentConfig().events.COINTOOL_MINT_TOPIC');
+createDeprecatedGlobal('SALT_BYTES_TO_QUERY', config.constants.SALT_BYTES_TO_QUERY, 'window.chainManager.getCurrentConfig().constants.SALT_BYTES_TO_QUERY');
+createDeprecatedGlobal('REMINT_SELECTOR', config.events.REMINT_SELECTOR, 'window.chainManager.getCurrentConfig().events.REMINT_SELECTOR');
+createDeprecatedGlobal('XEN_CRYPTO_ADDRESS', config.contracts.XEN_ETH, 'window.chainManager.getContractAddress("XEN_CRYPTO")');
 
 export default config;

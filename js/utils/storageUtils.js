@@ -201,7 +201,7 @@ export const settingsStorage = {
     }
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
     const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-    const defaultRPC = currentChain === 'BASE' ? 'https://base-rpc.publicnode.com' : 'https://ethereum-rpc.publicnode.com';
+    const defaultRPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 'https://ethereum-rpc.publicnode.com';
     const raw = storageUtils.getItem(chainPrefix + 'customRPC', defaultRPC);
     return String(raw).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
   },

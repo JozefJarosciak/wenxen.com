@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><title>Debug Storage</title></head>
+<body>
+<h3>LocalStorage RPC Keys:</h3>
+<pre id="output"></pre>
+<script>
+const output = [];
+for (let i = 0; i < localStorage.length; i++) {
+  const key = localStorage.key(i);
+  if (key.includes('RPC') || key.includes('rpc')) {
+    const value = localStorage.getItem(key);
+    output.push(`${key}: ${value.substring(0, 100)}...`);
+  }
+}
+document.getElementById('output').textContent = output.join('\n\n');
+</script>
+</body>
+</html>
