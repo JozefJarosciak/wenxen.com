@@ -1,4 +1,4 @@
-# XEN Tracker - AWS Lambda Deployment
+ah, # XEN Tracker - AWS Lambda Deployment
 
 This guide helps you deploy the XEN Tracker to AWS Lambda for cost-effective, serverless hosting.
 
@@ -21,64 +21,69 @@ This guide helps you deploy the XEN Tracker to AWS Lambda for cost-effective, se
 Run the configuration script:
 ```cmd
 cd deployment
-configure-aws.bat
+initial-configure-aws.bat
 ```
 
 ### Option 2: Manual Setup
 ```bash
 aws configure
 # Enter your AWS Access Key ID
-# Enter your AWS Secret Access Key  
+# Enter your AWS Secret Access Key
 # Enter your preferred region (e.g., us-east-1)
 # Enter output format (json)
 ```
 
 ## 🚀 Deployment Instructions
 
-### Step 1: Navigate to Deployment Directory
+### Initial Setup (First Time Only)
 ```bash
 cd deployment
+initial-deploy.bat
 ```
+This creates all AWS infrastructure (Lambda, API Gateway, CloudFront, SSL certificates).
 
-### Step 2: Deploy
+**Wait time**: 5-15 minutes for complete setup (SSL + DNS propagation)
 
-#### Windows (PowerShell - Recommended)
-```powershell
-.\deploy.ps1
-```
-
-#### Windows (Batch)
-```cmd
-simple-deploy.bat
-```
-
-#### Linux/Mac
+### Updating Your Site (After Changes)
 ```bash
-chmod +x wenxen-deploy.sh
-./wenxen-deploy.sh
+cd deployment
+wenxen-deploy.bat
 ```
+This script automatically:
+1. **Updates cache-busting version numbers** in index.html (adds timestamp to ?v= parameters)
+2. **Deploys to Lambda** with latest files
+3. **Invalidates CloudFront cache** for immediate propagation
 
-### Step 3: Wait for Completion
-- Initial deployment: 5-15 minutes
-- SSL certificate provisioning: 5-10 minutes  
-- DNS propagation: Up to 15 minutes
+**Wait time**: 1-2 minutes for changes to appear globally
+
+### Step 3: Verify Deployment
+After deployment completes, visit:
+- https://wenxen.com
+- https://www.wenxen.com
+
+**Note**: You may need to hard refresh (Ctrl+F5) to see changes immediately.
 
 ## 📁 Project Structure
 
 ```
-tracker/
-├── deployment/           # All deployment files
-│   ├── main.tf          # Terraform infrastructure
-│   ├── lambda_handler.py # AWS Lambda function
-│   ├── deploy.ps1       # PowerShell deployment script
-│   ├── configure-aws.bat # AWS CLI setup
-│   ├── simple-deploy.bat # Basic Windows deployment
-│   ├── wenxen-deploy.bat # Wenxen-specific deployment
-│   └── wenxen-deploy.sh  # Wenxen shell script
-├── css/                 # Stylesheets
-├── js/                  # JavaScript files  
-├── ABI/                 # Smart contract ABIs
-└── index.html          # Main HTML file
+wenxen.com/
+├── deployment/                    # All deployment files
+│   ├── main.tf                   # Terraform infrastructure
+│   ├── lambda_handler.py         # AWS Lambda function
+│   ├── initial-configure-aws.bat # First-time AWS setup
+│   ├── initial-deploy.bat        # First deployment (creates infrastructure)
+│   ├── wenxen-deploy.bat         # Update deployment (after changes)
+│   ├── get-wenxen-costs.bat      # Quick cost check
+│   ├── RunAWSCosts.bat           # Detailed cost dashboard
+│   └── GenerateCostDashboard.bat # Cost report generator
+├── css/                          # Stylesheets
+├── js/                           # JavaScript files
+│   ├── config/                   # Chain configurations
+│   ├── scanners/                 # Blockchain scanners
+│   ├── ui/                       # UI components
+│   └── ...
+├── ABI/                          # Smart contract ABIs
+└── index.html                    # Main HTML file
 ```
 
 ## 📂 What Gets Created
@@ -138,30 +143,21 @@ To use your own domain:
 
 ## 🔄 Updating Your Site
 
-After making changes to your HTML, CSS, or JS files:
+After making changes to your HTML, CSS, JS, or configuration files:
 
-### Navigate to deployment directory first:
 ```bash
 cd deployment
+wenxen-deploy.bat
 ```
 
-### Then run your preferred deployment script:
+This will automatically:
+1. **Update cache-busting version numbers** - Adds timestamps to all `?v=` parameters in index.html
+2. **Deploy to Lambda** - Uploads all updated files
+3. **Invalidate CloudFront cache** - Forces global CDN refresh
 
-```powershell
-# Windows PowerShell (Recommended)
-.\deploy.ps1
+**Changes appear in**: 1-2 minutes globally
 
-# Windows Batch
-simple-deploy.bat
-
-# Linux/Mac
-./wenxen-deploy.sh
-```
-
-This will:
-- Update the Lambda function with new files
-- Invalidate CloudFront cache
-- Deploy changes in ~2-5 minutes
+**Pro tip**: The script handles version numbering automatically, so you don't need to manually update cache-busting parameters!
 
 ## 🛠️ Manual Terraform Commands
 
@@ -171,25 +167,27 @@ All Terraform commands must be run from the `deployment` directory:
 cd deployment
 ```
 
-### Initialize Only
+### Initialize Terraform
 ```bash
 terraform init
 ```
 
-### Plan Deployment
+### Plan Deployment (Preview Changes)
 ```bash
 terraform plan -var="project_name=xen-tracker" -var="aws_region=us-east-1" -var="domain_name=wenxen.com"
 ```
 
-### Apply Changes
+### Apply Changes Manually
 ```bash
-terraform apply
+terraform apply -var="project_name=xen-tracker" -var="aws_region=us-east-1" -var="domain_name=wenxen.com" -auto-approve
 ```
 
-### Destroy Everything
+### Destroy Everything (CAUTION)
 ```bash
-terraform destroy
+terraform destroy -var="project_name=xen-tracker" -var="aws_region=us-east-1" -var="domain_name=wenxen.com"
 ```
+
+**Note**: The `wenxen-deploy.bat` script handles all of this automatically. Manual commands are only needed for troubleshooting.
 
 ## 🔍 Troubleshooting
 
@@ -205,16 +203,14 @@ aws configure
 - Download from [terraform.io](https://www.terraform.io/downloads)
 - Add to your system PATH
 
-**3. "Permission denied" on wenxen-deploy.sh**
-```bash
-cd deployment
-chmod +x wenxen-deploy.sh
-```
+**3. "Terraform not in PATH"**
+- The script will try to find Terraform at `C:\terraform\terraform.exe`
+- Add Terraform to your system PATH or place it in `C:\terraform\`
 
 **4. CloudFront takes time to propagate**
-- Initial deployment: ~15 minutes
-- Updates: ~2-5 minutes
-- Use API Gateway URL for immediate testing
+- Initial deployment: ~15 minutes for SSL + DNS
+- Updates: 1-2 minutes for cache invalidation
+- Hard refresh browser (Ctrl+F5) to see immediate changes
 
 ### Getting Support
 
@@ -240,13 +236,42 @@ CloudFront edge locations provide fast loading worldwide:
 - **HTTP/2 Support**: Modern protocol for better performance
 - **Smart Caching**: Static assets cached for 1 year, HTML for 5 minutes
 
-## 📊 Monitoring
+## 📊 Monitoring & Cost Tracking
 
+### Deployment Metrics
 Access your deployment metrics:
 
 1. **AWS Console** → **Lambda** → **Functions** → `xen-tracker-static-site`
 2. **CloudWatch** for logs and metrics
 3. **CloudFront** → **Distributions** for CDN stats
+
+### Cost Monitoring
+The project includes built-in cost tracking tools:
+
+#### Quick Cost Check
+```bash
+cd deployment
+get-wenxen-costs.bat
+```
+Shows a quick summary of your AWS costs.
+
+#### Detailed Cost Dashboard
+```bash
+cd deployment
+RunAWSCosts.bat
+```
+Generates a comprehensive HTML cost report with:
+- Daily cost breakdown
+- Service-level costs
+- Historical trends
+- Cost forecasting
+
+#### Generate Custom Report
+```bash
+cd deployment
+GenerateCostDashboard.bat
+```
+Creates a new cost report in the deployment directory.
 
 ## 🔄 Backup & Recovery
 
