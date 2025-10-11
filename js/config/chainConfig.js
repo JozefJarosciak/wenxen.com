@@ -180,7 +180,7 @@ export const SUPPORTED_CHAINS = {
       SALT_BYTES_TO_QUERY: '0x01',
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
       XEN_GENESIS_TIMESTAMP: 1665700430, // Avalanche XEN launch timestamp (Oct 13, 2022)
-      XEN_GENESIS_DATE_MS: Date.UTC(2022, 9, 13, 19, 40, 30, 0), // Avalanche XEN launch date (month is 0-indexed)
+      XEN_GENESIS_DATE_MS: 1665700430000, // Avalanche XEN launch date in milliseconds (Oct 13, 2022)
       XEN_DEPLOYMENT_BLOCK: 27265450, // XEN deployed at this block on Avalanche
       BASE_AMP: 3000
     },
