@@ -63,7 +63,12 @@ export const SUPPORTED_CHAINS = {
       xenId: 'xen-crypto'
     }
   },
-  
+
+
+
+
+
+
   BASE: {
     id: 8453,
     name: 'Base',
@@ -97,7 +102,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
       XENFT_TORRENT: '0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6',
       XENFT_STAKE: '0xfC0eC2f733Cf35863178fa0DF759c6CE8C38ee7b',
-      REMINT_HELPER: '0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98' // Same as Ethereum (may need verification)
+      REMINT_HELPER: '0xc82ba627ba29fc4da2d3343e2f0a2d40119c2885' // Base-specific helper (1130 bytes, verified)
     },
     events: {
       // Base uses same event signatures as Ethereum
@@ -111,7 +116,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
       XEN_GENESIS_TIMESTAMP: 1692986123, // Base XEN launch timestamp (Aug-25-2023 04:13:53 PM UTC)
       XEN_GENESIS_DATE_MS: Date.UTC(2023, 7, 25, 16, 13, 53, 0), // Base XEN launch date (month is 0-indexed)
-      XEN_DEPLOYMENT_BLOCK: 3095343, // XEN deployed at this block on Base
+      XEN_DEPLOYMENT_BLOCK: 3098388, // XEN deployed at this block on Base
       BASE_AMP: 3000
     },
     databases: {
