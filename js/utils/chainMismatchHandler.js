@@ -9,20 +9,40 @@ export class ChainMismatchHandler {
             'ETHEREUM': 'Ethereum',
             'BASE': 'Base',
             'AVALANCHE': 'Avalanche',
+            'BSC': 'BNB Smart Chain',
+            'MOONBEAM': 'Moonbeam',
+            'POLYGON': 'Polygon',
+            'OPTIMISM': 'Optimism',
             '0x1': 'Ethereum',
             '0x2105': 'Base',
             '0xa86a': 'Avalanche',
+            '0x38': 'BNB Smart Chain',
+            '0x504': 'Moonbeam',
+            '0x89': 'Polygon',
+            '0xa': 'Optimism',
             '1': 'Ethereum',
             '8453': 'Base',
-            '43114': 'Avalanche'
+            '43114': 'Avalanche',
+            '56': 'BNB Smart Chain',
+            '1284': 'Moonbeam',
+            '137': 'Polygon',
+            '10': 'Optimism'
         };
         this.chainIds = {
             'ETHEREUM': '0x1',
             'BASE': '0x2105',
             'AVALANCHE': '0xa86a',
+            'BSC': '0x38',
+            'MOONBEAM': '0x504',
+            'POLYGON': '0x89',
+            'OPTIMISM': '0xa',
             '0x1': '0x1',
             '0x2105': '0x2105',
-            '0xa86a': '0xa86a'
+            '0xa86a': '0xa86a',
+            '0x38': '0x38',
+            '0x504': '0x504',
+            '0x89': '0x89',
+            '0xa': '0xa'
         };
     }
 
@@ -58,6 +78,14 @@ export class ChainMismatchHandler {
             targetChain = 'BASE';
         } else if (chainIdNum === 43114) {
             targetChain = 'AVALANCHE';
+        } else if (chainIdNum === 56) {
+            targetChain = 'BSC';
+        } else if (chainIdNum === 1284) {
+            targetChain = 'MOONBEAM';
+        } else if (chainIdNum === 137) {
+            targetChain = 'POLYGON';
+        } else if (chainIdNum === 10) {
+            targetChain = 'OPTIMISM';
         }
 
         if (targetChain) {
@@ -67,7 +95,7 @@ export class ChainMismatchHandler {
                 // Hide any existing toast
                 this.hideToast();
                 this.userDeclined = false;
-                
+
                 // Switch app to match wallet
                 if (window.chainManager) {
                     window.chainManager.setChain(targetChain);
@@ -192,6 +220,18 @@ export class ChainMismatchHandler {
         }
         if (chainId === 'AVALANCHE' || chainId === '0xa86a' || chainId === '43114') {
             return '0xa86a';
+        }
+        if (chainId === 'BSC' || chainId === '0x38' || chainId === '56') {
+            return '0x38';
+        }
+        if (chainId === 'MOONBEAM' || chainId === '0x504' || chainId === '1284') {
+            return '0x504';
+        }
+        if (chainId === 'POLYGON' || chainId === '0x89' || chainId === '137') {
+            return '0x89';
+        }
+        if (chainId === 'OPTIMISM' || chainId === '0xa' || chainId === '10') {
+            return '0xa';
         }
         return chainId;
     }
@@ -438,6 +478,50 @@ export class ChainMismatchHandler {
                 },
                 rpcUrls: ['https://api.avax.network/ext/bc/C/rpc'],
                 blockExplorerUrls: ['https://snowtrace.io']
+            },
+            'BSC': {
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: {
+                    name: 'BNB',
+                    symbol: 'BNB',
+                    decimals: 18
+                },
+                rpcUrls: ['https://bsc-dataseed1.binance.org'],
+                blockExplorerUrls: ['https://bscscan.com']
+            },
+            'MOONBEAM': {
+                chainId: '0x504',
+                chainName: 'Moonbeam',
+                nativeCurrency: {
+                    name: 'Glimmer',
+                    symbol: 'GLMR',
+                    decimals: 18
+                },
+                rpcUrls: ['https://rpc.api.moonbeam.network'],
+                blockExplorerUrls: ['https://moonscan.io']
+            },
+            'POLYGON': {
+                chainId: '0x89',
+                chainName: 'Polygon',
+                nativeCurrency: {
+                    name: 'MATIC',
+                    symbol: 'MATIC',
+                    decimals: 18
+                },
+                rpcUrls: ['https://polygon-rpc.com'],
+                blockExplorerUrls: ['https://polygonscan.com']
+            },
+            'OPTIMISM': {
+                chainId: '0xa',
+                chainName: 'Optimism',
+                nativeCurrency: {
+                    name: 'Ether',
+                    symbol: 'ETH',
+                    decimals: 18
+                },
+                rpcUrls: ['https://mainnet.optimism.io'],
+                blockExplorerUrls: ['https://optimistic.etherscan.io']
             }
         };
 
@@ -519,7 +603,7 @@ export class ChainMismatchHandler {
             console.error('Error switching wallet chain:', error);
             
             // If chain not found, try to add it
-            if (error.code === 4902 && (targetChain === 'BASE' || targetChain === 'AVALANCHE')) {
+            if (error.code === 4902 && (targetChain === 'BASE' || targetChain === 'AVALANCHE' || targetChain === 'BSC' || targetChain === 'MOONBEAM' || targetChain === 'POLYGON' || targetChain === 'OPTIMISM')) {
                 try {
                     await this.addChainToWallet(targetChain);
                     // Try switching again

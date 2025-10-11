@@ -227,7 +227,11 @@ class NetworkSelectorUI {
       const icons = {
         'ETHEREUM': '⟠',
         'BASE': '🔵',
-        'AVALANCHE': '🔺'
+        'AVALANCHE': '🔺',
+        'BSC': '🟡',
+        'MOONBEAM': '🌙',
+        'POLYGON': '🟣',
+        'OPTIMISM': '🔴'
       };
       iconEl.textContent = icons[currentChain] || '🔗';
     }

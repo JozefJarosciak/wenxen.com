@@ -2,6 +2,19 @@
 // Uses a separate IndexedDB "DB_Xenft".
 // Exposes: window.xenft = { openDB, getAll, scan, CONTRACT_ADDRESS }
 
+// Helper function to get chain prefix for database names
+function getChainPrefix(chain) {
+  const prefixMap = {
+    'ETHEREUM': 'ETH',
+    'BASE': 'BASE',
+    'AVALANCHE': 'AVAX',
+    'BSC': 'BSC',
+    'MOONBEAM': 'MOON',
+    'POLYGON': 'MATIC',
+    'OPTIMISM': 'OP'
+  };
+  return prefixMap[chain] || 'ETH';
+}
 
 // Fetch EndTorrent (bulkClaimMintReward) events for a user, with timestamps
 async function fetchEndTorrentActions(w3, user, fromBlock) {
@@ -90,7 +103,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     return new Promise((resolve, reject) => {
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
+      const chainPrefix = getChainPrefix(currentChain);
       const dbName = `${chainPrefix}_DB_Xenft`;
       
       const request = indexedDB.open(dbName, 3);

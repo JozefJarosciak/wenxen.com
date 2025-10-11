@@ -6,6 +6,20 @@
 // About tab loading state
 let _aboutLoaded = false;
 
+// Helper function to get chain prefix for database names
+function getChainPrefix(chain) {
+  const prefixMap = {
+    'ETHEREUM': 'ETH',
+    'BASE': 'BASE',
+    'AVALANCHE': 'AVAX',
+    'BSC': 'BSC',
+    'MOONBEAM': 'MOON',
+    'POLYGON': 'MATIC',
+    'OPTIMISM': 'OP'
+  };
+  return prefixMap[chain] || 'ETH';
+}
+
 // Update UI labels based on current chain
 function updateChainSpecificLabels() {
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
@@ -2153,7 +2167,7 @@ function openDB() {
   return new Promise((resolve, reject) => {
     // Get chain-specific database name
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
+    const chainPrefix = getChainPrefix(currentChain);
     const dbName = `${chainPrefix}_DB_Cointool`;
     
     // bump to v3 to add actionsCache
@@ -3213,7 +3227,7 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
 
 // Helper functions for different reset operations
 async function deleteAllDataWithStorage(currentChain, chainName) {
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : (currentChain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
+  const chainPrefix = getChainPrefix(currentChain) + '_';
 
   // Close open connections
   await closeOpenConnections();
@@ -3259,7 +3273,7 @@ async function deleteAllDataWithStorage(currentChain, chainName) {
 }
 
 async function deleteAllScanData(currentChain, chainName) {
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : (currentChain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
+  const chainPrefix = getChainPrefix(currentChain) + '_';
 
   // More aggressive connection closing
   await closeOpenConnections();
@@ -7241,7 +7255,7 @@ async function importBackupFromFile(file) {
   } else {
     // Old behavior for single-chain backups
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : (currentChain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
+    const chainPrefix = getChainPrefix(currentChain) + '_';
     
     // Delete only current chain databases
     const chainDatabases = [

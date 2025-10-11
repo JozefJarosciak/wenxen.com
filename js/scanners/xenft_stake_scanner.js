@@ -12,6 +12,20 @@
 //   • Actions include endStake with txHash/timeStamp when available.
 
 (function(){
+  // Helper function to get chain prefix for database names
+  function getChainPrefix(chain) {
+    const prefixMap = {
+      'ETHEREUM': 'ETH',
+      'BASE': 'BASE',
+      'AVALANCHE': 'AVAX',
+      'BSC': 'BSC',
+      'MOONBEAM': 'MOON',
+      'POLYGON': 'MATIC',
+      'OPTIMISM': 'OP'
+    };
+    return prefixMap[chain] || 'ETH';
+  }
+
   // Get chain-specific contract address
   const getContractAddress = () => {
     return window.chainManager?.getContractAddress('XENFT_STAKE') || 
@@ -119,7 +133,7 @@
     return new Promise((resolve, reject) => {
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
+      const chainPrefix = getChainPrefix(currentChain);
       const dbName = window.chainManager?.getDatabaseName('xenft_stake') || `${chainPrefix}_DB_XenftStake`;
       
       const req = indexedDB.open(dbName, 2);

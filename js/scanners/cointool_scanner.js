@@ -2,6 +2,20 @@
 // Wrapped in IIFE to avoid global variable conflicts with main_app.js
 
 (function() {
+  // Helper function to get chain prefix for database names
+  function getChainPrefix(chain) {
+    const prefixMap = {
+      'ETHEREUM': 'ETH',
+      'BASE': 'BASE',
+      'AVALANCHE': 'AVAX',
+      'BSC': 'BSC',
+      'MOONBEAM': 'MOON',
+      'POLYGON': 'MATIC',
+      'OPTIMISM': 'OP'
+    };
+    return prefixMap[chain] || 'ETH';
+  }
+
   // Get chain-specific contract address like other scanners
   const CONTRACT_ADDRESS = window.chainManager?.getContractAddress('COINTOOL') || 
     window.appConfig?.contracts?.COINTOOL || 
@@ -47,7 +61,7 @@ async function openCointoolDB() {
   return new Promise((resolve, reject) => {
     // Get chain-specific database name
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
+    const chainPrefix = getChainPrefix(currentChain);
     const dbName = `${chainPrefix}_DB_Cointool`;
     
     const request = indexedDB.open(dbName, 3);
