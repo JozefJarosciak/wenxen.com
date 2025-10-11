@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoinTool ABI Comparison</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 25px; font-size: 14px; }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .chain-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        .chain-box h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .function-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .function-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            border-left: 3px solid #667eea;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        .function-item.remint {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .highlight {
+            background: #fffacd;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border: 2px solid #ffd700;
+        }
+        .loading { text-align: center; padding: 20px; }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 CoinTool ABI Comparison</h1>
+        <p class="subtitle">Compare Ethereum and Base CoinTool contract functions to see if reminting is supported</p>
+
+        <button onclick="compareContracts()">🔍 Compare Contract ABIs</button>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Fetching contract ABIs from Etherscan and BaseScan...</p>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Using Etherscan V2 API - single endpoint for all chains
+        const API_KEY = 'P4UJHPNS87ST8N6KAV9TEZGV68BH5Q1N9X';
+        const API_V2_ENDPOINT = 'https://api.etherscan.io/v2/api';
+
+        const CONTRACTS = {
+            ethereum: {
+                chainId: 1,
+                address: '0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628',
+                name: 'Ethereum'
+            },
+            base: {
+                chainId: 8453,
+                address: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
+                name: 'Base'
+            }
+        };
+
+        async function fetchABI(chain) {
+            const config = CONTRACTS[chain];
+            const url = `${API_V2_ENDPOINT}?chainid=${config.chainId}&module=contract&action=getabi&address=${config.address}&apikey=${API_KEY}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                console.log(`${config.name} API response:`, data);
+
+                if (data.status === '1' && data.result) {
+                    return JSON.parse(data.result);
+                }
+
+                console.error(`${config.name} API error:`, data.message || data.result);
+                return null;
+            } catch (err) {
+                console.error(`Failed to fetch ${config.name} ABI:`, err);
+                return null;
+            }
+        }
+
+        async function compareContracts() {
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+
+            loading.style.display = 'block';
+            results.innerHTML = '';
+
+            try {
+                const [ethABI, baseABI] = await Promise.all([
+                    fetchABI('ethereum'),
+                    fetchABI('base')
+                ]);
+
+                if (!ethABI && !baseABI) {
+                    results.innerHTML = `
+                        <div class="highlight" style="border-color: #dc3545; background: #f8d7da;">
+                            ❌ Failed to fetch ABIs from both chains.<br><br>
+                            <strong>Alternative Method:</strong><br>
+                            1. Visit <a href="https://etherscan.io/address/${CONTRACTS.ethereum.address}#code" target="_blank">Etherscan</a>
+                               and <a href="https://basescan.org/address/${CONTRACTS.base.address}#code" target="_blank">BaseScan</a><br>
+                            2. Check the "Contract" tab on each<br>
+                            3. Look for "Read Contract" section to see available functions<br>
+                            4. Search for "remint" in the function list
+                        </div>
+                    `;
+                    return;
+                }
+
+                if (!ethABI) {
+                    results.innerHTML = '<div class="highlight" style="border-color: #dc3545;">❌ Failed to fetch Ethereum ABI. Check console for details.</div>';
+                    return;
+                }
+
+                if (!baseABI) {
+                    results.innerHTML = '<div class="highlight" style="border-color: #dc3545;">❌ Failed to fetch Base ABI. Check console for details.</div>';
+                    return;
+                }
+
+                // Extract function names
+                const ethFunctions = ethABI.filter(item => item.type === 'function').map(f => f.name);
+                const baseFunctions = baseABI.filter(item => item.type === 'function').map(f => f.name);
+
+                // Find remint-related functions
+                const ethRemint = ethFunctions.filter(name => name.toLowerCase().includes('remint'));
+                const baseRemint = baseFunctions.filter(name => name.toLowerCase().includes('remint'));
+
+                // Display results
+                let html = `
+                    <div class="highlight">
+                        <strong>📊 Summary:</strong><br>
+                        Ethereum Functions: ${ethFunctions.length}<br>
+                        Base Functions: ${baseFunctions.length}<br>
+                        Ethereum Remint Functions: ${ethRemint.length > 0 ? ethRemint.join(', ') : 'None'}<br>
+                        Base Remint Functions: ${baseRemint.length > 0 ? baseRemint.join(', ') : 'None'}
+                    </div>
+
+                    <div class="comparison">
+                        <div class="chain-box">
+                            <h3>Ethereum CoinTool</h3>
+                            <div class="function-list">
+                                ${ethFunctions.map(fn => `
+                                    <div class="function-item ${fn.toLowerCase().includes('remint') ? 'remint' : ''}">
+                                        ${fn}()
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="chain-box">
+                            <h3>Base CoinTool</h3>
+                            <div class="function-list">
+                                ${baseFunctions.map(fn => `
+                                    <div class="function-item ${fn.toLowerCase().includes('remint') ? 'remint' : ''}">
+                                        ${fn}()
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Add conclusion
+                if (baseRemint.length === 0 && ethRemint.length > 0) {
+                    html += `
+                        <div class="highlight" style="border-color: #ffc107; background: #fff3cd;">
+                            <strong>⚠️ Important Finding:</strong><br>
+                            Base CoinTool does NOT have a remint function, but Ethereum does.<br>
+                            This means <strong>reminting might not be supported on Base</strong>, or it uses a different mechanism.
+                        </div>
+                    `;
+                } else if (baseRemint.length > 0) {
+                    html += `
+                        <div class="highlight" style="border-color: #28a745; background: #d4edda;">
+                            <strong>✅ Remint functions found on Base!</strong><br>
+                            Functions: ${baseRemint.join(', ')}
+                        </div>
+                    `;
+                }
+
+                results.innerHTML = html;
+
+            } catch (error) {
+                results.innerHTML = `<div class="highlight" style="border-color: #dc3545;">❌ Error: ${error.message}</div>`;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Base Remint Helper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0052ff 0%, #00d4ff 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #0052ff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .info-box code {
+            background: #d1e7ff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0052ff 0%, #00d4ff 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 82, 255, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+
+        .section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .address-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .address-item:hover {
+            border-color: #0052ff;
+            background: #f0f7ff;
+        }
+
+        .verify-btn {
+            background: #0052ff;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .verify-btn:hover {
+            background: #0041cc;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0052ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .highlight {
+            background: #fffacd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            border: 2px solid #ffd700;
+        }
+
+        .highlight strong {
+            color: #cc8400;
+        }
+
+        .method-section {
+            margin-bottom: 25px;
+        }
+
+        .method-title {
+            font-weight: 600;
+            color: #0052ff;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .link {
+            color: #0052ff;
+            text-decoration: none;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔎 Find Base Remint Helper Address</h1>
+        <p class="subtitle">Analyze Base CoinTool contract to discover the correct Remint Helper address</p>
+
+        <div class="info-box">
+            <strong>Base CoinTool:</strong> <code>0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7</code><br>
+            <strong>Strategy:</strong> Extract all Ethereum addresses from the CoinTool bytecode and analyze recent remint transactions to find the helper contract.
+        </div>
+
+        <button id="analyzeBtn" onclick="analyzeContract()">🔍 Analyze Base CoinTool</button>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing contract bytecode and transactions...</p>
+        </div>
+
+        <div id="results" class="results">
+            <!-- Results will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        const BASE_COINTOOL = '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7';
+        const BASE_CHAIN_ID = 8453;
+        const BASE_RPCS = [
+            'https://base-rpc.publicnode.com',
+            'https://mainnet.base.org',
+            'https://base.gateway.tenderly.co'
+        ];
+        const ETHERSCAN_API_V2 = 'https://api.etherscan.io/v2/api';
+        const API_KEY = 'P4UJHPNS87ST8N6KAV9TEZGV68BH5Q1N9X';
+
+        async function makeRpcCall(method, params) {
+            for (const rpc of BASE_RPCS) {
+                try {
+                    const response = await fetch(rpc, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            method: method,
+                            params: params,
+                            id: 1
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+                    return data.result;
+                } catch (err) {
+                    console.warn(`RPC ${rpc} failed:`, err);
+                    continue;
+                }
+            }
+            throw new Error('All RPC endpoints failed');
+        }
+
+        async function fetchBasescanData(module, action, params = {}) {
+            const url = new URL(ETHERSCAN_API_V2);
+            url.searchParams.append('chainid', BASE_CHAIN_ID);
+            url.searchParams.append('module', module);
+            url.searchParams.append('action', action);
+            url.searchParams.append('apikey', API_KEY);
+            Object.entries(params).forEach(([key, value]) => {
+                url.searchParams.append(key, value);
+            });
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                console.log('BaseScan V2 API response:', data);
+                if (data.status === '1') {
+                    return data.result;
+                }
+                console.warn('BaseScan V2 API response:', data.message || data.result);
+                return null;
+            } catch (err) {
+                console.warn('BaseScan API failed:', err);
+                return null;
+            }
+        }
+
+        function extractAddresses(bytecode) {
+            if (!bytecode) return [];
+
+            // Remove 0x prefix
+            const code = bytecode.toLowerCase().replace('0x', '');
+
+            // Look for 40-character hex sequences (20 bytes = Ethereum address)
+            // Addresses are often padded to 32 bytes (64 hex chars) in bytecode
+            const addresses = new Set();
+
+            // Pattern 1: Look for padded addresses (24 zeros + 40 hex chars)
+            const paddedPattern = /0{24}([0-9a-f]{40})/g;
+            let match;
+            while ((match = paddedPattern.exec(code)) !== null) {
+                const addr = '0x' + match[1];
+                // Filter out obvious non-addresses
+                if (!addr.match(/^0x0+$/) && !addr.match(/^0xf+$/i)) {
+                    addresses.add(addr);
+                }
+            }
+
+            return Array.from(addresses);
+        }
+
+        async function analyzeContract() {
+            const btn = document.getElementById('analyzeBtn');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+
+            btn.disabled = true;
+            loading.style.display = 'block';
+            results.classList.remove('show');
+            results.innerHTML = '';
+
+            try {
+                // Step 1: Get CoinTool bytecode
+                const bytecode = await makeRpcCall('eth_getCode', [BASE_COINTOOL, 'latest']);
+
+                // Step 2: Extract addresses from bytecode
+                const addresses = extractAddresses(bytecode);
+
+                // Step 3: Get recent transactions
+                const txList = await fetchBasescanData('account', 'txlist', {
+                    address: BASE_COINTOOL,
+                    startblock: '0',
+                    endblock: '99999999',
+                    page: '1',
+                    offset: '100',
+                    sort: 'desc'
+                });
+
+                // Step 4: Get internal transactions (where helper calls would show up)
+                const internalTxs = await fetchBasescanData('account', 'txlistinternal', {
+                    address: BASE_COINTOOL,
+                    startblock: '0',
+                    endblock: '99999999',
+                    page: '1',
+                    offset: '100',
+                    sort: 'desc'
+                });
+
+                // Step 5: Analyze transactions for remint patterns
+                const remintTxs = txList ? txList.filter(tx =>
+                    tx.input &&
+                    tx.input.length > 200 &&
+                    tx.isError === '0'
+                ) : [];
+
+                // Display results
+                displayAnalysis(addresses, bytecode, remintTxs, internalTxs);
+
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="section" style="border-color: #dc3545; background: #f8d7da;">
+                        <strong>❌ Error:</strong> ${error.message}
+                    </div>
+                `;
+                results.classList.add('show');
+            } finally {
+                loading.style.display = 'none';
+                btn.disabled = false;
+            }
+        }
+
+        async function verifyAddress(address) {
+            try {
+                const code = await makeRpcCall('eth_getCode', [address, 'latest']);
+                const exists = code && code !== '0x' && code !== '0x0';
+                const size = exists ? (code.length - 2) / 2 : 0;
+
+                return { exists, size };
+            } catch {
+                return { exists: false, size: 0 };
+            }
+        }
+
+        function displayAnalysis(addresses, bytecode, txList, internalTxs) {
+            const results = document.getElementById('results');
+
+            // Extract unique addresses from internal transactions
+            const internalAddresses = new Set();
+            if (internalTxs && internalTxs.length > 0) {
+                internalTxs.forEach(tx => {
+                    if (tx.to && tx.to !== BASE_COINTOOL) {
+                        internalAddresses.add(tx.to.toLowerCase());
+                    }
+                    if (tx.from && tx.from !== BASE_COINTOOL) {
+                        internalAddresses.add(tx.from.toLowerCase());
+                    }
+                });
+            }
+
+            let html = `
+                <div class="section">
+                    <h3>📊 Analysis Summary</h3>
+                    <p><strong>Bytecode Size:</strong> ${(bytecode.length - 2) / 2} bytes</p>
+                    <p><strong>Addresses Found in Bytecode:</strong> ${addresses.length}</p>
+                    <p><strong>Recent Transactions:</strong> ${txList.length}</p>
+                    <p><strong>Internal Transactions:</strong> ${internalTxs ? internalTxs.length : 0}</p>
+                    <p><strong>Unique Addresses from Internal Txs:</strong> ${internalAddresses.size}</p>
+                </div>
+            `;
+
+            // Method 1: Addresses from bytecode
+            html += `
+                <div class="section method-section">
+                    <div class="method-title">Method 1: Addresses Embedded in Bytecode</div>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                        These addresses are hardcoded in the contract. One might be the Remint Helper.
+                    </p>
+            `;
+
+            if (addresses.length > 0) {
+                addresses.forEach(addr => {
+                    html += `
+                        <div class="address-item">
+                            <a href="https://basescan.org/address/${addr}" target="_blank" class="link">${addr}</a>
+                            <button class="verify-btn" onclick="checkAddress('${addr}')">Check</button>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `<p style="color: #999;">No clear addresses found in bytecode.</p>`;
+            }
+
+            html += `</div>`;
+
+            // Method 2: Internal Transaction Analysis (NEW - MOST IMPORTANT)
+            html += `
+                <div class="section method-section">
+                    <div class="method-title">Method 2: Addresses from Internal Transactions (🔥 Most Likely)</div>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                        These addresses were called BY the CoinTool contract. The helper contract should be here!
+                    </p>
+            `;
+
+            if (internalAddresses.size > 0) {
+                Array.from(internalAddresses).forEach(addr => {
+                    html += `
+                        <div class="address-item">
+                            <a href="https://basescan.org/address/${addr}" target="_blank" class="link">${addr}</a>
+                            <button class="verify-btn" onclick="checkAddress('${addr}')">Check Contract</button>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `
+                    <div class="highlight" style="border-color: #ffc107; background: #fff3cd;">
+                        <strong>⚠️ No internal transactions found via API.</strong><br>
+                        This might be due to API limitations. Please check BaseScan manually:
+                        <a href="https://basescan.org/address/${BASE_COINTOOL}#internaltx" target="_blank" class="link">
+                            View Internal Transactions on BaseScan
+                        </a>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+
+            // Method 3: Transaction analysis
+            html += `
+                <div class="section method-section">
+                    <div class="method-title">Method 3: Recent Transactions</div>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                        Recent CoinTool transactions (click to view details on BaseScan).
+                    </p>
+            `;
+
+            if (txList.length > 0) {
+                html += `
+                    <div class="highlight">
+                        <strong>💡 Recommendation:</strong> Check the most recent transactions on
+                        <a href="https://basescan.org/address/${BASE_COINTOOL}" target="_blank" class="link">BaseScan</a>
+                        and look for "Internal Transactions" that might show calls to a helper contract.
+                    </div>
+
+                    <p style="margin-top: 15px; font-size: 13px;">Recent transaction hashes (click to view on BaseScan):</p>
+                `;
+
+                txList.slice(0, 10).forEach(tx => {
+                    html += `
+                        <div class="address-item">
+                            <a href="https://basescan.org/tx/${tx.hash}" target="_blank" class="link">${tx.hash}</a>
+                            <span style="font-size: 11px; color: #666;">${new Date(tx.timeStamp * 1000).toLocaleDateString()}</span>
+                        </div>
+                    `;
+                });
+            } else {
+                html += `<p style="color: #999;">No transactions found.</p>`;
+            }
+
+            html += `</div>`;
+
+            // Method 4: Manual verification
+            html += `
+                <div class="section">
+                    <div class="method-title">Method 4: Manual Verification</div>
+                    <p style="font-size: 13px; margin-bottom: 10px;">
+                        Try common deployment patterns for the helper contract:
+                    </p>
+                    <div class="code-block">
+                        1. Check if CREATE2 was used (deterministic address)<br>
+                        2. Look for constructor parameters in contract creation tx<br>
+                        3. Check CoinTool's internal transactions for delegatecall/call patterns
+                    </div>
+                </div>
+            `;
+
+            // Final recommendation
+            html += `
+                <div class="highlight" style="border-color: #0052ff; background: #e7f3ff;">
+                    <strong>🎯 Next Steps:</strong><br>
+                    1. Click "Check" on each address above to see if it's a contract<br>
+                    2. Visit <a href="https://basescan.org/address/${BASE_COINTOOL}#internaltx" target="_blank" class="link">
+                        BaseScan Internal Transactions
+                    </a> to trace helper calls<br>
+                    3. Look for addresses with bytecode similar to Ethereum's helper (1130 bytes)
+                </div>
+            `;
+
+            results.innerHTML = html;
+            results.classList.add('show');
+        }
+
+        async function checkAddress(address) {
+            const info = await verifyAddress(address);
+
+            if (info.exists) {
+                alert(`✅ Contract Found!\n\nAddress: ${address}\nSize: ${info.size} bytes\n\n${info.size === 1130 ? '🎯 SAME SIZE as Ethereum helper!' : 'Different size from Ethereum helper (1130 bytes)'}\n\nClick OK to open on BaseScan.`);
+                window.open(`https://basescan.org/address/${address}`, '_blank');
+            } else {
+                alert(`❌ No Contract\n\nAddress: ${address}\nThis is not a contract (no bytecode found).`);
+            }
+        }
+    </script>
+</body>
+</html>
