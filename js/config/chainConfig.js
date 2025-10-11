@@ -232,7 +232,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL: '0x7ff11e5b256c9EB67F4dEa2FacECEd5De1CD691F',
       XENFT_TORRENT: '0x1Ac17FFB8456525BfF46870bba7Ed8772ba063a5',
       XENFT_STAKE: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
-      REMINT_HELPER: '' // TODO: To be discovered
+      REMINT_HELPER: '0xc3025b2f2ba021bcc6e83b5a3fcf51a6ee300d26' // BSC-specific helper (1130 bytes, verified)
     },
     events: {
       // BSC uses same event signatures as Ethereum
@@ -297,7 +297,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
       XENFT_TORRENT: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
       XENFT_STAKE: '0x1Ac17FFB8456525BfF46870bba7Ed8772ba063a5',
-      REMINT_HELPER: '' // TODO: To be discovered
+      REMINT_HELPER: '0xcd40c4f617959338e47f453a666392bf10af5bc0' // Moonbeam-specific helper (1130 bytes, verified)
     },
     events: {
       // Moonbeam uses same event signatures as Ethereum
@@ -362,7 +362,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL: '0xdf6fEE057222d2F7933C215C11e5150bD2efc53E',
       XENFT_TORRENT: '0x726bB6aC9b74441Eb8FB52163e9014302D4249e5',
       XENFT_STAKE: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
-      REMINT_HELPER: '' // TODO: To be discovered
+      REMINT_HELPER: '0x413aaa75db26c007563ab536f98613e7981daa32' // Polygon-specific helper (1130 bytes, verified)
     },
     events: {
       // Polygon uses same event signatures as Ethereum
@@ -427,7 +427,7 @@ export const SUPPORTED_CHAINS = {
       COINTOOL: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
       XENFT_TORRENT: '0xAF18644083151cf57F914CCCc23c42A1892C218e',
       XENFT_STAKE: '0x4c4CF206465AbFE5cECb3b581fa1b508Ec514692',
-      REMINT_HELPER: '' // TODO: To be discovered
+      REMINT_HELPER: '0xcd40c4f617959338e47f453a666392bf10af5bc0' // Optimism-specific helper (1130 bytes, verified, shared with Moonbeam)
     },
     events: {
       // Optimism uses same event signatures as Ethereum
