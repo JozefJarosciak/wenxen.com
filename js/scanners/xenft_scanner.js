@@ -90,7 +90,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     return new Promise((resolve, reject) => {
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
       const dbName = `${chainPrefix}_DB_Xenft`;
       
       const request = indexedDB.open(dbName, 3);
@@ -542,10 +542,13 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       const scanState = await getScanState(db, addr);
       const lastTransactionBlock = scanState?.lastTransactionBlock || 0;
 
+      // Get chain-specific deployment block
+      const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
+
       // Use safety buffer approach: always rescan from before last transaction
       const safeStartBlock = lastTransactionBlock > 0
-        ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, 15700000) // XENFT deployment block
-        : 15700000; // XENFT deployment block
+        ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock)
+        : deploymentBlock;
 
       // Get current block using Web3 directly
       const rpcEndpoints = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC];
@@ -988,17 +991,19 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   document.addEventListener('DOMContentLoaded', () => {
     const fastScanCheckbox = document.getElementById('useFastXenftScan');
     if (fastScanCheckbox) {
-      // Load saved setting (default to true for fast scan)
-      const savedSetting = localStorage.getItem('useFastXenftScan');
+      // Load saved setting (default to true for fast scan, chain-specific)
+      const key = window.chainManager?.getStorageKey('useFastXenftScan') || 'useFastXenftScan';
+      const savedSetting = localStorage.getItem(key);
       if (savedSetting !== null) {
         fastScanCheckbox.checked = savedSetting === 'true';
       } else {
         fastScanCheckbox.checked = true; // Default to fast scan
       }
-      
+
       // Save setting when changed
       fastScanCheckbox.addEventListener('change', () => {
-        localStorage.setItem('useFastXenftScan', fastScanCheckbox.checked.toString());
+        const key = window.chainManager?.getStorageKey('useFastXenftScan') || 'useFastXenftScan';
+        localStorage.setItem(key, fastScanCheckbox.checked.toString());
       });
     }
   });

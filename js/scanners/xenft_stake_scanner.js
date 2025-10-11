@@ -19,22 +19,13 @@
   };
   
   const CONTRACT_ADDRESS = getContractAddress();
-  
-  // Chain-specific creation blocks
-  const getContractCreationBlock = () => {
-    const chain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    return chain === 'BASE' ? 3095343 : 16339900; // Base creation block vs Ethereum
-  };
-  
-  const CONTRACT_CREATION_BLOCK = getContractCreationBlock();
+
+  // Get chain-specific deployment block from chainManager
+  const CONTRACT_CREATION_BLOCK = window.chainManager?.getXenftStakeDeploymentBlock() || 16339900;
   const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
-  const DEFAULT_RPC = (() => {
-    const chain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    return chain === 'BASE' ? 
-      'https://base-rpc.publicnode.com' : 
-      'https://ethereum-rpc.publicnode.com';
-  })();
+  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default ||
+    'https://ethereum-rpc.publicnode.com';
 
   // ABI moved to ./ABI/xenft-stake-ABI.js as window.xenftStakeAbi
 
@@ -128,7 +119,7 @@
     return new Promise((resolve, reject) => {
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+      const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
       const dbName = window.chainManager?.getDatabaseName('xenft_stake') || `${chainPrefix}_DB_XenftStake`;
       
       const req = indexedDB.open(dbName, 2);
@@ -399,7 +390,7 @@
         }
 
         const scanState = await getScanState(db, addr);
-        const creationBlock = getContractCreationBlock(); // Get chain-specific creation block
+        const creationBlock = CONTRACT_CREATION_BLOCK; // Get chain-specific creation block
         const startBlock = scanState ? scanState.lastScannedBlock + 1 : creationBlock;
 
         if (startBlock > latestBlock && !forceRescan) {

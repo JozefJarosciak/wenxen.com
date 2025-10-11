@@ -47,7 +47,7 @@ async function openCointoolDB() {
   return new Promise((resolve, reject) => {
     // Get chain-specific database name
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
     const dbName = `${chainPrefix}_DB_Cointool`;
     
     const request = indexedDB.open(dbName, 3);
@@ -184,8 +184,8 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
 
   // Process mints in sequential batches to prevent browser crashes
   // Configurable batch sizes - smaller batches to prevent memory issues
-  const BATCH_SIZE = parseInt(localStorage.getItem('cointoolBatchSize')) || 10; // Process 10 mints per batch (reduced from 15)
-  const DELAY_BETWEEN_BATCHES = parseInt(localStorage.getItem('cointoolBatchDelay')) || 100; // 100ms minimum delay between batches
+  const BATCH_SIZE = window.chainConfigUtils?.getCointoolBatchSize() || 10; // Process 10 mints per batch (reduced from 15)
+  const DELAY_BETWEEN_BATCHES = window.chainConfigUtils?.getCointoolBatchDelay() || 100; // 100ms minimum delay between batches
 
   const startTime = Date.now();
 
@@ -494,11 +494,14 @@ function normalizeSaltForHash(salt) {
 }
 
 async function getBlockWithCache(blockNumber) {
-  if (!blockTsCache.has(blockNumber)) {
+  const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainCache = blockTsCache[currentChain] || blockTsCache.ETHEREUM;
+
+  if (!chainCache.has(blockNumber)) {
     const block = await makeRpcCall(() => web3Instance.eth.getBlock(blockNumber));
-    blockTsCache.set(blockNumber, block);
+    chainCache.set(blockNumber, block);
   }
-  return blockTsCache.get(blockNumber);
+  return chainCache.get(blockNumber);
 }
 
 // Rate limiting for API calls
@@ -557,8 +560,8 @@ function startPerformanceMonitoring(totalMints) {
 }
 
 function logPerformanceSettings() {
-  const batchSize = parseInt(localStorage.getItem('cointoolBatchSize')) || 15;
-  const batchDelay = parseInt(localStorage.getItem('cointoolBatchDelay')) || 50;
+  const batchSize = window.chainConfigUtils?.getCointoolBatchSize() || 15;
+  const batchDelay = window.chainConfigUtils?.getCointoolBatchDelay() || 50;
   const rateLimit = 200; // API_RATE_LIMIT_MS
   
   console.log(`[COINTOOL] Current Performance Settings:`);
@@ -636,7 +639,7 @@ function finishPerformanceMonitoring() {
     console.log(`  • Performance is within normal range`);
   }
   
-  const currentBatchSize = parseInt(localStorage.getItem('cointoolBatchSize')) || 15;
+  const currentBatchSize = window.chainConfigUtils?.getCointoolBatchSize() || 15;
   if (performanceStats.apiCallTimes.some(t => t > 2000)) {
     console.log(`  • Network latency detected - consider reducing batch size to ${Math.max(5, currentBatchSize-5)}`);
   }
@@ -666,7 +669,8 @@ async function scanEventsForMints(address, etherscanApiKey, forceRescan) {
     // Always rescan from safety buffer blocks before last known transaction to handle API lag
     // This ensures we never miss transactions that appear late in APIs
     const SAFETY_BUFFER_BLOCKS = 50; // Configurable safety margin
-    const safeStartBlock = Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, 15700000);
+    const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
+    const safeStartBlock = Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock);
     const fromBlock = safeStartBlock;
 
     console.log(`[COINTOOL] Using safety buffer: lastTransaction=${lastTransactionBlock}, safeStart=${safeStartBlock}, buffer=${SAFETY_BUFFER_BLOCKS}`);

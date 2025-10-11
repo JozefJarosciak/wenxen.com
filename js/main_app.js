@@ -2153,7 +2153,7 @@ function openDB() {
   return new Promise((resolve, reject) => {
     // Get chain-specific database name
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE' : (currentChain === 'AVALANCHE' ? 'AVAX' : 'ETH');
     const dbName = `${chainPrefix}_DB_Cointool`;
     
     // bump to v3 to add actionsCache
@@ -3213,7 +3213,7 @@ document.getElementById("resetBtn").addEventListener("click", async function () 
 
 // Helper functions for different reset operations
 async function deleteAllDataWithStorage(currentChain, chainName) {
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : (currentChain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
 
   // Close open connections
   await closeOpenConnections();
@@ -3259,7 +3259,7 @@ async function deleteAllDataWithStorage(currentChain, chainName) {
 }
 
 async function deleteAllScanData(currentChain, chainName) {
-  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+  const chainPrefix = currentChain === 'BASE' ? 'BASE_' : (currentChain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
 
   // More aggressive connection closing
   await closeOpenConnections();
@@ -6704,7 +6704,7 @@ function applySettingsSnapshot(settings) {
   // Handle legacy format (backward compatibility)
   console.log('[Settings] Applying legacy settings format...');
   const targetChain = settings.selectedChain || window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainPrefix = targetChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+  const chainPrefix = targetChain === 'BASE' ? 'BASE_' : (targetChain === 'AVALANCHE' ? 'AVALANCHE_' : 'ETHEREUM_');
 
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
   setVal("ethAddress", settings.ethAddress);
@@ -6894,7 +6894,7 @@ async function exportBackup() {
   
   // Export data from all chains
   for (const chain of chains) {
-    const chainPrefix = chain === 'BASE' ? 'BASE_' : 'ETH_';
+    const chainPrefix = chain === 'BASE' ? 'BASE_' : (chain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
     
     for (const dbType of dbTypes) {
       const dbName = chainPrefix + dbType.suffix;
@@ -7241,7 +7241,7 @@ async function importBackupFromFile(file) {
   } else {
     // Old behavior for single-chain backups
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
+    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : (currentChain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
     
     // Delete only current chain databases
     const chainDatabases = [
