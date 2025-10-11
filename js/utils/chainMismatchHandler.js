@@ -8,16 +8,21 @@ export class ChainMismatchHandler {
         this.chainNames = {
             'ETHEREUM': 'Ethereum',
             'BASE': 'Base',
+            'AVALANCHE': 'Avalanche',
             '0x1': 'Ethereum',
             '0x2105': 'Base',
+            '0xa86a': 'Avalanche',
             '1': 'Ethereum',
-            '8453': 'Base'
+            '8453': 'Base',
+            '43114': 'Avalanche'
         };
         this.chainIds = {
             'ETHEREUM': '0x1',
             'BASE': '0x2105',
+            'AVALANCHE': '0xa86a',
             '0x1': '0x1',
-            '0x2105': '0x2105'
+            '0x2105': '0x2105',
+            '0xa86a': '0xa86a'
         };
     }
 
@@ -45,14 +50,16 @@ export class ChainMismatchHandler {
     async handleWalletChainChange(chainIdHex) {
         const chainIdNum = parseInt(chainIdHex, 16);
         let targetChain = null;
-        
+
         // Map chain ID to our chain key
         if (chainIdNum === 1) {
             targetChain = 'ETHEREUM';
         } else if (chainIdNum === 8453) {
             targetChain = 'BASE';
+        } else if (chainIdNum === 43114) {
+            targetChain = 'AVALANCHE';
         }
-        
+
         if (targetChain) {
             const currentChain = this.getAppChain();
             if (currentChain !== targetChain) {
@@ -182,6 +189,9 @@ export class ChainMismatchHandler {
         }
         if (chainId === 'BASE' || chainId === '0x2105' || chainId === '8453') {
             return '0x2105';
+        }
+        if (chainId === 'AVALANCHE' || chainId === '0xa86a' || chainId === '43114') {
+            return '0xa86a';
         }
         return chainId;
     }
@@ -417,6 +427,17 @@ export class ChainMismatchHandler {
                 },
                 rpcUrls: ['https://mainnet.base.org'],
                 blockExplorerUrls: ['https://basescan.org']
+            },
+            'AVALANCHE': {
+                chainId: '0xa86a',
+                chainName: 'Avalanche C-Chain',
+                nativeCurrency: {
+                    name: 'Avalanche',
+                    symbol: 'AVAX',
+                    decimals: 18
+                },
+                rpcUrls: ['https://api.avax.network/ext/bc/C/rpc'],
+                blockExplorerUrls: ['https://snowtrace.io']
             }
         };
 
@@ -498,7 +519,7 @@ export class ChainMismatchHandler {
             console.error('Error switching wallet chain:', error);
             
             // If chain not found, try to add it
-            if (error.code === 4902 && targetChain === 'BASE') {
+            if (error.code === 4902 && (targetChain === 'BASE' || targetChain === 'AVALANCHE')) {
                 try {
                     await this.addChainToWallet(targetChain);
                     // Try switching again
