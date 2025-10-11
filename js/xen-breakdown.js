@@ -124,8 +124,6 @@ function initializeXenTotalBreakdown() {
       let html = '<table style="border-collapse: collapse; font-size: 12px;">';
       html += '<thead><tr>';
       html += '<th style="text-align: left; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Address</th>';
-      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Mints</th>';
-      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Wallet</th>';
       html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Total</th>';
       html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Value</th>';
       html += '<th style="width: 50px;"></th>'; // Space for buttons
@@ -178,8 +176,6 @@ function initializeXenTotalBreakdown() {
 
         html += '<tr>';
         html += `<td style="padding: 2px 6px; opacity: 0.8;">${formatAddress(item.address)}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right; opacity: 0.9;">${xenFormatted}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right; opacity: 0.9;">${walletFormatted}</td>`;
         html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalFormatted}</td>`;
         html += `<td style="padding: 2px 6px; text-align: right;" class="usd-value">${usdFormatted}</td>`;
         html += '<td></td>';
@@ -204,8 +200,6 @@ function initializeXenTotalBreakdown() {
       
       html += '<tr style="border-top: 1px solid rgba(128,128,128,0.3);">';
       html += '<td style="padding: 2px 6px; font-weight: bold;">Total</td>';
-      html += '<td style="padding: 2px 6px; text-align: right; font-weight: bold;">-</td>'; // Mints column placeholder
-      html += '<td style="padding: 2px 6px; text-align: right; font-weight: bold;">-</td>'; // Wallet column placeholder
       html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`; // Total column
       html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;" class="usd-value">${totalUsdFormatted}</td>`;
       html += '<td style="padding: 2px 4px; text-align: right;">';
