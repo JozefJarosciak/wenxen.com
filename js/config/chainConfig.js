@@ -223,9 +223,9 @@ export const SUPPORTED_CHAINS = {
       name: 'BscScan',
       baseUrl: 'https://bscscan.com',
       apiUrl: 'https://api.etherscan.io/api',
-      txUrl: 'https://etherscan.io/tx/',
-      addressUrl: 'https://etherscan.io/address/',
-      blockUrl: 'https://etherscan.io/block/'
+      txUrl: 'https://bscscan.com/tx/',
+      addressUrl: 'https://bscscan.com/address/',
+      blockUrl: 'https://bscscan.com/block/'
     },
     contracts: {
       XEN_CRYPTO: '0x2AB0e9e4eE70FFf1fB9D67031E44F6410170d00e',
@@ -288,9 +288,9 @@ export const SUPPORTED_CHAINS = {
       name: 'Moonscan',
       baseUrl: 'https://moonscan.io',
       apiUrl: 'https://api.etherscan.io/api',
-      txUrl: 'https://etherscan.io/tx/',
-      addressUrl: 'https://etherscan.io/address/',
-      blockUrl: 'https://etherscan.io/block/'
+      txUrl: 'https://moonscan.io/tx/',
+      addressUrl: 'https://moonscan.io/address/',
+      blockUrl: 'https://moonscan.io/block/'
     },
     contracts: {
       XEN_CRYPTO: '0xb564A5767A00Ee9075cAC561c427643286F8F4E1',
@@ -353,9 +353,9 @@ export const SUPPORTED_CHAINS = {
       name: 'PolygonScan',
       baseUrl: 'https://polygonscan.com',
       apiUrl: 'https://api.etherscan.io/api',
-      txUrl: 'https://etherscan.io/tx/',
-      addressUrl: 'https://etherscan.io/address/',
-      blockUrl: 'https://etherscan.io/block/'
+      txUrl: 'https://polygonscan.com/tx/',
+      addressUrl: 'https://polygonscan.com/address/',
+      blockUrl: 'https://polygonscan.com/block/'
     },
     contracts: {
       XEN_CRYPTO: '0x2AB0e9e4eE70FFf1fB9D67031E44F6410170d00e',
@@ -418,9 +418,9 @@ export const SUPPORTED_CHAINS = {
       name: 'Optimistic Etherscan',
       baseUrl: 'https://optimistic.etherscan.io',
       apiUrl: 'https://api.etherscan.io/api',
-      txUrl: 'https://etherscan.io/tx/',
-      addressUrl: 'https://etherscan.io/address/',
-      blockUrl: 'https://etherscan.io/block/'
+      txUrl: 'https://optimistic.etherscan.io/tx/',
+      addressUrl: 'https://optimistic.etherscan.io/address/',
+      blockUrl: 'https://optimistic.etherscan.io/block/'
     },
     contracts: {
       XEN_CRYPTO: '0xeB585163DEbB1E637c6D617de3bEF99347cd75c8',
