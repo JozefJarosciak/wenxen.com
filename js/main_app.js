@@ -13,9 +13,9 @@ function getChainPrefix(chain) {
     'BASE': 'BASE',
     'AVALANCHE': 'AVAX',
     'BSC': 'BSC',
-    'MOONBEAM': 'MOON',
-    'POLYGON': 'MATIC',
-    'OPTIMISM': 'OP'
+    'MOONBEAM': 'GLMR',
+    'POLYGON': 'POL',
+    'OPTIMISM': 'OPT'
   };
   return prefixMap[chain] || 'ETH';
 }

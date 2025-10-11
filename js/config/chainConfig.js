@@ -210,29 +210,29 @@ export const SUPPORTED_CHAINS = {
       decimals: 18
     },
     rpcUrls: {
-      default: 'https://bsc-dataseed1.binance.org',
+      default: 'https://bsc-dataseed.binance.org/',
       fallback: [
-        'https://bsc-dataseed2.binance.org',
-        'https://bsc-dataseed3.binance.org',
-        'https://bsc-dataseed4.binance.org',
-        'https://bsc-rpc.publicnode.com',
-        'https://rpc.ankr.com/bsc'
+        'https://bsc-dataseed1.defibit.io/',
+        'https://bsc-dataseed1.ninicoin.io/',
+        'https://bsc-dataseed2.defibit.io/',
+        'https://bsc-dataseed3.bnbchain.org/',
+        'https://bsc.publicnode.com'
       ]
     },
     explorer: {
       name: 'BscScan',
       baseUrl: 'https://bscscan.com',
-      apiUrl: 'https://api.bscscan.com/api',
-      txUrl: 'https://bscscan.com/tx/',
-      addressUrl: 'https://bscscan.com/address/',
-      blockUrl: 'https://bscscan.com/block/'
+      apiUrl: 'https://api.etherscan.io/api',
+      txUrl: 'https://etherscan.io/tx/',
+      addressUrl: 'https://etherscan.io/address/',
+      blockUrl: 'https://etherscan.io/block/'
     },
     contracts: {
-      XEN_CRYPTO: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      COINTOOL: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_TORRENT: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_STAKE: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      REMINT_HELPER: '0x0000000000000000000000000000000000000000' // TODO: Awaiting user input or discovery
+      XEN_CRYPTO: '0x2AB0e9e4eE70FFf1fB9D67031E44F6410170d00e',
+      COINTOOL: '0x7ff11e5b256c9EB67F4dEa2FacECEd5De1CD691F',
+      XENFT_TORRENT: '0x1Ac17FFB8456525BfF46870bba7Ed8772ba063a5',
+      XENFT_STAKE: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
+      REMINT_HELPER: '' // TODO: To be discovered
     },
     events: {
       // BSC uses same event signatures as Ethereum
@@ -244,9 +244,9 @@ export const SUPPORTED_CHAINS = {
     constants: {
       SALT_BYTES_TO_QUERY: '0x01',
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
-      XEN_GENESIS_TIMESTAMP: 0, // TODO: Awaiting user input
-      XEN_GENESIS_DATE_MS: 0, // TODO: Awaiting user input
-      XEN_DEPLOYMENT_BLOCK: 0, // TODO: Awaiting user input
+      XEN_GENESIS_TIMESTAMP: 1665527037,
+      XEN_GENESIS_DATE_MS: 1665527037000, // Oct 11, 2022
+      XEN_DEPLOYMENT_BLOCK: 25361679,
       BASE_AMP: 3000
     },
     databases: {
@@ -268,7 +268,7 @@ export const SUPPORTED_CHAINS = {
   MOONBEAM: {
     id: 1284,
     name: 'Moonbeam',
-    shortName: 'MOON',
+    shortName: 'GLMR',
     nativeCurrency: {
       name: 'Glimmer',
       symbol: 'GLMR',
@@ -278,25 +278,26 @@ export const SUPPORTED_CHAINS = {
       default: 'https://rpc.api.moonbeam.network',
       fallback: [
         'https://moonbeam.public.blastapi.io',
-        'https://moonbeam-rpc.publicnode.com',
+        'https://moonbeam-rpc.dwellir.com',
         'https://rpc.ankr.com/moonbeam',
-        'https://moonbeam.unitedbloc.com'
+        'https://1rpc.io/glmr',
+        'https://moonbeam.drpc.org'
       ]
     },
     explorer: {
       name: 'Moonscan',
       baseUrl: 'https://moonscan.io',
-      apiUrl: 'https://api-moonbeam.moonscan.io/api',
-      txUrl: 'https://moonscan.io/tx/',
-      addressUrl: 'https://moonscan.io/address/',
-      blockUrl: 'https://moonscan.io/block/'
+      apiUrl: 'https://api.etherscan.io/api',
+      txUrl: 'https://etherscan.io/tx/',
+      addressUrl: 'https://etherscan.io/address/',
+      blockUrl: 'https://etherscan.io/block/'
     },
     contracts: {
-      XEN_CRYPTO: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      COINTOOL: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_TORRENT: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_STAKE: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      REMINT_HELPER: '0x0000000000000000000000000000000000000000' // TODO: Awaiting user input or discovery
+      XEN_CRYPTO: '0xb564A5767A00Ee9075cAC561c427643286F8F4E1',
+      COINTOOL: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
+      XENFT_TORRENT: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
+      XENFT_STAKE: '0x1Ac17FFB8456525BfF46870bba7Ed8772ba063a5',
+      REMINT_HELPER: '' // TODO: To be discovered
     },
     events: {
       // Moonbeam uses same event signatures as Ethereum
@@ -308,16 +309,16 @@ export const SUPPORTED_CHAINS = {
     constants: {
       SALT_BYTES_TO_QUERY: '0x01',
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
-      XEN_GENESIS_TIMESTAMP: 0, // TODO: Awaiting user input
-      XEN_GENESIS_DATE_MS: 0, // TODO: Awaiting user input
-      XEN_DEPLOYMENT_BLOCK: 0, // TODO: Awaiting user input
+      XEN_GENESIS_TIMESTAMP: 1666118622,
+      XEN_GENESIS_DATE_MS: 1666118622000, // Oct 18, 2022
+      XEN_DEPLOYMENT_BLOCK: 3203586,
       BASE_AMP: 3000
     },
     databases: {
-      COINTOOL_DB: 'MOON_DB_Cointool',
-      XENFT_DB: 'MOON_DB_Xenft',
-      XEN_STAKE_DB: 'MOON_DB_XenStake',
-      XENFT_STAKE_DB: 'MOON_DB_XenftStake'
+      COINTOOL_DB: 'GLMR_DB_Cointool',
+      XENFT_DB: 'GLMR_DB_Xenft',
+      XEN_STAKE_DB: 'GLMR_DB_XenStake',
+      XENFT_STAKE_DB: 'GLMR_DB_XenftStake'
     },
     dbVersions: {
       COINTOOL: 1,
@@ -334,34 +335,34 @@ export const SUPPORTED_CHAINS = {
     name: 'Polygon',
     shortName: 'MATIC',
     nativeCurrency: {
-      name: 'MATIC',
+      name: 'Matic',
       symbol: 'MATIC',
       decimals: 18
     },
     rpcUrls: {
       default: 'https://polygon-rpc.com',
       fallback: [
-        'https://polygon-bor.publicnode.com',
         'https://rpc.ankr.com/polygon',
-        'https://polygon.gateway.tenderly.co',
-        'https://polygon.drpc.org',
-        'https://1rpc.io/matic'
+        'https://polygon-mainnet.public.blastapi.io',
+        'https://polygon-bor-rpc.publicnode.com',
+        'https://1rpc.io/matic',
+        'https://polygon.drpc.org'
       ]
     },
     explorer: {
       name: 'PolygonScan',
       baseUrl: 'https://polygonscan.com',
-      apiUrl: 'https://api.polygonscan.com/api',
-      txUrl: 'https://polygonscan.com/tx/',
-      addressUrl: 'https://polygonscan.com/address/',
-      blockUrl: 'https://polygonscan.com/block/'
+      apiUrl: 'https://api.etherscan.io/api',
+      txUrl: 'https://etherscan.io/tx/',
+      addressUrl: 'https://etherscan.io/address/',
+      blockUrl: 'https://etherscan.io/block/'
     },
     contracts: {
-      XEN_CRYPTO: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      COINTOOL: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_TORRENT: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_STAKE: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      REMINT_HELPER: '0x0000000000000000000000000000000000000000' // TODO: Awaiting user input or discovery
+      XEN_CRYPTO: '0x2AB0e9e4eE70FFf1fB9D67031E44F6410170d00e',
+      COINTOOL: '0xdf6fEE057222d2F7933C215C11e5150bD2efc53E',
+      XENFT_TORRENT: '0x726bB6aC9b74441Eb8FB52163e9014302D4249e5',
+      XENFT_STAKE: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
+      REMINT_HELPER: '' // TODO: To be discovered
     },
     events: {
       // Polygon uses same event signatures as Ethereum
@@ -373,16 +374,16 @@ export const SUPPORTED_CHAINS = {
     constants: {
       SALT_BYTES_TO_QUERY: '0x01',
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
-      XEN_GENESIS_TIMESTAMP: 0, // TODO: Awaiting user input
-      XEN_GENESIS_DATE_MS: 0, // TODO: Awaiting user input
-      XEN_DEPLOYMENT_BLOCK: 0, // TODO: Awaiting user input
+      XEN_GENESIS_TIMESTAMP: 1665615710,
+      XEN_GENESIS_DATE_MS: 1665615710000, // Oct 12, 2022
+      XEN_DEPLOYMENT_BLOCK: 39156314,
       BASE_AMP: 3000
     },
     databases: {
-      COINTOOL_DB: 'MATIC_DB_Cointool',
-      XENFT_DB: 'MATIC_DB_Xenft',
-      XEN_STAKE_DB: 'MATIC_DB_XenStake',
-      XENFT_STAKE_DB: 'MATIC_DB_XenftStake'
+      COINTOOL_DB: 'POL_DB_Cointool',
+      XENFT_DB: 'POL_DB_Xenft',
+      XEN_STAKE_DB: 'POL_DB_XenStake',
+      XENFT_STAKE_DB: 'POL_DB_XenftStake'
     },
     dbVersions: {
       COINTOOL: 1,
@@ -406,27 +407,27 @@ export const SUPPORTED_CHAINS = {
     rpcUrls: {
       default: 'https://mainnet.optimism.io',
       fallback: [
-        'https://optimism.publicnode.com',
+        'https://optimism-rpc.publicnode.com',
         'https://rpc.ankr.com/optimism',
-        'https://optimism.gateway.tenderly.co',
-        'https://optimism.drpc.org',
-        'https://1rpc.io/op'
+        'https://1rpc.io/op',
+        'https://optimism.public.blastapi.io',
+        'https://optimism.drpc.org'
       ]
     },
     explorer: {
-      name: 'Optimism Explorer',
+      name: 'Optimistic Etherscan',
       baseUrl: 'https://optimistic.etherscan.io',
-      apiUrl: 'https://api-optimistic.etherscan.io/api',
-      txUrl: 'https://optimistic.etherscan.io/tx/',
-      addressUrl: 'https://optimistic.etherscan.io/address/',
-      blockUrl: 'https://optimistic.etherscan.io/block/'
+      apiUrl: 'https://api.etherscan.io/api',
+      txUrl: 'https://etherscan.io/tx/',
+      addressUrl: 'https://etherscan.io/address/',
+      blockUrl: 'https://etherscan.io/block/'
     },
     contracts: {
-      XEN_CRYPTO: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      COINTOOL: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_TORRENT: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      XENFT_STAKE: '0x0000000000000000000000000000000000000000', // TODO: Awaiting user input
-      REMINT_HELPER: '0x0000000000000000000000000000000000000000' // TODO: Awaiting user input or discovery
+      XEN_CRYPTO: '0xeB585163DEbB1E637c6D617de3bEF99347cd75c8',
+      COINTOOL: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
+      XENFT_TORRENT: '0xAF18644083151cf57F914CCCc23c42A1892C218e',
+      XENFT_STAKE: '0x4c4CF206465AbFE5cECb3b581fa1b508Ec514692',
+      REMINT_HELPER: '' // TODO: To be discovered
     },
     events: {
       // Optimism uses same event signatures as Ethereum
@@ -438,16 +439,16 @@ export const SUPPORTED_CHAINS = {
     constants: {
       SALT_BYTES_TO_QUERY: '0x01',
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
-      XEN_GENESIS_TIMESTAMP: 0, // TODO: Awaiting user input
-      XEN_GENESIS_DATE_MS: 0, // TODO: Awaiting user input
-      XEN_DEPLOYMENT_BLOCK: 0, // TODO: Awaiting user input
-      BASE_AMP: 3000
+      XEN_GENESIS_TIMESTAMP: 1694825551,
+      XEN_GENESIS_DATE_MS: 1694825551000, // Sep 16, 2023
+      XEN_DEPLOYMENT_BLOCK: 109613518,
+      BASE_AMP: 300
     },
     databases: {
-      COINTOOL_DB: 'OP_DB_Cointool',
-      XENFT_DB: 'OP_DB_Xenft',
-      XEN_STAKE_DB: 'OP_DB_XenStake',
-      XENFT_STAKE_DB: 'OP_DB_XenftStake'
+      COINTOOL_DB: 'OPT_DB_Cointool',
+      XENFT_DB: 'OPT_DB_Xenft',
+      XEN_STAKE_DB: 'OPT_DB_XenStake',
+      XENFT_STAKE_DB: 'OPT_DB_XenftStake'
     },
     dbVersions: {
       COINTOOL: 1,
