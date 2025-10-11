@@ -224,7 +224,12 @@ class NetworkSelectorUI {
     // Update button icon
     const iconEl = document.getElementById('networkIcon');
     if (iconEl) {
-      iconEl.textContent = currentChain === 'BASE' ? '🔵' : '⟠';
+      const icons = {
+        'ETHEREUM': '⟠',
+        'BASE': '🔵',
+        'AVALANCHE': '🔺'
+      };
+      iconEl.textContent = icons[currentChain] || '🔗';
     }
     
     // Update brand suffix
@@ -258,11 +263,13 @@ class NetworkSelectorUI {
   }
   
   saveCurrentState() {
+    const currentChain = chainManager.getCurrentChain();
     // Save RPCs
     const rpcInput = document.getElementById('customRPC');
     if (rpcInput?.value) {
       const rpcList = rpcInput.value.trim().split('\n').filter(Boolean);
-      chainManager.saveRPCEndpoints(rpcList);
+      // CRITICAL: Force save to current chain BEFORE switch happens
+      chainManager.saveRPCEndpoints(rpcList, currentChain);
     }
     
     // Save addresses

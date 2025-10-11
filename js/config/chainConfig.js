@@ -133,6 +133,71 @@ export const SUPPORTED_CHAINS = {
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
     }
+  },
+
+  AVALANCHE: {
+    id: 43114,
+    name: 'Avalanche',
+    shortName: 'AVAX',
+    nativeCurrency: {
+      name: 'Avalanche',
+      symbol: 'AVAX',
+      decimals: 18
+    },
+    rpcUrls: {
+      default: 'https://api.avax.network/ext/bc/C/rpc',
+      fallback: [
+        'https://avalanche-c-chain.publicnode.com',
+        'https://rpc.ankr.com/avalanche',
+        'https://avalanche.public-rpc.com',
+        'https://ava-mainnet.public.blastapi.io/ext/bc/C/rpc',
+        'https://avalanche.drpc.org'
+      ]
+    },
+    explorer: {
+      name: 'SnowTrace',
+      baseUrl: 'https://snowtrace.io',
+      apiUrl: 'https://api.snowtrace.io/api',
+      txUrl: 'https://snowtrace.io/tx/',
+      addressUrl: 'https://snowtrace.io/address/',
+      blockUrl: 'https://snowtrace.io/block/'
+    },
+    contracts: {
+      XEN_CRYPTO: '0xC0C5AA69Dbe4d6DDdfBc89c0957686ec60F24389',
+      COINTOOL: '0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7',
+      XENFT_TORRENT: '0x94d9E02D115646DFC407ABDE75Fa45256D66E043',
+      XENFT_STAKE: '0x1Ac17FFB8456525BfF46870bba7Ed8772ba063a5',
+      REMINT_HELPER: '0xd8fb02f08f940d9d87ae1ab81d78ac6ef134ca2e' // Avalanche-specific helper (1130 bytes, verified)
+    },
+    events: {
+      // Avalanche uses same event signatures as Ethereum
+      COINTOOL_MINT_TOPIC: '0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37',
+      REMINT_SELECTOR: '0xc2580804',
+      CLAIM_MINT_REWARD_SELECTOR: '0xa2309ff8',
+      CLAIM_AND_STAKE_SELECTOR: '0xf2f4eb26'
+    },
+    constants: {
+      SALT_BYTES_TO_QUERY: '0x01',
+      COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
+      XEN_GENESIS_TIMESTAMP: 1665700430, // Avalanche XEN launch timestamp (Oct 13, 2022)
+      XEN_GENESIS_DATE_MS: Date.UTC(2022, 9, 13, 19, 40, 30, 0), // Avalanche XEN launch date (month is 0-indexed)
+      XEN_DEPLOYMENT_BLOCK: 27265450, // XEN deployed at this block on Avalanche
+      BASE_AMP: 3000
+    },
+    databases: {
+      COINTOOL_DB: 'AVAX_DB_Cointool',
+      XENFT_DB: 'AVAX_DB_Xenft',
+      XEN_STAKE_DB: 'AVAX_DB_XenStake',
+      XENFT_STAKE_DB: 'AVAX_DB_XenftStake'
+    },
+    dbVersions: {
+      COINTOOL: 1,
+      XENFT: 1,
+      STAKE: 1
+    },
+    coingecko: {
+      xenId: 'xen-crypto' // Same ID for XEN across chains
+    }
   }
 };
 

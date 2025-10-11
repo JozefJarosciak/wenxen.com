@@ -1,260 +1,184 @@
-# Ethereum vs Base Chain Configuration Comparison
+# Multi-Chain Configuration Comparison
 
-## Quick Reference: Complete Settings Extraction
-
-### All Network Settings in Tabulated Format
-
-| Setting Category | Setting Name | Ethereum Value | Base Value                                                           |
-|------------------|--------------|----------------|----------------------------------------------------------------------|
-| **Network** | Chain ID | `1` | `8453`                                                               |
-| **Network** | Name | `Ethereum` | `Base`                                                               |
-| **Network** | Short Name | `ETH` | `BASE`                                                               |
-| **Network** | Native Currency Name | `Ether` | `Ether`                                                              |
-| **Network** | Native Currency Symbol | `ETH` | `ETH`                                                                |
-| **Network** | Native Currency Decimals | `18` | `18`                                                                 |
-| **RPC** | Default RPC | `https://ethereum-rpc.publicnode.com` | `https://base-rpc.publicnode.com`                                    |
-| **RPC** | Fallback RPC 1 | `https://cloudflare-eth.com` | `https://mainnet.base.org`                                           |
-| **RPC** | Fallback RPC 2 | `https://rpc.ankr.com/eth` | `https://base.gateway.tenderly.co`                                   |
-| **RPC** | Fallback RPC 3 | `https://ethereum.publicnode.com` | `https://base.blockpi.network/v1/rpc/public`                         |
-| **RPC** | Fallback RPC 4 | `N/A` | `https://1rpc.io/base`                                               |
-| **RPC** | Fallback RPC 5 | `N/A` | `https://base.meowrpc.com`                                           |
-| **Explorer** | Name | `Etherscan` | `BaseScan`                                                           |
-| **Explorer** | Base URL | `https://etherscan.io` | `https://basescan.org`                                               |
-| **Explorer** | API URL | `https://api.etherscan.io/api` | `https://api.basescan.org/api`                                       |
-| **Explorer** | Transaction URL | `https://etherscan.io/tx/` | `https://basescan.org/tx/`                                           |
-| **Explorer** | Address URL | `https://etherscan.io/address/` | `https://basescan.org/address/`                                      |
-| **Explorer** | Block URL | `https://etherscan.io/block/` | `https://basescan.org/block/`                                        |
-| **Contracts** | XEN_CRYPTO | `0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8` | `0xffcbF84650cE02DaFE96926B37a0ac5E34932fa5`                         |
-| **Contracts** | COINTOOL | `0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628` | `0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7`                         |
-| **Contracts** | XENFT_TORRENT | `0x0a252663DBCc0b073063D6420a40319e438Cfa59` | `0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6`                         |
-| **Contracts** | XENFT_STAKE | `0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC` | `0xfC0eC2f733Cf35863178fa0DF759c6CE8C38ee7b`                         |
-| **Contracts** | REMINT_HELPER | `0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98` | `0xc82ba627ba29fc4da2d3343e2f0a2d40119c2885`                         |
-| **Events** | COINTOOL_MINT_TOPIC | `0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37` | `0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37` |
-| **Events** | REMINT_SELECTOR | `0xc2580804` | `0xc2580804`                                                         |
-| **Events** | CLAIM_MINT_REWARD_SELECTOR | `0xa2309ff8` | `0xa2309ff8`                                                         |
-| **Events** | CLAIM_AND_STAKE_SELECTOR | `0xf2f4eb26` | `0xf2f4eb26`                                                         |
-| **Constants** | SALT_BYTES_TO_QUERY | `0x01` | `0x01`                                                               |
-| **Constants** | COINTOOL_SALT_BYTES | `0x29A2241A010000000000` | `0x29A2241A010000000000`                                             |
-| **Constants** | XEN_GENESIS_TIMESTAMP | `1665250163` | `1692986123`                                                         |
-| **Constants** | XEN_GENESIS_DATE_MS | `1665187200000` (Oct 8, 2022) | `1692980033000` (Aug 25, 2023)                                       |
-| **Constants** | XEN_DEPLOYMENT_BLOCK | `15704871` | `3098388`                                                            |
-| **Constants** | BASE_AMP | `3000` | `3000`                                                               |
-| **Databases** | COINTOOL_DB | `ETH_DB_Cointool` | `BASE_DB_Cointool`                                                   |
-| **Databases** | XENFT_DB | `ETH_DB_Xenft` | `BASE_DB_Xenft`                                                      |
-| **Databases** | XEN_STAKE_DB | `ETH_DB_XenStake` | `BASE_DB_XenStake`                                                   |
-| **Databases** | XENFT_STAKE_DB | `ETH_DB_XenftStake` | `BASE_DB_XenftStake`                                                 |
-| **DB Versions** | COINTOOL | `3` | `1`                                                                  |
-| **DB Versions** | XENFT | `1` | `1`                                                                  |
-| **DB Versions** | STAKE | `1` | `1`                                                                  |
-| **API** | CoinGecko XEN ID | `xen-crypto` | `xen-crypto`                                                         |
+Complete configuration reference for Ethereum, Base, and Avalanche networks in WenXen.com.
 
 ---
 
-## Network Identifiers
+## Quick Reference Table
 
-| Property | Ethereum | Base |
-|----------|----------|------|
-| **Chain ID** | 1 | 8453 |
-| **Name** | Ethereum | Base |
-| **Short Name** | ETH | BASE |
-| **Native Currency Name** | Ether | Ether |
-| **Native Currency Symbol** | ETH | ETH |
-| **Native Currency Decimals** | 18 | 18 |
+| Category | Ethereum | Base | Avalanche |
+|----------|----------|------|-----------|
+| **Chain ID** | 1 | 8453 | 43114 |
+| **Short Name** | ETH | BASE | AVAX |
+| **Explorer** | Etherscan | BaseScan | SnowTrace |
+| **XEN Launch** | Oct 8, 2022 | Aug 25, 2023 | Oct 13, 2022 |
+| **Deployment Block** | 15,704,871 | 3,098,388 | 27,265,450 |
+
+---
+
+## Network Details
+
+### Ethereum Mainnet
+- **Chain ID**: 1
+- **Name**: Ethereum
+- **Short Name**: ETH
+- **Native Currency**: Ether (ETH), 18 decimals
+- **Explorer**: [Etherscan](https://etherscan.io)
+
+### Base Network
+- **Chain ID**: 8453
+- **Name**: Base
+- **Short Name**: BASE
+- **Native Currency**: Ether (ETH), 18 decimals
+- **Explorer**: [BaseScan](https://basescan.org)
+
+### Avalanche C-Chain
+- **Chain ID**: 43114
+- **Name**: Avalanche
+- **Short Name**: AVAX
+- **Native Currency**: Avalanche (AVAX), 18 decimals
+- **Explorer**: [SnowTrace](https://snowtrace.io)
 
 ---
 
 ## RPC Endpoints
 
-| Type | Ethereum | Base |
-|------|----------|------|
-| **Default RPC** | `https://ethereum-rpc.publicnode.com` | `https://base-rpc.publicnode.com` |
-| **Fallback RPC 1** | `https://cloudflare-eth.com` | `https://mainnet.base.org` |
-| **Fallback RPC 2** | `https://rpc.ankr.com/eth` | `https://base.gateway.tenderly.co` |
-| **Fallback RPC 3** | `https://ethereum.publicnode.com` | `https://base.blockpi.network/v1/rpc/public` |
-| **Fallback RPC 4** | - | `https://1rpc.io/base` |
-| **Fallback RPC 5** | - | `https://base.meowrpc.com` |
-| **Total RPC Count** | 4 (1 default + 3 fallback) | 6 (1 default + 5 fallback) |
+### Ethereum
+- **Default**: `https://ethereum-rpc.publicnode.com`
+- **Fallback**:
+  - `https://cloudflare-eth.com`
+  - `https://rpc.ankr.com/eth`
+  - `https://ethereum.publicnode.com`
 
----
+### Base
+- **Default**: `https://base-rpc.publicnode.com`
+- **Fallback**:
+  - `https://mainnet.base.org`
+  - `https://base.gateway.tenderly.co`
+  - `https://base.blockpi.network/v1/rpc/public`
+  - `https://1rpc.io/base`
+  - `https://base.meowrpc.com`
 
-## Block Explorer Configuration
-
-| Property | Ethereum | Base |
-|----------|----------|------|
-| **Explorer Name** | Etherscan | BaseScan |
-| **Base URL** | `https://etherscan.io` | `https://basescan.org` |
-| **API URL** | `https://api.etherscan.io/api` | `https://api.basescan.org/api` |
-| **Transaction URL** | `https://etherscan.io/tx/` | `https://basescan.org/tx/` |
-| **Address URL** | `https://etherscan.io/address/` | `https://basescan.org/address/` |
-| **Block URL** | `https://etherscan.io/block/` | `https://basescan.org/block/` |
+### Avalanche
+- **Default**: `https://api.avax.network/ext/bc/C/rpc`
+- **Fallback**:
+  - `https://avalanche-c-chain.publicnode.com`
+  - `https://rpc.ankr.com/avalanche`
+  - `https://avalanche.public-rpc.com`
+  - `https://ava-mainnet.public.blastapi.io/ext/bc/C/rpc`
+  - `https://avalanche.drpc.org`
 
 ---
 
 ## Smart Contract Addresses
 
-| Contract | Ethereum | Base |
-|----------|----------|------|
-| **XEN Crypto** | `0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8` | `0xffcbF84650cE02DaFE96926B37a0ac5E34932fa5` |
-| **Cointool** | `0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628` | `0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7` |
-| **XENFT Torrent** | `0x0a252663DBCc0b073063D6420a40319e438Cfa59` | `0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6` |
-| **XENFT Stake** | `0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC` | `0xfC0eC2f733Cf35863178fa0DF759c6CE8C38ee7b` |
-| **Remint Helper** | `0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98` | `0xc82ba627ba29fc4da2d3343e2f0a2d40119c2885` ✅ |
+| Contract | Ethereum | Base | Avalanche |
+|----------|----------|------|-----------|
+| **XEN Crypto** | `0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8` | `0xffcbF84650cE02DaFE96926B37a0ac5E34932fa5` | `0xC0C5AA69Dbe4d6DDdfBc89c0957686ec60F24389` |
+| **CoinTool** | `0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628` | `0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7` | `0x9Ec1C3DcF667f2035FB4CD2eB42A1566fd54d2B7` |
+| **XENFT Torrent** | `0x0a252663DBCc0b073063D6420a40319e438Cfa59` | `0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6` | `0x94d9E02D115646DFC407ABDE75Fa45256D66E043` |
+| **XENFT Stake** | `0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC` | `0xfC0eC2f733Cf35863178fa0DF759c6CE8C38ee7b` | `0x1Ac17FFB8456525BfF46870bba7Ed8772ba063a5` |
+| **Remint Helper** | `0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98` | `0xc82ba627ba29fc4da2d3343e2f0a2d40119c2885` ✅ | `0xd8fb02f08f940d9d87ae1ab81d78ac6ef134ca2e` ✅ |
 
-> ✅ **Verified**: Base uses a different Remint Helper address. Both contracts are 1130 bytes and functionally identical.
+> ✅ **Verified**: Each chain uses a different Remint Helper address. All contracts are 1130 bytes and functionally identical.
 
 ---
 
 ## Event Signatures & Selectors
 
-| Event/Selector | Ethereum | Base | Status |
-|----------------|----------|------|--------|
-| **Cointool Mint Topic** | `0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37` | `0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37` | ✅ Same |
-| **Remint Selector** | `0xc2580804` | `0xc2580804` | ✅ Same |
-| **Claim Mint Reward Selector** | `0xa2309ff8` | `0xa2309ff8` | ✅ Same |
-| **Claim And Stake Selector** | `0xf2f4eb26` | `0xf2f4eb26` | ✅ Same |
+**All chains use identical event signatures:**
 
-> ✅ **Note**: All event signatures are identical between chains (Base uses same contract interfaces)
+| Event/Selector | Value | Status |
+|----------------|-------|--------|
+| **CoinTool Mint Topic** | `0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37` | ✅ Universal |
+| **Remint Selector** | `0xc2580804` | ✅ Universal |
+| **Claim Mint Reward Selector** | `0xa2309ff8` | ✅ Universal |
+| **Claim And Stake Selector** | `0xf2f4eb26` | ✅ Universal |
 
 ---
 
 ## XEN Protocol Constants
 
-| Constant | Ethereum | Base | Difference |
-|----------|----------|------|------------|
-| **Salt Bytes to Query** | `0x01` | `0x01` | ✅ Same |
-| **Cointool Salt Bytes** | `0x29A2241A010000000000` | `0x29A2241A010000000000` | ✅ Same |
-| **XEN Genesis Timestamp** | `1665250163` | `1692986123` | +27,735,960 sec (~321 days) |
-| **XEN Genesis Date** | Oct 8, 2022 00:00:00 UTC | Aug 25, 2023 16:13:53 UTC | ~10.5 months later |
-| **XEN Deployment Block** | `15704871` | `3095343` | Different network, different block |
-| **Base AMP** | `3000` | `3000` | ✅ Same |
-
-### Genesis Date Details
-- **Ethereum Launch**: October 8, 2022 at 00:00:00 UTC
-- **Base Launch**: August 25, 2023 at 16:13:53 UTC
-- **Time Difference**: Approximately 321 days (10.5 months)
+| Constant | Ethereum | Base | Avalanche |
+|----------|----------|------|-----------|
+| **Genesis Timestamp** | 1665250163 | 1692986123 | 1665700430 |
+| **Genesis Date** | Oct 8, 2022 00:00 UTC | Aug 25, 2023 16:13 UTC | Oct 13, 2022 19:40 UTC |
+| **Deployment Block** | 15,704,871 | 3,098,388 | 27,265,450 |
+| **Days Since Genesis** (approx) | ~1,189 | ~441 | ~1,184 |
+| **Current AMP** (approx) | ~1,811 | ~2,559 | ~1,816 |
+| **Base AMP** | 3000 | 3000 | 3000 |
+| **Salt Bytes** | `0x01` | `0x01` | `0x01` |
+| **CoinTool Salt** | `0x29A2241A010000000000` | `0x29A2241A010000000000` | `0x29A2241A010000000000` |
 
 ---
 
 ## Database Configuration
 
-### Database Names
+### Ethereum
+- **CoinTool**: `ETH_DB_Cointool` (v3)
+- **XENFT**: `ETH_DB_Xenft` (v1)
+- **XEN Stake**: `ETH_DB_XenStake` (v1)
+- **XENFT Stake**: `ETH_DB_XenftStake` (v1)
 
-| Database Type | Ethereum | Base |
-|---------------|----------|------|
-| **Cointool DB** | `ETH_DB_Cointool` | `BASE_DB_Cointool` |
-| **XENFT DB** | `ETH_DB_Xenft` | `BASE_DB_Xenft` |
-| **XEN Stake DB** | `ETH_DB_XenStake` | `BASE_DB_XenStake` |
-| **XENFT Stake DB** | `ETH_DB_XenftStake` | `BASE_DB_XenftStake` |
+### Base
+- **CoinTool**: `BASE_DB_Cointool` (v1)
+- **XENFT**: `BASE_DB_Xenft` (v1)
+- **XEN Stake**: `BASE_DB_XenStake` (v1)
+- **XENFT Stake**: `BASE_DB_XenftStake` (v1)
 
-> 🔒 **Isolation**: Each chain maintains completely separate IndexedDB databases to prevent data contamination
+### Avalanche
+- **CoinTool**: `AVAX_DB_Cointool` (v1)
+- **XENFT**: `AVAX_DB_Xenft` (v1)
+- **XEN Stake**: `AVAX_DB_XenStake` (v1)
+- **XENFT Stake**: `AVAX_DB_XenftStake` (v1)
 
-### Database Versions
-
-| Database | Ethereum | Base | Notes |
-|----------|----------|------|-------|
-| **Cointool** | Version 3 | Version 1 | Ethereum more mature |
-| **XENFT** | Version 1 | Version 1 | ✅ Same |
-| **Stake** | Version 1 | Version 1 | ✅ Same |
-
----
-
-## External API Integration
-
-| Service | Ethereum | Base | Status |
-|---------|----------|------|--------|
-| **CoinGecko XEN ID** | `xen-crypto` | `xen-crypto` | ✅ Same ID used |
-
-> 📊 **Price Data**: Both chains use the same CoinGecko API ID for XEN price tracking
+> 🔒 **Complete Isolation**: Each chain maintains separate IndexedDB databases to prevent data contamination.
 
 ---
 
-## Current Protocol Status (as of today)
+## API Integration
 
-### Days Since Genesis
+**All chains use the same CoinGecko API:**
+- **XEN ID**: `xen-crypto`
 
-| Chain | Genesis Date | Days Since Genesis (approx) |
-|-------|--------------|------------------------------|
-| **Ethereum** | Oct 8, 2022 | ~854 days |
-| **Base** | Aug 25, 2023 | ~412 days |
-
-### Current AMP Values
-
-| Chain | Formula | Current AMP (approx) |
-|-------|---------|---------------------|
-| **Ethereum** | `3000 - 854` | ~2,146 |
-| **Base** | `3000 - 412` | ~2,588 |
-
-> ⚡ **Note**: Base has higher current AMP due to later launch date
+**Explorer APIs:**
+- **Ethereum**: `https://api.etherscan.io/api`
+- **Base**: Uses Etherscan V2 API with `chainid=8453`
+- **Avalanche**: Uses Etherscan V2 API with `chainid=43114`
 
 ---
 
-## Storage Keys & Namespacing
+## Key Similarities & Differences
 
-All localStorage and IndexedDB keys are prefixed with the chain identifier to prevent cross-chain contamination:
+### ✅ **Identical Across All Chains**
+- Event signatures and function selectors
+- Protocol constants (Salt, Base AMP, CoinTool Salt)
+- Database structure (different names, same schema)
+- CoinGecko integration
 
-| Base Key | Ethereum Key | Base Key |
-|----------|--------------|----------|
-| `customRPC` | `ETHEREUM_customRPC` | `BASE_customRPC` |
-| `customRPC_source` | `ETHEREUM_customRPC_source` | `BASE_customRPC_source` |
-| `customRPC_lastKnown` | `ETHEREUM_customRPC_lastKnown` | `BASE_customRPC_lastKnown` |
-| `scanState` | Stored in `ETH_DB_Cointool` | Stored in `BASE_DB_Cointool` |
+### ⚠️ **Chain-Specific**
+- All smart contract addresses (except CoinTool on Base/Avalanche)
+- Remint Helper addresses (different on each chain)
+- XEN genesis dates and deployment blocks
+- RPC endpoints and block explorers
+- Current AMP values (time-dependent)
 
----
-
-## Key Architectural Differences
-
-### 1. **RPC Resilience**
-- **Ethereum**: 4 RPC endpoints (less redundancy)
-- **Base**: 6 RPC endpoints (more redundancy, newer network needs it)
-
-### 2. **Database Versioning**
-- **Ethereum Cointool**: Version 3 (multiple migrations, mature)
-- **Base Cointool**: Version 1 (newer deployment, no migrations yet)
-
-### 3. **Network Maturity**
-- **Ethereum**: ~854 days of XEN history
-- **Base**: ~412 days of XEN history (launched later)
-
-### 4. **Block Numbers**
-- Networks have completely independent block progression
-- Ethereum started XEN at block 15,704,871
-- Base started XEN at block 3,095,343
+### 🎯 **Implementation Notes**
+- **CoinTool**: Same address on Base and Avalanche (`0x9Ec1...`)
+- **Remint Helpers**: All 1130 bytes, functionally identical, different addresses
+- **Database Versions**: Ethereum CoinTool at v3 (mature), others at v1 (newer)
 
 ---
 
-## Cross-Chain Protection Mechanisms
+## Timeline Comparison
 
-The codebase implements several protections against cross-chain contamination:
-
-1. **Database Isolation**: Separate IndexedDB databases per chain
-2. **RPC Source Tracking**: `customRPC_source` metadata tracks which chain RPC settings belong to
-3. **Last Known Values**: `customRPC_lastKnown` provides recovery from accidental overwrites
-4. **Contamination Detection**: Heuristic checks to detect when one chain's settings overwrite another
-5. **Chain-Specific Keys**: All localStorage keys prefixed with chain identifier
+| Event | Ethereum | Avalanche | Base |
+|-------|----------|-----------|------|
+| **XEN Launch** | Oct 8, 2022 | Oct 13, 2022 (+5 days) | Aug 25, 2023 (+321 days) |
+| **Maturity** | ~1,189 days | ~1,184 days | ~441 days |
+| **Status** | Most mature | Similar to ETH | Newest deployment |
 
 ---
 
-## Summary
-
-| Aspect | Similarity Level | Notes |
-|--------|-----------------|-------|
-| **Contract Interfaces** | 🟢 100% Same | Event signatures, selectors identical |
-| **Network Infrastructure** | 🔴 Completely Different | Different chain IDs, RPCs, explorers |
-| **Smart Contracts** | 🔴 All Different | Separate deployments on each chain |
-| **XEN Launch Timing** | 🔴 Different | ~321 days apart |
-| **Database Architecture** | 🟡 Same Structure | Different names/versions for isolation |
-| **Price Tracking** | 🟢 Same API | Both use CoinGecko `xen-crypto` |
-| **Constants (Salt/AMP)** | 🟢 Same Values | Protocol constants identical |
-
----
-
-**Legend**:
-- 🟢 = Identical or very similar
-- 🟡 = Same structure, different values
-- 🔴 = Completely different
-- ✅ = Confirmed same
-- ⚠️ = Needs verification
-
----
-
-*Generated from `js/config/chainConfig.js` - Last updated: 2025-10-10*
+*Last Updated: 2025-01-10*
+*Generated from `js/config/chainConfig.js`*

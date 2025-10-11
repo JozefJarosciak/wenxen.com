@@ -160,7 +160,8 @@ class NetworkSelectorUI {
   getChainIcon(chain) {
     const icons = {
       'ETHEREUM': '⟠',
-      'BASE': '🔵'
+      'BASE': '🔵',
+      'AVALANCHE': '🔺'
     };
     return icons[chain] || '🔗';
   }
@@ -177,26 +178,21 @@ class NetworkSelectorUI {
     this.showSwitchingOverlay(newChain);
     
     try {
-      // Save current state
+      // Save current state BEFORE any changes
       await this.saveCurrentChainState();
-      
-      // Clear current chain data from UI
-      await this.clearCurrentChainUI();
-      
+
       // Switch chain in our app
       chainManager.setChain(newChain);
-      
-      // Try to switch wallet network automatically
-      await this.switchWalletNetwork(newChain);
-      
-      // Load new chain data
-      await this.loadNewChainData();
-      
-      // Reload the page to ensure clean state
+
+      // Try to switch wallet network automatically (fire and forget - don't wait)
+      this.switchWalletNetwork(newChain).catch(e => console.warn('Wallet switch failed:', e));
+
+      // Reload immediately - don't clear UI or load new data as that triggers unwanted saves
+      // The reload will load the correct chain data from storage
       setTimeout(() => {
         window.location.reload();
-      }, 500);
-      
+      }, 100);
+
     } catch (error) {
       console.error('Error switching network:', error);
       this.hideSwitchingOverlay();
@@ -269,12 +265,13 @@ class NetworkSelectorUI {
   async saveCurrentChainState() {
     // Save any unsaved data for the current chain
     const currentChain = chainManager.getCurrentChain();
-    
+
     // Save current RPC settings
     const rpcInput = document.getElementById('customRPC');
     if (rpcInput && rpcInput.value) {
       const rpcList = rpcInput.value.trim().split('\n').filter(Boolean);
-      chainManager.saveRPCEndpoints(rpcList);
+      // CRITICAL: Force save to current chain BEFORE switch happens
+      chainManager.saveRPCEndpoints(rpcList, currentChain);
     }
     
     // Save current addresses being tracked
@@ -377,7 +374,7 @@ class NetworkSelectorUI {
     const config = chainManager.getCurrentConfig();
     
     // Update any existing explorer links
-    const links = document.querySelectorAll('a[href*="etherscan.io"], a[href*="basescan.org"]');
+    const links = document.querySelectorAll('a[href*="etherscan.io"], a[href*="basescan.org"], a[href*="snowtrace.io"]');
     links.forEach(link => {
       const href = link.getAttribute('href');
       if (href) {
@@ -450,7 +447,7 @@ class NetworkSelectorUI {
         console.log('Wallet switched to unsupported chain ID:', chainId);
         // Optionally show a message that this chain is not supported
         if (window.toastManager) {
-          window.toastManager.showToast(`Chain ID ${chainId} is not supported. Please switch to Ethereum or Base.`, 'warning');
+          window.toastManager.showToast(`Chain ID ${chainId} is not supported. Please switch to Ethereum, Base, or Avalanche.`, 'warning');
         }
       }
     };
