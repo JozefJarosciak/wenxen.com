@@ -6630,8 +6630,8 @@ function applySettingsSnapshot(settings) {
   if (settings.localStorage && typeof settings.localStorage === 'object') {
     console.log('[Settings] Restoring complete localStorage data...');
 
-    // Restore localStorage data, but preserve ALL existing chain-specific RPC data
-    const allChains = ['ETHEREUM', 'BASE'];
+    // Restore localStorage data, but preserve ALL existing chain-specific RPC data (ALL 7 CHAINS)
+    const allChains = ['ETHEREUM', 'BASE', 'AVALANCHE', 'BSC', 'MOONBEAM', 'POLYGON', 'OPTIMISM'];
     const preservedRPCs = {};
 
     // Preserve ALL chain-specific RPC data before restore
@@ -6894,21 +6894,32 @@ function formatBackupFileName(now = new Date()){
 }
 async function exportBackup() {
   console.log(`Exporting backup for ALL chains`);
-  
+
   const allDatabases = [];
-  
-  // Define all database names for all chains
-  const chains = ['ETHEREUM', 'BASE'];
+
+  // Define all database names for all chains (ALL 7 CHAINS)
+  const chains = ['ETHEREUM', 'BASE', 'AVALANCHE', 'BSC', 'MOONBEAM', 'POLYGON', 'OPTIMISM'];
   const dbTypes = [
     { suffix: 'DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
     { suffix: 'DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
     { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] },
     { suffix: 'DB_XenStake', version: 1, stores: ['stakes', 'scanState'] }
   ];
-  
+
   // Export data from all chains
   for (const chain of chains) {
-    const chainPrefix = chain === 'BASE' ? 'BASE_' : (chain === 'AVALANCHE' ? 'AVAX_' : 'ETH_');
+    // Get proper chain prefix for each chain
+    let chainPrefix;
+    switch (chain) {
+      case 'ETHEREUM': chainPrefix = 'ETH_'; break;
+      case 'BASE': chainPrefix = 'BASE_'; break;
+      case 'AVALANCHE': chainPrefix = 'AVAX_'; break;
+      case 'BSC': chainPrefix = 'BSC_'; break;
+      case 'MOONBEAM': chainPrefix = 'GLMR_'; break;
+      case 'POLYGON': chainPrefix = 'POL_'; break;
+      case 'OPTIMISM': chainPrefix = 'OPT_'; break;
+      default: chainPrefix = 'ETH_';
+    }
     
     for (const dbType of dbTypes) {
       const dbName = chainPrefix + dbType.suffix;
@@ -7219,14 +7230,24 @@ async function importBackupFromFile(file) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       console.log('[Import] Waiting for connections to close...');
 
-      // Delete all chain-specific databases for complete restore
+      // Delete all chain-specific databases for complete restore (ALL 7 CHAINS)
       window.importProgress.updateProgress(30, 'Clearing existing databases...');
       const allDatabases = [
-        'ETH_DB_Cointool', 'BASE_DB_Cointool',
-        'ETH_DB_Xenft', 'BASE_DB_Xenft',
-        'ETH_DB_XenftStake', 'BASE_DB_XenftStake',
-        'ETH_DB_XenStake', 'BASE_DB_XenStake',
-        // Also legacy names that might exist
+        // Ethereum
+        'ETH_DB_Cointool', 'ETH_DB_Xenft', 'ETH_DB_XenftStake', 'ETH_DB_XenStake',
+        // Base
+        'BASE_DB_Cointool', 'BASE_DB_Xenft', 'BASE_DB_XenftStake', 'BASE_DB_XenStake',
+        // Avalanche
+        'AVAX_DB_Cointool', 'AVAX_DB_Xenft', 'AVAX_DB_XenftStake', 'AVAX_DB_XenStake',
+        // BSC (BNB Smart Chain)
+        'BSC_DB_Cointool', 'BSC_DB_Xenft', 'BSC_DB_XenftStake', 'BSC_DB_XenStake',
+        // Moonbeam
+        'GLMR_DB_Cointool', 'GLMR_DB_Xenft', 'GLMR_DB_XenftStake', 'GLMR_DB_XenStake',
+        // Polygon
+        'POL_DB_Cointool', 'POL_DB_Xenft', 'POL_DB_XenftStake', 'POL_DB_XenStake',
+        // Optimism
+        'OPT_DB_Cointool', 'OPT_DB_Xenft', 'OPT_DB_XenftStake', 'OPT_DB_XenStake',
+        // Legacy names that might exist
         'DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'
       ];
 
