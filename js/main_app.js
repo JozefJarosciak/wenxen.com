@@ -1273,7 +1273,9 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     // But allow updates immediately if filters are active (user interaction)
     const timeSinceLoad = Date.now() - window.pageLoadTime;
     const isInitialLoadPeriod = timeSinceLoad < 45000;
-    const hasSubstantialData = activeData.length > 2000; // Assuming you have 2500+ mints
+    // Lowered threshold from 2000 to 10 to support chains with less data
+    // This ensures XEN total displays immediately on all chains, not just Ethereum
+    const hasSubstantialData = activeData.length > 10;
 
     // Check if any filters are currently active (check both programmatic and header filters)
     let hasActiveFilters = false;
