@@ -28,6 +28,13 @@ Everything runs **100% in your browser**, with no centralized servers, meaning y
 
 ---
 
+## Screenshot
+
+<img width="2000" height="1229" alt="image" src="https://github.com/user-attachments/assets/5d5b90eb-7e55-4e65-9454-39ee4c68182e" />
+
+
+---
+
 ## Architecture & Principles
 
 - **Client-Side Operation**  
