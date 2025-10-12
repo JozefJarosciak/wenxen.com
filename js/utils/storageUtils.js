@@ -152,23 +152,25 @@ export const privacyStorage = {
 
   isSetupComplete() {
     try {
-      // Get current chain for chain-specific onboarding check
-      const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-      
-      // First check if onboarding was explicitly dismissed for this chain
-      if (localStorage.getItem(chainPrefix + 'onboardingDismissed') === '1') {
+      // First check if onboarding was explicitly dismissed (GLOBAL, not chain-specific)
+      if (localStorage.getItem('onboardingDismissed') === '1') {
         return true;
       }
-      
+
       // Otherwise check if user has entered required data
-      // Check chain-specific address
-      const ethAddress = localStorage.getItem(chainPrefix + 'ethAddress');
-      
+      // Check if ANY addresses exist (check both chain-specific and legacy keys)
+      const legacyAddress = localStorage.getItem('ethAddress');
+      const ethAddress = localStorage.getItem('ETHEREUM_ethAddress');
+      const baseAddress = localStorage.getItem('BASE_ethAddress');
+
       // API key is global (not chain-specific)
       const etherscanApiKey = localStorage.getItem('etherscanApiKey');
-      
-      return !!(ethAddress && ethAddress.trim() && etherscanApiKey && etherscanApiKey.trim());
+
+      const hasAddress = (legacyAddress && legacyAddress.trim()) ||
+                         (ethAddress && ethAddress.trim()) ||
+                         (baseAddress && baseAddress.trim());
+
+      return !!(hasAddress && etherscanApiKey && etherscanApiKey.trim());
     } catch {
       return false;
     }
@@ -176,10 +178,8 @@ export const privacyStorage = {
 
   setOnboardingDismissed(dismissed) {
     try {
-      // Make onboardingDismissed chain-specific
-      const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-      localStorage.setItem(chainPrefix + 'onboardingDismissed', dismissed ? '1' : '0');
+      // Make onboardingDismissed GLOBAL (not chain-specific) to avoid timing issues
+      localStorage.setItem('onboardingDismissed', dismissed ? '1' : '0');
       return true;
     } catch {
       return false;
