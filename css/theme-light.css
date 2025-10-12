@@ -50,6 +50,8 @@ body.light-mode {
   --input-bg: #fff;
   --btn-hover-bg: #dbeafe;
   --btn-hover-border: #93c5fd;
+  --text-color: #111827; /* slate-900 - for about page */
+  --accent-color: #3b82f6; /* blue-600 */
 }
 body.light-mode #themeSelect option {
   background: #ffffff;
