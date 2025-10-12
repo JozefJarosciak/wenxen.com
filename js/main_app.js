@@ -822,7 +822,7 @@ async function fetchXenGlobalRank(){
           console.log(`[Rank] Successfully fetched ${currentChain} rank: ${num.toLocaleString()} from ${rpc}`);
           // re-render table estimates
           try { window.cointoolTable?.redraw?.(true); } catch {}
-          try { updateXENTotalBadge(); } catch {}
+          // DO NOT auto-update XEN badge - only manual filter clicks and auto-apply "All" should trigger updates
           return;
         }
       }
@@ -4060,9 +4060,10 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
   };
   cointoolTable.on("dataProcessed", applyAllFilterOnce);
 
-  // Badge updates ONLY when user explicitly filters/sorts (not on automatic data events)
-  cointoolTable.on("dataFiltered",   updateXENTotalBadge);
-  cointoolTable.on("dataSorted",     updateXENTotalBadge);
+  // NO automatic badge updates on table events
+  // Badge updates ONLY from:
+  // 1. Auto-apply "All" filter above (once on page load)
+  // 2. Manual filter button clicks (handled in filter button event listeners)
 
   // VMU Chart wiring
   cointoolTable.on("tableBuilt",     initVmuChartSection);
