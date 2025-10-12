@@ -256,26 +256,33 @@ export const modalManager = {
     document.addEventListener('click', (event) => {
       try {
         if (privacyStorage.isPrivacyAccepted()) return;
-        
+
         const target = event.target;
-        
-        // Allow interactions inside modals
+
+        // CRITICAL: Allow ALL clicks on modal buttons and close buttons
+        // Check if target is inside a modal or IS a modal button
         const privacyModal = document.getElementById('privacyModal');
-        if (privacyModal && privacyModal.contains(target)) return;
-        
         const onboardingModal = document.getElementById('onboardingModal');
-        if (onboardingModal && onboardingModal.contains(target)) return;
-        
+
+        // Allow any click inside modals (including all buttons)
+        if (privacyModal && !privacyModal.classList.contains('hidden')) {
+          if (privacyModal.contains(target)) return;
+        }
+
+        if (onboardingModal && !onboardingModal.classList.contains('hidden')) {
+          if (onboardingModal.contains(target)) return;
+        }
+
         // Allow privacy link clicks
         if (target && (target.id === 'privacyLink' || target.closest('#privacyLink'))) return;
-        
-        // Block interactive elements
+
+        // Block interactive elements outside modals
         const interactiveSelector = 'button, input[type="button"], input[type="submit"], .btn, .btn-secondary, .btn-mint, .button-like, .chip, .claim-button, .tab-button, .split-caret, .collapsible-toggle, .toggle, [role="button"]';
         const formSelector = 'input, textarea, select';
-        
+
         const isInteractive = !!(target.closest && target.closest(interactiveSelector));
         const isForm = !!(target.closest && target.closest(formSelector));
-        
+
         if (isInteractive || isForm) {
           event.preventDefault();
           event.stopImmediatePropagation();
