@@ -280,6 +280,8 @@ body.dark-mode {
   --input-bg: #111827;  /* slate-900 */
   --btn-hover-bg: #374151; /* slate-700 */
   --btn-hover-border: #4b5563; /* slate-600 */
+  --text-color: #e5e7eb; /* slate-200 - for about page */
+  --accent-color: #60a5fa; /* blue-400 */
 }
 /* Improve readability for Settings labels and headings in dark mode */
 body.dark-mode .field label,
