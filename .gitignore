@@ -67,6 +67,9 @@ tmp/
 .claude/
 CLAUDE.md
 
+# AWS documentation (deployment-specific)
+README-AWS.md
+
 # ============================================
 # DEVELOPMENT & INTERNAL FILES (PRIVATE)
 # ============================================
