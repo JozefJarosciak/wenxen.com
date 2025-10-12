@@ -117,6 +117,11 @@ body.dark-mode .about-iframe {
   line-height: 1.7;
 }
 
+/* About page title */
+#tab-about h2 {
+  color: var(--text-color) !important;
+}
+
 .about-subtitle {
   font-size: 1.1em;
   padding: 20px;
@@ -136,13 +141,13 @@ body.dark-mode .about-iframe {
   margin-top: 40px;
   margin-bottom: 20px;
   font-size: 1.6em;
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-inline-content h4 {
   margin: 0 0 10px 0;
   font-size: 1.1em;
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-inline-content p {
@@ -169,11 +174,11 @@ body.dark-mode .about-iframe {
 }
 
 .about-feature-card h4 {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-feature-card p {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-feature-card:hover {
@@ -191,31 +196,31 @@ body.dark-mode .about-iframe {
 }
 
 .about-quick-start h3 {
-  color: var(--text-color);
+  color: var(--text-color) !important;
   margin-top: 0;
 }
 
 .about-quick-start ol {
   margin: 20px 0;
   padding-left: 24px;
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-quick-start li {
   margin: 16px 0;
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-quick-start li strong {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-quick-start p {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-quick-start p strong {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-highlight {
@@ -224,16 +229,16 @@ body.dark-mode .about-iframe {
   padding: 24px;
   margin: 30px 0;
   border-radius: 6px;
-  color: var(--text-color);
+  color: var(--text-color) !important;
   border: 1px solid var(--border);
 }
 
 .about-highlight p {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-highlight strong {
-  color: var(--text-color);
+  color: var(--text-color) !important;
 }
 
 .about-cta {
