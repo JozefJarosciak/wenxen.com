@@ -892,10 +892,14 @@ function setMaturityHeaderFilterFromDate(dt) {
       onMonthChange: function(selectedDates, dateStr, fp){
         try { setMaturityHeaderFilterFromYearMonth(fp.currentYear, fp.currentMonth); } catch(_) {}
         __fixFlatpickrHeader(fp);
+        // Update XEN total badge to reflect filtered data
+        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
       },
       onYearChange: function(selectedDates, dateStr, fp){
         try { setMaturityHeaderFilterFromYearMonth(fp.currentYear, fp.currentMonth); } catch(_) {}
         __fixFlatpickrHeader(fp);
+        // Update XEN total badge to reflect filtered data
+        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
       },
 
       // Selecting a specific date (even if no badge) sets the header filter (full date)
@@ -914,6 +918,8 @@ function setMaturityHeaderFilterFromDate(dt) {
             }
           } catch(_) {}
         }
+        // Update XEN total badge to reflect filtered data
+        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
       },
       onReady: function(selectedDates, dateStr, fp){ __fixFlatpickrHeader(fp); }
     });
