@@ -1776,24 +1776,37 @@ async function fetchXenUsdPrice(){
     // Get the appropriate token address based on current chain
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
     let tokenAddress;
-    
-    if (currentChain === 'BASE') {
-      // Use CBXEN liquidity pool address on Base
-      tokenAddress = '0xe28f5637d009732259fcbb5cea23488a411a5ead';
+
+    // Get the XEN contract address for the current chain
+    if (window.chainManager) {
+      const config = window.chainManager.getCurrentConfig();
+      if (config && config.contracts && config.contracts.XEN_CRYPTO) {
+        tokenAddress = config.contracts.XEN_CRYPTO;
+        console.log(`[XEN Price] Fetching price for ${currentChain} using token address: ${tokenAddress}`);
+      } else {
+        // Fallback to Ethereum XEN if config not available
+        tokenAddress = XEN_ETH;
+        console.warn(`[XEN Price] No config for ${currentChain}, falling back to Ethereum XEN: ${tokenAddress}`);
+      }
     } else {
-      // Use XEN token address on Ethereum
+      // Fallback to Ethereum XEN if chainManager not available
       tokenAddress = XEN_ETH;
+      console.warn(`[XEN Price] ChainManager not available, falling back to Ethereum XEN: ${tokenAddress}`);
     }
-    
+
     const primary = await fetchFromDexscreener(tokenAddress);
     xenUsdPrice  = primary.price;
     xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: primary.source };
+    console.log(`[XEN Price] Successfully fetched ${currentChain} price: $${xenUsdPrice} from ${primary.source}`);
   } catch (e1) {
+    console.warn(`[XEN Price] Dexscreener failed: ${e1.message}, falling back to CoinGecko`);
     try {
       const fb = await fetchFromCoinGecko();
       xenUsdPrice  = fb.price;
       xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: fb.source };
+      console.log(`[XEN Price] Successfully fetched price from CoinGecko: $${xenUsdPrice}`);
     } catch (e2) {
+      console.error(`[XEN Price] Both Dexscreener and CoinGecko failed. Dexscreener: ${e1.message}, CoinGecko: ${e2.message}`);
       xenUsdPrice  = null;
       xenPriceLast = { ok: false, price: null, ts: Date.now(), source: 'Dexscreener/CoinGecko' };
     }
