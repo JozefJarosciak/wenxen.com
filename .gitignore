@@ -1,26 +1,8 @@
-# Terraform files
-deployment/.terraform/
-deployment/*.tfstate
-deployment/*.tfstate.*
-deployment/tfplan
-deployment/*.tfplan
-deployment/*.tfvars
-deployment/*.tfvars.json
-deployment/override.tf
-deployment/override.tf.json
-deployment/*_override.tf
-deployment/*_override.tf.json
-deployment/.terraformrc
-deployment/terraform.rc
-
-# Terraform providers (large files)
-**/.terraform/
-**/.terraform.lock.hcl
-
-# Cost reports and generated files in deployment folder
-deployment/*.html
-deployment/*.json
-deployment/lambda_function.zip
+# ============================================
+# DEPLOYMENT DIRECTORY (ENTIRE FOLDER - PRIVATE)
+# ============================================
+# AWS deployment files should NOT be in public repo
+deployment/
 
 # OLD_BACKUP folder
 OLD_BACKUP/
@@ -83,3 +65,30 @@ tmp/
 
 # Claude AI files
 .claude/
+
+# ============================================
+# DEVELOPMENT & INTERNAL FILES (PRIVATE)
+# ============================================
+# Internal documentation and planning files
+AGENTS.md
+CHAIN_COMPARISON.md
+PRIORITY_FIX_ORDER.md
+current_issues.md
+improvements.md
+new_chain_blueprint.md
+
+# Development and debugging HTML files
+check-cointool-abi.html
+cleanup_rpcs.html
+d2-alternative.html
+database-diagnostic.html
+debug_storage.html
+find-base-remint-helper.html
+summary-options-demo.html
+verify-remint-helper.html
+
+# Development batch files
+python-server.bat
+
+# Internal diagrams folder
+diagrams/
