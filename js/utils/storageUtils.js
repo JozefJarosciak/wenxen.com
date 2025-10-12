@@ -135,7 +135,9 @@ export const themeStorage = {
 export const privacyStorage = {
   isPrivacyAccepted() {
     try {
-      return localStorage.getItem('privacyAccepted') === '1';
+      const value = localStorage.getItem('privacyAccepted');
+      // Accept both '1' (new format) and 'true' (old format for backward compatibility)
+      return value === '1' || value === 'true';
     } catch {
       return false;
     }
