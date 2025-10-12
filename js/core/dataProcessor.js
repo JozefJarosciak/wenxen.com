@@ -208,7 +208,8 @@ async function fetchXenPrice() {
       xenPriceLast = { ok: false, price: null, ts: Date.now(), source: 'Dexscreener/CoinGecko' };
     }
   }
-  updateXENTotalBadge();
+  // DO NOT auto-update XEN badge - only manual filter clicks and auto-apply "All" should trigger updates
+  // This legacy function is not actively used, but keeping consistent with fetchXenUsdPrice()
   updateXenPriceStatus();
   try { updateVmuChart(); } catch {}
 }
