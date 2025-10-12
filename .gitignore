@@ -13,6 +13,11 @@ deployment/*_override.tf.json
 deployment/.terraformrc
 deployment/terraform.rc
 
+# Cost reports and generated files in deployment folder
+deployment/*.html
+deployment/*.json
+deployment/lambda_function.zip
+
 # Python cache
 __pycache__/
 *.py[cod]
