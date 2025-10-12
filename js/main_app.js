@@ -4031,38 +4031,36 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
   });
 
   cointoolTable.on("tableBuilt", () => {
-    updateXENTotalBadge();
     // Signal that filter buttons are now ready to work
     window.tableReady = true;
     console.log('[Filter] Table built - filter buttons now ready');
   });
 
-  // Auto-apply "All" filter once after initial data load to ensure correct totals
+  // Auto-apply "All" filter ONCE after initial data load to ensure correct totals
+  // This is the ONLY automatic update - simulates single "All" button click
   let initialDataLoaded = false;
   const applyAllFilterOnce = () => {
     if (!initialDataLoaded && window.tableReady && cointoolTable.getDataCount() > 0) {
       initialDataLoaded = true;
-      console.log('[Filter] Auto-applying "All" filter on initial data load');
+      console.log('[Filter] Auto-applying "All" filter on initial data load (ONE TIME ONLY)');
       setTimeout(() => {
         try {
           cointoolTable.clearHeaderFilter();
           cointoolTable.setHeaderFilterValue('Status', '');
           cointoolTable.setSort('Maturity_Date_Fmt', 'asc');
+          // This is the ONE AND ONLY automatic badge update on page load
           updateXENTotalBadge();
         } catch (e) {
           console.warn('[Filter] Failed to auto-apply "All" filter:', e);
         }
-      }, 300); // Small delay to ensure all data is processed
+      }, 500); // Delay to ensure all data is fully loaded
     }
   };
   cointoolTable.on("dataProcessed", applyAllFilterOnce);
 
-  cointoolTable.on("dataLoaded",     updateXENTotalBadge);
-  cointoolTable.on("dataProcessed",  updateXENTotalBadge);
+  // Badge updates ONLY when user explicitly filters/sorts (not on automatic data events)
   cointoolTable.on("dataFiltered",   updateXENTotalBadge);
   cointoolTable.on("dataSorted",     updateXENTotalBadge);
-  cointoolTable.on("renderComplete", updateXENTotalBadge);
-  cointoolTable.on("pageLoaded",     updateXENTotalBadge);
 
   // VMU Chart wiring
   cointoolTable.on("tableBuilt",     initVmuChartSection);
