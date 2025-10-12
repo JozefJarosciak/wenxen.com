@@ -1811,7 +1811,11 @@ async function fetchXenUsdPrice(){
       xenPriceLast = { ok: false, price: null, ts: Date.now(), source: 'Dexscreener/CoinGecko' };
     }
   }
-  updateXENTotalBadge(false); // Don't include wallet balances on price update
+  // Refresh the breakdown view to update USD values with new price
+  // Don't call updateXENTotalBadge as it would recalculate without wallet balances
+  if (window._xenTooltipRefresh) {
+    window._xenTooltipRefresh();
+  }
   updateXenPriceStatus();
   try { updateVmuChart(); } catch {}
 }
