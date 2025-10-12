@@ -164,6 +164,14 @@ body.dark-mode .about-iframe {
   transition: all 0.2s ease;
 }
 
+.about-feature-card h4 {
+  color: var(--text-color);
+}
+
+.about-feature-card p {
+  color: var(--text-color);
+}
+
 .about-feature-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -178,13 +186,32 @@ body.dark-mode .about-iframe {
   border: 1px solid var(--border);
 }
 
+.about-quick-start h3 {
+  color: var(--text-color);
+  margin-top: 0;
+}
+
 .about-quick-start ol {
   margin: 20px 0;
   padding-left: 24px;
+  color: var(--text-color);
 }
 
 .about-quick-start li {
   margin: 16px 0;
+  color: var(--text-color);
+}
+
+.about-quick-start li strong {
+  color: var(--text-color);
+}
+
+.about-quick-start p {
+  color: var(--text-color);
+}
+
+.about-quick-start p strong {
+  color: var(--text-color);
 }
 
 .about-highlight {
@@ -212,6 +239,20 @@ body.dark-mode .about-iframe {
 
 .about-cta .btn {
   margin: 0 10px;
+}
+
+/* Additional About section text elements */
+.about-inline-content a {
+  color: var(--accent-color);
+}
+
+.about-inline-content a:hover {
+  opacity: 0.8;
+}
+
+.about-inline-content small {
+  color: var(--text-color);
+  opacity: 0.8;
 }
 
 /* Dark theme adjustments */
