@@ -40,9 +40,9 @@
   <link id="flatpickrDarkCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" disabled>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="./css/base.css?v=20251011205210">
-  <link rel="stylesheet" href="./css/theme-light.css?v=20251011205210">
-  <link rel="stylesheet" href="./css/theme-dark.css?v=20251011205210">
+  <link rel="stylesheet" href="./css/base.css?v=20251011215547">
+  <link rel="stylesheet" href="./css/theme-light.css?v=20251011215547">
+  <link rel="stylesheet" href="./css/theme-dark.css?v=20251011215547">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/npm/simple-icons@7/icons/ethereum.svg">
 
@@ -641,20 +641,17 @@
 
   <!-- About tab -->
   <section id="tab-about" class="tab-panel" role="tabpanel" aria-labelledby="About">
-    <h2>About WenXen</h2>
-
     <div class="about-inline-content">
-      <p class="about-subtitle">
-        <strong>Your Complete XEN Ecosystem Dashboard</strong><br>
-        Track, manage, and analyze your XEN Crypto holdings across 7 blockchain networks - all from your browser, with zero server dependencies.
-      </p>
-
-      <h3>What is WenXen?</h3>
+      <h3>What is WenXen.com?</h3>
       <p>
         WenXen is a <strong>privacy-first, client-side web application</strong> that helps you manage your XEN Crypto ecosystem assets.
         Available at <strong>wenxen.com</strong> or as a download, everything runs directly in your browser - no servers, no tracking,
         no data collection. Whether you use our hosted version or run it locally, your data never leaves your device.
       </p>
+
+        <p class="about-subtitle">
+                    Track, manage & analyze your XEN Crypto holdings across 7 blockchains, from browser with zero dependencies.
+        </p>
 
       <div class="about-features">
         <div class="about-feature-card">
@@ -782,7 +779,7 @@
 <!-- Onboarding Modal -->
 <div id="onboardingModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="onboardingTitle">
   <div class="modal-content onboarding-content">
-    <button id="onboardingCloseBtn" class="modal-close-btn" aria-label="Close" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 5px; line-height: 1;">×</button>
+    <button id="onboardingCloseBtn" class="modal-close-btn" aria-label="Close">×</button>
     <h3 id="onboardingTitle" style="margin:0 0 8px 0;">Welcome to WenXen.com!</h3>
     <div class="modal-body">
       <p>Tired of logging every XEN mint by hand? 🥱</p>
@@ -824,35 +821,35 @@
 </div>
 
 <!-- Global Configuration (load first) -->
-<script type="module" src="./js/config/configuration.js?v=20251011205210"></script>
+<script type="module" src="./js/config/configuration.js?v=20251011215547"></script>
 
 <!-- New Utility Modules (load first for compatibility) -->
-<script type="module" src="./js/utils/dateUtils.js?v=20251011205210"></script>
-<script type="module" src="./js/utils/stringUtils.js?v=20251011205210"></script>
-<script type="module" src="./js/utils/mathUtils.js?v=20251011205210"></script>
-<script type="module" src="./js/utils/domUtils.js?v=20251011205210"></script>
-<script type="module" src="./js/utils/storageUtils.js?v=20251011205210"></script>
+<script type="module" src="./js/utils/dateUtils.js?v=20251011215547"></script>
+<script type="module" src="./js/utils/stringUtils.js?v=20251011215547"></script>
+<script type="module" src="./js/utils/mathUtils.js?v=20251011215547"></script>
+<script type="module" src="./js/utils/domUtils.js?v=20251011215547"></script>
+<script type="module" src="./js/utils/storageUtils.js?v=20251011215547"></script>
 
 <!-- New UI Modules -->
-<script type="module" src="./js/ui/themeManager.js?v=20251011205210"></script>
-<script type="module" src="./js/ui/modalManager.js?v=20251011205210"></script>
-<script type="module" src="./js/ui/tabManager.js?v=20251011205210"></script>
-<script type="module" src="./js/ui/tooltipManager.js?v=20251011205210"></script>
-<script type="module" src="./js/ui/toastManager.js?v=20251011205210"></script>
-<script type="module" src="./js/ui/deployVersionManager.js?v=20251011205210"></script>
+<script type="module" src="./js/ui/themeManager.js?v=20251011215547"></script>
+<script type="module" src="./js/ui/modalManager.js?v=20251011215547"></script>
+<script type="module" src="./js/ui/tabManager.js?v=20251011215547"></script>
+<script type="module" src="./js/ui/tooltipManager.js?v=20251011215547"></script>
+<script type="module" src="./js/ui/toastManager.js?v=20251011215547"></script>
+<script type="module" src="./js/ui/deployVersionManager.js?v=20251011215547"></script>
 
 <!-- Routing Modules -->
-<script type="module" src="./js/routing/routeConfig.js?v=20251011205210"></script>
-<script type="module" src="./js/routing/router.js?v=20251011205210"></script>
+<script type="module" src="./js/routing/routeConfig.js?v=20251011215547"></script>
+<script type="module" src="./js/routing/router.js?v=20251011215547"></script>
 
 <!-- New Data and Blockchain Modules -->
-<script type="module" src="./js/blockchain/web3Utils.js?v=20251011205210"></script>
-<script type="module" src="./js/data/indexedDbUtils.js?v=20251011205210"></script>
-<script type="module" src="./js/data/apiUtils.js?v=20251011205210"></script>
+<script type="module" src="./js/blockchain/web3Utils.js?v=20251011215547"></script>
+<script type="module" src="./js/data/indexedDbUtils.js?v=20251011215547"></script>
+<script type="module" src="./js/data/apiUtils.js?v=20251011215547"></script>
 
 <!-- Auto-Rescan Manager -->
-<script src="./js/utils/autoRescanManager.js?v=20251011205210"></script>
-<script src="./js/utils/transactionHelper.js?v=20251011205210"></script>
+<script src="./js/utils/autoRescanManager.js?v=20251011215547"></script>
+<script src="./js/utils/transactionHelper.js?v=20251011215547"></script>
 
 <!-- Toast notification system now provided by js/ui/toastManager.js module -->
 
@@ -905,7 +902,7 @@
 </script>
 
 <!-- Google Analytics -->
-<script src="./js/analytics.js?v=20251011205210"></script>
+<script src="./js/analytics.js?v=20251011215547"></script>
 
 <!-- Chain configuration and network selector -->
 <script type="module">
@@ -986,26 +983,26 @@
 </script>
 
 <!-- ABI files (order matters) -->
-<script src="./ABI/xen-ABI.js?v=20251011205210"></script>
-<script src="./ABI/xenft-ABI.js?v=20251011205210"></script>
-<script src="./ABI/xenft-stake-correct-ABI.js?v=20251011205210"></script>
-<script src="./ABI/cointool-ABI.js?v=20251011205210"></script>
+<script src="./ABI/xen-ABI.js?v=20251011215547"></script>
+<script src="./ABI/xenft-ABI.js?v=20251011215547"></script>
+<script src="./ABI/xenft-stake-correct-ABI.js?v=20251011215547"></script>
+<script src="./ABI/cointool-ABI.js?v=20251011215547"></script>
 
 <!-- Configuration modules -->
-<script type="module" src="./js/config/chainConfig.js?v=20251011205210"></script>
-<script type="module" src="./js/config/configuration.js?v=20251011205210"></script>
+<script type="module" src="./js/config/chainConfig.js?v=20251011215547"></script>
+<script type="module" src="./js/config/configuration.js?v=20251011215547"></script>
 
 <!-- Existing JavaScript files (order matters) -->
-<script src="./js/mint_flows.js?v=20251011205210"></script>
-<script src="./js/utils/databaseInitializer.js?v=20251011205210"></script>
-<script src="./js/scanners/cointool_scanner.js?v=20251011205210"></script>
-<script src="./js/scanners/xenft_scanner.js?v=20251011205210"></script>
-<script src="./js/scanners/xenft_stake_scanner.js?v=20251011205210"></script>
-<script src="./js/scanners/xen_scanner.js?v=20251011205210"></script>
-<script src="./js/summaryOption2.js?v=20251011205210"></script>
-<script src="./js/unified_view.js?v=20251011205210"></script>
-<script src="./js/main_app.js?v=20251011205210"></script>
-<script src="./js/xen-breakdown.js?v=20251011205210"></script>
+<script src="./js/mint_flows.js?v=20251011215547"></script>
+<script src="./js/utils/databaseInitializer.js?v=20251011215547"></script>
+<script src="./js/scanners/cointool_scanner.js?v=20251011215547"></script>
+<script src="./js/scanners/xenft_scanner.js?v=20251011215547"></script>
+<script src="./js/scanners/xenft_stake_scanner.js?v=20251011215547"></script>
+<script src="./js/scanners/xen_scanner.js?v=20251011215547"></script>
+<script src="./js/summaryOption2.js?v=20251011215547"></script>
+<script src="./js/unified_view.js?v=20251011215547"></script>
+<script src="./js/main_app.js?v=20251011215547"></script>
+<script src="./js/xen-breakdown.js?v=20251011215547"></script>
 <!-- Markdown parser for About tab -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 

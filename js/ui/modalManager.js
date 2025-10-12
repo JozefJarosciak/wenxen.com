@@ -197,7 +197,7 @@ export const modalManager = {
     // Set up onboarding modal buttons
     const getStartedButton = document.getElementById('onboardingGetStartedBtn');
     if (getStartedButton) {
-      getStartedButton.addEventListener('click', this.onboarding.complete);
+      getStartedButton.addEventListener('click', () => this.onboarding.complete());
     }
     
     const onboardingCloseBtn = document.getElementById('onboardingCloseBtn');

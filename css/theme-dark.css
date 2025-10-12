@@ -234,6 +234,19 @@ body.dark-mode .step-detail {
 body.dark-mode .onboarding-footer {
   border-top-color: rgba(255, 255, 255, 0.1);
 }
+
+/* Modal close button in dark theme - highly visible */
+body.dark-mode .modal-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-color, #e5e7eb);
+}
+
+body.dark-mode .modal-close-btn:hover {
+  background: rgba(255, 0, 0, 0.2);
+  border-color: rgba(255, 0, 0, 0.4);
+  color: #ff6b6b;
+}
 /* Ensure ALL elements inside progressContainer have matching background */
 body.dark-mode #progressContainer * {
   background: #0f172a !important; /* force same as progressContainer */
