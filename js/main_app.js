@@ -1353,7 +1353,19 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     addressBreakdown[address].count++;
   });
 
-  // Add wallet balances if requested and throttled
+  // Always try to include wallet balances from cache first
+  // This ensures consistent totals even during rapid updates
+  if (window._cachedWalletBalances) {
+    Object.keys(addressBreakdown).forEach(address => {
+      if (window._cachedWalletBalances[address]) {
+        const balanceTokens = BigInt(window._cachedWalletBalances[address]) / BigInt('1000000000000000000');
+        addressBreakdown[address].walletBalance = balanceTokens;
+        total += balanceTokens;
+      }
+    });
+  }
+
+  // Only fetch fresh wallet balances if requested and throttle allows
   if (includeWalletBalances) {
     const now = Date.now();
     const shouldUpdateBalances = (now - lastWalletBalanceUpdate) > WALLET_BALANCE_THROTTLE_MS;
@@ -1362,6 +1374,12 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
       try {
         lastWalletBalanceUpdate = now;
         const walletBalances = await fetchAllWalletBalances();
+
+        // Reset totals to recalculate with fresh data
+        total = 0n;
+        Object.keys(addressBreakdown).forEach(address => {
+          total += addressBreakdown[address].xen;
+        });
 
         Object.entries(walletBalances).forEach(([address, balanceWei]) => {
           if (!addressBreakdown[address]) {
@@ -1383,15 +1401,6 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
           console.warn('[XEN-TOTAL] Wallet balance error:', e.message);
         }
       }
-    } else {
-      // Use cached wallet balances from previous calculation
-      Object.keys(addressBreakdown).forEach(address => {
-        if (window._cachedWalletBalances && window._cachedWalletBalances[address]) {
-          const balanceTokens = BigInt(window._cachedWalletBalances[address]) / BigInt('1000000000000000000');
-          addressBreakdown[address].walletBalance = balanceTokens;
-          total += balanceTokens;
-        }
-      });
     }
   }
 
