@@ -124,12 +124,12 @@ body.dark-mode .about-iframe {
   border-left: 4px solid var(--accent-color);
   border-radius: 6px;
   margin-bottom: 30px;
-  color: var(--text-color);
+  color: var(--text-color) !important;
   border: 1px solid var(--border);
 }
 
-.about-subtitle strong {
-  color: var(--text-color);
+.about-subtitle * {
+  color: var(--text-color) !important;
 }
 
 .about-inline-content h3 {
@@ -146,7 +146,11 @@ body.dark-mode .about-iframe {
 }
 
 .about-inline-content p {
-  color: var(--text-color);
+  color: var(--text-color) !important;
+}
+
+.about-inline-content p strong {
+  color: var(--text-color) !important;
 }
 
 .about-features {
