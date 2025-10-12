@@ -1416,9 +1416,11 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
       walletBalance: data.walletBalance.toString()
     }))
   );
-  
-    // Trigger breakdown display refresh
-    if (window._xenTooltipRefresh) {
+
+    // Initialize breakdown display ONCE, then just refresh
+    if (!window._xenBreakdownInitialized && typeof window._initializeXenTotalBreakdown === 'function') {
+      window._initializeXenTotalBreakdown();
+    } else if (window._xenTooltipRefresh) {
       window._xenTooltipRefresh();
     }
   }, 100); // 100ms debounce delay

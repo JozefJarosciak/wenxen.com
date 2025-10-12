@@ -294,18 +294,36 @@ function initializeXenTotalBreakdown() {
   
   // Register global refresh
   window._xenTooltipRefresh = refreshView;
-  
-  // Initialize with saved state
-  if (isExpanded) {
-    showExpanded();
-  } else {
-    showCollapsed();
-  }
+
+  // DO NOT auto-initialize - wait for data to be ready
+  // This prevents showing empty/wrong data during page load
 }
 
-// Initialize on DOM ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeXenTotalBreakdown);
-} else {
-  setTimeout(initializeXenTotalBreakdown, 100); // Small delay to ensure data is ready
-}
+// Export initialization function for manual triggering
+window._initializeXenTotalBreakdown = () => {
+  const compactDiv = document.getElementById("xenTotalCompact");
+  const expandedDiv = document.getElementById("xenTotalExpanded");
+
+  if (!compactDiv || !expandedDiv) return;
+
+  // Check if already initialized
+  if (window._xenBreakdownInitialized) return;
+  window._xenBreakdownInitialized = true;
+
+  console.log('[XEN Breakdown] Initializing breakdown display');
+
+  // Initialize the breakdown manager
+  initializeXenTotalBreakdown();
+
+  // Show initial view based on saved state
+  const isExpanded = localStorage.getItem('xenBreakdownExpanded') === 'true';
+  if (isExpanded && typeof window._xenTooltipRefresh === 'function') {
+    // Show expanded view
+    const refreshView = window._xenTooltipRefresh;
+    refreshView();
+  } else if (typeof window._xenTooltipRefresh === 'function') {
+    // Show collapsed view
+    const refreshView = window._xenTooltipRefresh;
+    refreshView();
+  }
+};
