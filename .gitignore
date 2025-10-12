@@ -13,10 +13,17 @@ deployment/*_override.tf.json
 deployment/.terraformrc
 deployment/terraform.rc
 
+# Terraform providers (large files)
+**/.terraform/
+**/.terraform.lock.hcl
+
 # Cost reports and generated files in deployment folder
 deployment/*.html
 deployment/*.json
 deployment/lambda_function.zip
+
+# OLD_BACKUP folder
+OLD_BACKUP/
 
 # Python cache
 __pycache__/
