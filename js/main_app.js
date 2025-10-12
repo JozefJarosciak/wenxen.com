@@ -4060,10 +4060,21 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
   };
   cointoolTable.on("dataProcessed", applyAllFilterOnce);
 
-  // NO automatic badge updates on table events
-  // Badge updates ONLY from:
+  // Update XEN badge when user manually changes filters in table header inputs
+  // This listener only runs AFTER initial page load is complete
+  cointoolTable.on("dataFiltered", () => {
+    // Only update if initial data load has completed (prevents duplicate updates during page load)
+    if (initialDataLoaded) {
+      console.log('[Filter] Manual filter change detected - updating XEN badge');
+      updateXENTotalBadge();
+    }
+  });
+
+  // Badge updates happen from:
   // 1. Auto-apply "All" filter above (once on page load)
   // 2. Manual filter button clicks (handled in filter button event listeners)
+  // 3. Manual header filter changes in table (dataFiltered event above)
+  // 4. Calendar date/month/year changes (in unified_view.js)
 
   // VMU Chart wiring
   cointoolTable.on("tableBuilt",     initVmuChartSection);
