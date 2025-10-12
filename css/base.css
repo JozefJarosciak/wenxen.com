@@ -247,7 +247,7 @@ body.dark-mode .about-iframe {
 
 /* Additional About section text elements */
 .about-inline-content a {
-  color: var(--accent-color);
+  color: var(--accent-color) !important;
 }
 
 .about-inline-content a:hover {
@@ -255,8 +255,24 @@ body.dark-mode .about-iframe {
 }
 
 .about-inline-content small {
-  color: var(--text-color);
-  opacity: 0.8;
+  color: var(--text-color) !important;
+}
+
+/* Bottom paragraph with access options */
+.about-inline-content > p[style*="center"] {
+  color: var(--text-color) !important;
+}
+
+.about-inline-content > p[style*="center"] strong {
+  color: var(--text-color) !important;
+}
+
+.about-inline-content > p[style*="center"] small {
+  color: var(--text-color) !important;
+}
+
+.about-inline-content > p[style*="center"] a {
+  color: var(--accent-color) !important;
 }
 
 /* Dark theme adjustments */
