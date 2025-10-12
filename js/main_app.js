@@ -4027,6 +4027,27 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
     window.tableReady = true;
     console.log('[Filter] Table built - filter buttons now ready');
   });
+
+  // Auto-apply "All" filter once after initial data load to ensure correct totals
+  let initialDataLoaded = false;
+  const applyAllFilterOnce = () => {
+    if (!initialDataLoaded && window.tableReady && cointoolTable.getDataCount() > 0) {
+      initialDataLoaded = true;
+      console.log('[Filter] Auto-applying "All" filter on initial data load');
+      setTimeout(() => {
+        try {
+          cointoolTable.clearHeaderFilter();
+          cointoolTable.setHeaderFilterValue('Status', '');
+          cointoolTable.setSort('Maturity_Date_Fmt', 'asc');
+          updateXENTotalBadge();
+        } catch (e) {
+          console.warn('[Filter] Failed to auto-apply "All" filter:', e);
+        }
+      }, 300); // Small delay to ensure all data is processed
+    }
+  };
+  cointoolTable.on("dataProcessed", applyAllFilterOnce);
+
   cointoolTable.on("dataLoaded",     updateXENTotalBadge);
   cointoolTable.on("dataProcessed",  updateXENTotalBadge);
   cointoolTable.on("dataFiltered",   updateXENTotalBadge);
