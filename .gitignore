@@ -65,6 +65,7 @@ tmp/
 
 # Claude AI files
 .claude/
+CLAUDE.md
 
 # ============================================
 # DEVELOPMENT & INTERNAL FILES (PRIVATE)
