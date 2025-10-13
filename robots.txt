@@ -1,0 +1,52 @@
+# robots.txt for WenXen.com
+# XEN Crypto Portfolio Tracker & Manager
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://wenxen.com/sitemap.xml
+
+# Crawl delay (be respectful to search engines)
+Crawl-delay: 1
+
+# Block access to admin/config files (if any)
+Disallow: /config/
+Disallow: /.git/
+Disallow: /node_modules/
+Disallow: /OLD_BACKUP/
+
+# Allow all major search engine bots
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+# Block bad bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
