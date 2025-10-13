@@ -758,6 +758,97 @@ label {
   align-items: center
 }
 
+/* Wallet Balance Card Styles */
+.mint-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.mint-header h2 {
+  margin: 0;
+}
+
+.wallet-balance-card {
+  position: relative;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-width: 320px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.wallet-balance-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.wallet-balance-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.balance-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.balance-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-color);
+  font-family: 'Courier New', monospace;
+}
+
+.balance-usd {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.wallet-balance-divider {
+  width: 1px;
+  height: 50px;
+  background: var(--border);
+}
+
+.balance-refresh-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: var(--muted);
+}
+
+.balance-refresh-btn:hover {
+  background: var(--chip-bg);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  transform: rotate(90deg);
+}
+
+.balance-refresh-btn svg {
+  display: block;
+}
+
 .btn-secondary {
   background: #f3f4f6;
   border: 1px solid #d1d5db;
