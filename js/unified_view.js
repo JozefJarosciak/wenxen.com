@@ -801,6 +801,16 @@ function setMaturityHeaderFilterFromDate(dt) {
     stakeXfRows.map(mapStakeXenftToRow).forEach(addFromRow);
     stakeRows.map(mapStakeToRow).forEach(addFromRow);
 
+    // Preserve the current month/year view before destroying
+    let preservedYear = null;
+    let preservedMonth = null;
+    if (window.calendarPicker && window.calendarPicker.currentYear !== undefined && window.calendarPicker.currentMonth !== undefined) {
+      // Store the currently displayed month/year
+      preservedYear = window.calendarPicker.currentYear;
+      preservedMonth = window.calendarPicker.currentMonth;
+      console.log(`[Calendar] Preserving user's current view: ${preservedYear}-${preservedMonth + 1}`);
+    }
+
     // If an old instance exists, remove it cleanly
     if (window.calendarPicker && typeof window.calendarPicker.destroy === "function") {
       try { window.calendarPicker.destroy(); } catch(e){}
@@ -921,7 +931,19 @@ function setMaturityHeaderFilterFromDate(dt) {
         // Update XEN total badge to reflect filtered data
         try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
       },
-      onReady: function(selectedDates, dateStr, fp){ __fixFlatpickrHeader(fp); }
+      onReady: function(selectedDates, dateStr, fp){
+        __fixFlatpickrHeader(fp);
+        // Restore preserved month/year after initialization
+        if (preservedYear !== null && preservedMonth !== null) {
+          try {
+            fp.changeMonth(preservedMonth, false);
+            fp.changeYear(preservedYear);
+            console.log(`[Calendar] Restored user's view to: ${preservedYear}-${preservedMonth + 1}`);
+          } catch(e) {
+            console.warn('[Calendar] Failed to restore month/year:', e);
+          }
+        }
+      }
     });
 
     // Keep the bootstrap pointer synchronized with the live instance
