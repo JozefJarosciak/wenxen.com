@@ -838,6 +838,9 @@ function setMaturityHeaderFilterFromDate(dt) {
       } catch {}
     }
 
+    // Flag to prevent onMonthChange from firing during programmatic restore
+    let restoringCalendarView = false;
+
     // Create a fresh Flatpickr with badges and navigation hooks
     window.calendarPicker = flatpickr("#calendar", {
       inline: true,
@@ -900,12 +903,16 @@ function setMaturityHeaderFilterFromDate(dt) {
       // ✅ New: when user navigates months/years via arrows or header,
       //        set the header filter to "YYYY Mon"
       onMonthChange: function(selectedDates, dateStr, fp){
+        // Skip if we're programmatically restoring the view (not user navigation)
+        if (restoringCalendarView) return;
         try { setMaturityHeaderFilterFromYearMonth(fp.currentYear, fp.currentMonth); } catch(_) {}
         __fixFlatpickrHeader(fp);
         // Update XEN total badge to reflect filtered data
         try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
       },
       onYearChange: function(selectedDates, dateStr, fp){
+        // Skip if we're programmatically restoring the view (not user navigation)
+        if (restoringCalendarView) return;
         try { setMaturityHeaderFilterFromYearMonth(fp.currentYear, fp.currentMonth); } catch(_) {}
         __fixFlatpickrHeader(fp);
         // Update XEN total badge to reflect filtered data
@@ -936,11 +943,16 @@ function setMaturityHeaderFilterFromDate(dt) {
         // Restore preserved month/year after initialization
         if (preservedYear !== null && preservedMonth !== null) {
           try {
+            // Set flag to prevent onMonthChange from firing during restoration
+            restoringCalendarView = true;
             fp.changeMonth(preservedMonth, false);
             fp.changeYear(preservedYear);
             console.log(`[Calendar] Restored user's view to: ${preservedYear}-${preservedMonth + 1}`);
+            // Reset flag after restoration
+            restoringCalendarView = false;
           } catch(e) {
             console.warn('[Calendar] Failed to restore month/year:', e);
+            restoringCalendarView = false;
           }
         }
       }
