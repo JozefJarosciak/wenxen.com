@@ -186,9 +186,11 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   }
 
   async function clearScanState(db, address) {
+    // Use cleanHexAddr to match the format used by getScanState at line 410
+    address = address.toLowerCase().replace(/^0x/i, '').padStart(40, '0');
     return new Promise((resolve, reject) => {
       const tx = db.transaction("scanState", "readwrite");
-      tx.objectStore("scanState").delete(address.toLowerCase()).onsuccess = () => resolve();
+      tx.objectStore("scanState").delete(address).onsuccess = () => resolve();
       tx.onerror = e => reject(e.target.error);
     });
   }
