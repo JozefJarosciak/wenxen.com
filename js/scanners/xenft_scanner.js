@@ -416,26 +416,38 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     });
   }
 
-  function saveScanState(db, address, lastScannedBlock, lastTransactionBlock) {
+  function saveScanState(db, address, lastScannedBlock, lastTransactionBlock, forceRescan = false) {
     address = cleanHexAddr(address);
     return new Promise((resolve, reject) => {
       const tx = db.transaction('scanState', 'readwrite');
       const store = tx.objectStore('scanState');
 
-      // Get existing state to preserve lastTransactionBlock if not provided
-      const getRequest = store.get(address);
-      getRequest.onsuccess = () => {
-        const existing = getRequest.result || {};
+      // On force rescan, don't preserve old lastTransactionBlock
+      if (forceRescan) {
         const newState = {
           address,
           lastScannedBlock: Number(lastScannedBlock) || 0,
-          lastTransactionBlock: lastTransactionBlock > 0 ? lastTransactionBlock : (existing.lastTransactionBlock || 0),
+          lastTransactionBlock: Number(lastTransactionBlock) || 0,
           lastScannedAt: Date.now()
         };
         store.put(newState).onsuccess = () => resolve();
-      };
-      getRequest.onerror = e => reject(e.target.error);
-      tx.onerror = e => reject(e.target.error);
+        tx.onerror = e => reject(e.target.error);
+      } else {
+        // Get existing state to preserve lastTransactionBlock if not provided
+        const getRequest = store.get(address);
+        getRequest.onsuccess = () => {
+          const existing = getRequest.result || {};
+          const newState = {
+            address,
+            lastScannedBlock: Number(lastScannedBlock) || 0,
+            lastTransactionBlock: lastTransactionBlock > 0 ? lastTransactionBlock : (existing.lastTransactionBlock || 0),
+            lastScannedAt: Date.now()
+          };
+          store.put(newState).onsuccess = () => resolve();
+        };
+        getRequest.onerror = e => reject(e.target.error);
+        tx.onerror = e => reject(e.target.error);
+      }
     });
   }
 
@@ -546,22 +558,25 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     try {
       // Clear progress on force rescan
       if (forceRescan) {
-        await saveScanState(db, addr, 0, 0);
+        await clearScanState(db, addr);
         await clearProcessProgress(db, addr);
-        // Force rescan - cleared progress
+        console.log(`[XENFT] Force rescan - cleared all scan state for ${addr}`);
       }
 
       // Get scan state for incremental scanning
       const scanState = await getScanState(db, addr);
       const lastTransactionBlock = scanState?.lastTransactionBlock || 0;
+      console.log(`[XENFT] Scan state for ${addr}:`, scanState, 'lastTransactionBlock:', lastTransactionBlock);
 
       // Get chain-specific deployment block
       const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
+      console.log(`[XENFT] Deployment block for ${currentChain}:`, deploymentBlock);
 
       // Use safety buffer approach: always rescan from before last transaction
       const safeStartBlock = lastTransactionBlock > 0
         ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock)
         : deploymentBlock;
+      console.log(`[XENFT] Safe start block calculated:`, safeStartBlock, `(lastTxBlock: ${lastTransactionBlock}, buffer: ${SAFETY_BUFFER_BLOCKS})`);
 
       // Get current block using Web3 directly
       const rpcEndpoints = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC];
@@ -615,8 +630,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           window.progressUI.setStage(`Scanning blocks ${blockStart}-${blockEnd} (chunk ${chunkIndex}/${totalChunks})`, chunkIndex, totalChunks);
         }
 
+        console.log(`[XENFT] Fetching chunk ${chunkIndex}/${totalChunks}: blocks ${blockStart}-${blockEnd}`);
         try {
           const chunkTransfers = await fetchXenftTransfersInRange(addr, etherscanApiKey, blockStart, blockEnd);
+          console.log(`[XENFT] Chunk ${chunkIndex}/${totalChunks} returned ${chunkTransfers ? chunkTransfers.length : 0} transfers`);
 
           if (chunkTransfers && chunkTransfers.length > 0) {
             allTransfers.push(...chunkTransfers);
@@ -632,7 +649,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           }
 
           // Update scan state with the highest block processed
-          await saveScanState(db, addr, blockEnd, Math.max(lastTransactionBlock, blockEnd));
+          await saveScanState(db, addr, blockEnd, Math.max(lastTransactionBlock, blockEnd), forceRescan);
 
           // Rate limiting between chunks
           if (blockEnd < currentBlock) {
@@ -679,6 +696,13 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       return tokenIds.sort((a, b) => Number(a) - Number(b));
 
     } catch (error) {
+      console.error('[XENFT] scanEventBased failed with error:', error);
+      console.error('[XENFT] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        address: addr,
+        chain: currentChain
+      });
       return null; // Signal fallback needed
     }
   }

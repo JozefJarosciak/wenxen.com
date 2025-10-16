@@ -184,9 +184,32 @@ function getXenPrice() {
   try {
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
     const chainPrefix = currentChain + '_';
-    const priceStr = localStorage.getItem(chainPrefix + 'xenPrice') || localStorage.getItem('xenPrice') || '0';
-    return parseFloat(priceStr) || 0;
-  } catch {
+
+    // Try chain-specific key first, then fallback to global
+    let priceStr = localStorage.getItem(chainPrefix + 'xenPrice');
+    console.log(`[WALLET-BALANCE] Looking for XEN price with key: ${chainPrefix}xenPrice, found:`, priceStr);
+
+    if (!priceStr) {
+      priceStr = localStorage.getItem('xenPrice');
+      console.log(`[WALLET-BALANCE] Fallback to xenPrice key, found:`, priceStr);
+    }
+
+    // Also try xenUsdPrice which might be used by main app
+    if (!priceStr) {
+      priceStr = localStorage.getItem(chainPrefix + 'xenUsdPrice');
+      console.log(`[WALLET-BALANCE] Trying ${chainPrefix}xenUsdPrice, found:`, priceStr);
+    }
+
+    if (!priceStr) {
+      priceStr = localStorage.getItem('xenUsdPrice');
+      console.log(`[WALLET-BALANCE] Trying xenUsdPrice, found:`, priceStr);
+    }
+
+    const price = parseFloat(priceStr) || 0;
+    console.log(`[WALLET-BALANCE] Final XEN price for ${currentChain}:`, price);
+    return price;
+  } catch (e) {
+    console.error('[WALLET-BALANCE] Error getting XEN price:', e);
     return 0;
   }
 }
