@@ -274,21 +274,17 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
   let total = 0n;
   const addressBreakdown = {};
 
-  // Check if "All" filter is active - if so, show all mints regardless of status
-  const activeChip = document.querySelector('.chip.active');
-  const isAllFilterActive = activeChip && (activeChip.dataset.filter === '' || !activeChip.dataset.filter);
-
-  // Process mint/stake data first
+  // Process mint/stake data first - ALWAYS only count Maturing rows
   let maturingCount = 0;
   let skippedCount = 0;
   activeData.forEach((rowData, index) => {
     const status = rowData.Status || rowData.status || '';
 
-    // Only filter by "Maturing" status if NOT showing "All" filter
-    // When "All" filter is active, include all mints regardless of status
-    if (status !== 'Maturing' && !isAllFilterActive) {
+    // ALWAYS only count Maturing mints in XEN total, regardless of which filter is active
+    // Claimed/Claimable mints represent XEN already in wallets, not future rewards
+    if (status !== 'Maturing') {
       skippedCount++;
-      return; // Skip non-maturing rows only when specific filter is active
+      return; // Skip non-maturing rows
     }
 
     maturingCount++;
