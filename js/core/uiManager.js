@@ -274,8 +274,19 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
   let total = 0n;
   const addressBreakdown = {};
 
-  // Process mint/stake data first
+  // Process mint/stake data first - ONLY count Maturing rows
+  let maturingCount = 0;
+  let skippedCount = 0;
   activeData.forEach((rowData, index) => {
+    // CRITICAL FIX: Only include Maturing mints in the total
+    // Claimed, Claimable, and other statuses should NOT be counted
+    const status = rowData.Status || rowData.status || '';
+    if (status !== 'Maturing') {
+      skippedCount++;
+      return; // Skip non-maturing rows
+    }
+
+    maturingCount++;
     const xenValue = window.estimateXENForRow?.(rowData) || 0;
     if (index < 3) { // Log first 3 rows for debugging
       console.log(`[XEN Badge] Row ${index}: XEN value = ${xenValue}, ID = ${rowData.ID}`);
@@ -330,6 +341,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     }
   }
 
+  console.log(`[XEN Badge - uiManager.js] Calculated total: ${total.toString()} XEN from ${maturingCount} maturing mints (skipped ${skippedCount} non-maturing)`);
   console.log(`[XEN Badge] Final total: ${total.toString()} (formatted: ${window.formatNumberForMobile?.(Number(total)) || Number(total).toLocaleString()})`);
 
   badge.textContent = window.formatNumberForMobile?.(Number(total)) || Number(total).toLocaleString();

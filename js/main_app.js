@@ -1322,8 +1322,19 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
   let total = 0n;
   const addressBreakdown = {};
 
-  // Process mint/stake data first
+  // Process mint/stake data first - ONLY count Maturing rows
+  let maturingCount = 0;
+  let skippedCount = 0;
   activeData.forEach(rowData => {
+    // CRITICAL FIX: Only include Maturing mints in the total
+    // Claimed, Claimable, and other statuses should NOT be counted
+    const status = rowData.Status || rowData.status || '';
+    if (status !== 'Maturing') {
+      skippedCount++;
+      return; // Skip non-maturing rows
+    }
+
+    maturingCount++;
     const xenValue = estimateXENForRow(rowData);
     total += BigInt(xenValue);
 
@@ -1404,9 +1415,11 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     }
   }
 
+  console.log(`[XEN Badge - main_app.js] Calculated total: ${total.toString()} XEN from ${maturingCount} maturing mints (skipped ${skippedCount} non-maturing)`);
+
   badge.textContent = formatNumberForMobile(total);
   renderXenUsdEstimate(total);   // ← NEW: show "($226.45)" style USD next to the total
-  
+
   // Store breakdown data for tooltip
   badge.dataset.breakdown = JSON.stringify(
     Object.entries(addressBreakdown).map(([address, data]) => ({
