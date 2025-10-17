@@ -315,7 +315,8 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     }
   });
 
-  // Add wallet balances if enabled and not throttled
+  // Store wallet balances but DON'T add them to the total
+  // The XEN total should only show maturing mints, not current wallet balances
   if (includeWalletBalances) {
     const now = Date.now();
     if (now - lastWalletBalanceUpdate > WALLET_BALANCE_THROTTLE_MS) {
@@ -327,7 +328,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
           const balanceWei = BigInt(balance || '0');
           // Convert from wei to tokens (divide by 10^18)
           const balanceTokens = balanceWei / BigInt('1000000000000000000');
-          total += balanceTokens;
+          // REMOVED: total += balanceTokens;  // Don't add wallet balance to maturing total!
 
           const normalizedAddress = address.toLowerCase();
           if (!addressBreakdown[normalizedAddress]) {

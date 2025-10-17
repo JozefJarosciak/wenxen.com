@@ -1381,21 +1381,20 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
   });
 
   console.log(`[XEN Badge DEBUG] Status breakdown:`, statusBreakdown);
-  console.log(`[XEN Badge DEBUG] Total from maturing mints BEFORE wallet balances: ${total.toString()} XEN`);
+  console.log(`[XEN Badge DEBUG] FINAL TOTAL (maturing mints only): ${total.toString()} XEN`);
 
-  // Always try to include wallet balances from cache first
-  // This ensures consistent totals even during rapid updates
+  // Store wallet balances in addressBreakdown for tooltip, but DON'T add to total
+  // The XEN total should only show maturing mints, not current wallet balances
   if (window._cachedWalletBalances) {
-    console.log(`[XEN Badge DEBUG] Adding cached wallet balances...`);
+    console.log(`[XEN Badge DEBUG] Storing cached wallet balances (NOT adding to total)...`);
     Object.keys(addressBreakdown).forEach(address => {
       if (window._cachedWalletBalances[address]) {
         const balanceTokens = BigInt(window._cachedWalletBalances[address]) / BigInt('1000000000000000000');
-        console.log(`[XEN Badge DEBUG] Adding cached wallet balance for ${address}: ${balanceTokens.toString()} XEN`);
+        console.log(`[XEN Badge DEBUG] Wallet balance for ${address}: ${balanceTokens.toString()} XEN (stored, not added)`);
         addressBreakdown[address].walletBalance = balanceTokens;
-        total += balanceTokens;
+        // REMOVED: total += balanceTokens;  // Don't add wallet balance to maturing total!
       }
     });
-    console.log(`[XEN Badge DEBUG] Total AFTER cached wallet balances: ${total.toString()} XEN`);
   }
 
   // Only fetch fresh wallet balances if requested and throttle allows
@@ -1405,17 +1404,12 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
 
     if (shouldUpdateBalances) {
       try {
-        console.log(`[XEN Badge DEBUG] Fetching fresh wallet balances...`);
+        console.log(`[XEN Badge DEBUG] Fetching fresh wallet balances (NOT adding to total)...`);
         lastWalletBalanceUpdate = now;
         const walletBalances = await fetchAllWalletBalances();
 
-        // Reset totals to recalculate with fresh data
-        total = 0n;
-        Object.keys(addressBreakdown).forEach(address => {
-          total += addressBreakdown[address].xen;
-        });
-        console.log(`[XEN Badge DEBUG] Total after resetting to maturing mints only: ${total.toString()} XEN`);
-
+        // Store wallet balances but DON'T add them to the total
+        // The total should only reflect maturing mints, not current wallet holdings
         Object.entries(walletBalances).forEach(([address, balanceWei]) => {
           if (!addressBreakdown[address]) {
             addressBreakdown[address] = {
@@ -1427,11 +1421,10 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
           // Convert from wei to tokens (divide by 10^18)
           const balanceWeiBI = BigInt(balanceWei || '0');
           const balanceTokens = balanceWeiBI / BigInt('1000000000000000000'); // 10^18
-          console.log(`[XEN Badge DEBUG] Adding fresh wallet balance for ${address}: ${balanceTokens.toString()} XEN`);
+          console.log(`[XEN Badge DEBUG] Wallet balance for ${address}: ${balanceTokens.toString()} XEN (stored, not added)`);
           addressBreakdown[address].walletBalance = balanceTokens;
-          total += balanceTokens;
+          // REMOVED: total += balanceTokens;  // Don't add wallet balance to maturing total!
         });
-        console.log(`[XEN Badge DEBUG] Total AFTER fresh wallet balances: ${total.toString()} XEN`);
       } catch (e) {
         // Reduced console spam - only log major errors
         if (e.message && !e.message.includes('rate limit')) {
