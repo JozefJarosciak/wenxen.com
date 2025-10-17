@@ -7849,6 +7849,11 @@ function setStatusHeaderFilter(statusText) {
         try { window.cointoolTable.setHeaderFilterValue('Status', ''); } catch (_) {}
         try { window.cointoolTable.setSort('Maturity_Date_Fmt', 'asc'); } catch (_) {}
         console.log('[Filter] Applied "All" filter immediately');
+        console.log('[Filter DEBUG] Total rows in table:', window.cointoolTable.getData().length);
+        console.log('[Filter DEBUG] Active/filtered rows:', window.cointoolTable.getData("active").length);
+        // Check what filters are actually applied
+        const statusFilter = window.cointoolTable.getHeaderFilters().find(f => f.field === 'Status');
+        console.log('[Filter DEBUG] Status filter value after clear:', statusFilter ? statusFilter.value : 'no filter');
         // Force immediate XEN badge update
         setTimeout(() => updateXENTotalBadge(), 100);
       } else {
