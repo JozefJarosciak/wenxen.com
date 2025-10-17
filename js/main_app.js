@@ -1325,17 +1325,33 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
   // Process mint/stake data first - ONLY count Maturing rows
   let maturingCount = 0;
   let skippedCount = 0;
-  activeData.forEach(rowData => {
+  const statusBreakdown = {};
+
+  console.log(`[XEN Badge DEBUG] ========== Starting calculation with ${activeData.length} total filtered rows ==========`);
+
+  activeData.forEach((rowData, index) => {
     // CRITICAL FIX: Only include Maturing mints in the total
     // Claimed, Claimable, and other statuses should NOT be counted
     const status = rowData.Status || rowData.status || '';
+
+    // Track status distribution for debugging
+    statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
+
     if (status !== 'Maturing') {
       skippedCount++;
+      if (index < 5) {
+        console.log(`[XEN Badge DEBUG] Row ${index}: SKIPPED - Status="${status}", ID=${rowData.ID}, Type=${rowData.SourceType}`);
+      }
       return; // Skip non-maturing rows
     }
 
     maturingCount++;
     const xenValue = estimateXENForRow(rowData);
+
+    if (index < 5 || maturingCount <= 5) {
+      console.log(`[XEN Badge DEBUG] Row ${index}: COUNTED - Status="${status}", XEN=${xenValue}, ID=${rowData.ID}, Type=${rowData.SourceType}`);
+    }
+
     total += BigInt(xenValue);
 
     // Collect breakdown by address - try multiple possible field names
@@ -1364,16 +1380,22 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     addressBreakdown[address].count++;
   });
 
+  console.log(`[XEN Badge DEBUG] Status breakdown:`, statusBreakdown);
+  console.log(`[XEN Badge DEBUG] Total from maturing mints BEFORE wallet balances: ${total.toString()} XEN`);
+
   // Always try to include wallet balances from cache first
   // This ensures consistent totals even during rapid updates
   if (window._cachedWalletBalances) {
+    console.log(`[XEN Badge DEBUG] Adding cached wallet balances...`);
     Object.keys(addressBreakdown).forEach(address => {
       if (window._cachedWalletBalances[address]) {
         const balanceTokens = BigInt(window._cachedWalletBalances[address]) / BigInt('1000000000000000000');
+        console.log(`[XEN Badge DEBUG] Adding cached wallet balance for ${address}: ${balanceTokens.toString()} XEN`);
         addressBreakdown[address].walletBalance = balanceTokens;
         total += balanceTokens;
       }
     });
+    console.log(`[XEN Badge DEBUG] Total AFTER cached wallet balances: ${total.toString()} XEN`);
   }
 
   // Only fetch fresh wallet balances if requested and throttle allows
@@ -1383,6 +1405,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
 
     if (shouldUpdateBalances) {
       try {
+        console.log(`[XEN Badge DEBUG] Fetching fresh wallet balances...`);
         lastWalletBalanceUpdate = now;
         const walletBalances = await fetchAllWalletBalances();
 
@@ -1391,6 +1414,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
         Object.keys(addressBreakdown).forEach(address => {
           total += addressBreakdown[address].xen;
         });
+        console.log(`[XEN Badge DEBUG] Total after resetting to maturing mints only: ${total.toString()} XEN`);
 
         Object.entries(walletBalances).forEach(([address, balanceWei]) => {
           if (!addressBreakdown[address]) {
@@ -1403,9 +1427,11 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
           // Convert from wei to tokens (divide by 10^18)
           const balanceWeiBI = BigInt(balanceWei || '0');
           const balanceTokens = balanceWeiBI / BigInt('1000000000000000000'); // 10^18
+          console.log(`[XEN Badge DEBUG] Adding fresh wallet balance for ${address}: ${balanceTokens.toString()} XEN`);
           addressBreakdown[address].walletBalance = balanceTokens;
           total += balanceTokens;
         });
+        console.log(`[XEN Badge DEBUG] Total AFTER fresh wallet balances: ${total.toString()} XEN`);
       } catch (e) {
         // Reduced console spam - only log major errors
         if (e.message && !e.message.includes('rate limit')) {
