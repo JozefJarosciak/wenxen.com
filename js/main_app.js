@@ -1809,6 +1809,15 @@ async function fetchXenUsdPrice(){
     xenUsdPrice  = primary.price;
     xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: primary.source };
     console.log(`[XEN Price] Successfully fetched ${currentChain} price: $${xenUsdPrice} from ${primary.source}`);
+
+    // Save to localStorage for wallet balance display
+    try {
+      localStorage.setItem('xenPrice', xenUsdPrice.toString());
+      localStorage.setItem(currentChain + '_xenPrice', xenUsdPrice.toString());
+      console.log(`[XEN Price] Saved to localStorage: xenPrice=${xenUsdPrice}, ${currentChain}_xenPrice=${xenUsdPrice}`);
+    } catch (e) {
+      console.warn('[XEN Price] Failed to save to localStorage:', e);
+    }
   } catch (e1) {
     console.warn(`[XEN Price] Dexscreener failed: ${e1.message}, falling back to CoinGecko`);
     try {
@@ -1816,6 +1825,16 @@ async function fetchXenUsdPrice(){
       xenUsdPrice  = fb.price;
       xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: fb.source };
       console.log(`[XEN Price] Successfully fetched price from CoinGecko: $${xenUsdPrice}`);
+
+      // Save to localStorage for wallet balance display
+      try {
+        const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+        localStorage.setItem('xenPrice', xenUsdPrice.toString());
+        localStorage.setItem(currentChain + '_xenPrice', xenUsdPrice.toString());
+        console.log(`[XEN Price] Saved to localStorage: xenPrice=${xenUsdPrice}, ${currentChain}_xenPrice=${xenUsdPrice}`);
+      } catch (e) {
+        console.warn('[XEN Price] Failed to save to localStorage:', e);
+      }
     } catch (e2) {
       console.error(`[XEN Price] Both Dexscreener and CoinGecko failed. Dexscreener: ${e1.message}, CoinGecko: ${e2.message}`);
       xenUsdPrice  = null;
@@ -1829,6 +1848,16 @@ async function fetchXenUsdPrice(){
   }
   updateXenPriceStatus();
   try { updateVmuChart(); } catch {}
+
+  // Update wallet balance display with new price
+  if (window.updateWalletBalanceDisplay && window.connectedAccount) {
+    try {
+      window.updateWalletBalanceDisplay();
+      console.log('[XEN Price] Triggered wallet balance display update');
+    } catch (e) {
+      console.warn('[XEN Price] Failed to update wallet balance display:', e);
+    }
+  }
 }
 
 
