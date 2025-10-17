@@ -32,11 +32,10 @@ function initializeXenTotalBreakdown() {
       let totalUsd = 0;
       
       breakdown.forEach(item => {
+        // ONLY count maturing mints, NOT wallet balances
         const xenAmount = BigInt(item.xen);
-        const walletBalance = BigInt(item.walletBalance || '0');
-        const totalForAddress = xenAmount + walletBalance;
-        totalXen += totalForAddress;
-        const xenTokens = Number(totalForAddress);
+        totalXen += xenAmount;
+        const xenTokens = Number(xenAmount);
         const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0)
           ? xenTokens * xenUsdPrice
           : 0;
@@ -113,10 +112,10 @@ function initializeXenTotalBreakdown() {
         return '<p style="padding: 10px;">No data available</p>';
       }
       
-      // Sort by total XEN amount descending (mints + wallet balance)
+      // Sort by XEN amount descending (maturing mints only)
       breakdown.sort((a, b) => {
-        const xenA = BigInt(a.xen) + BigInt(a.walletBalance || '0');
-        const xenB = BigInt(b.xen) + BigInt(b.walletBalance || '0');
+        const xenA = BigInt(a.xen);
+        const xenB = BigInt(b.xen);
         return xenB > xenA ? 1 : xenB < xenA ? -1 : 0;
       });
       
@@ -133,34 +132,21 @@ function initializeXenTotalBreakdown() {
       let totalUsd = 0;
       
       breakdown.forEach(item => {
+        // ONLY count maturing mints, NOT wallet balances
         const xenAmount = BigInt(item.xen);
-        const walletBalance = BigInt(item.walletBalance || '0');
-        const totalForAddress = xenAmount + walletBalance;
-        totalXen += totalForAddress;
+        totalXen += xenAmount;
 
         // Format amounts with thousand separators (no decimals)
         const xenTokens = Number(xenAmount);
-        const walletTokens = Number(walletBalance);
-        const totalTokens = Number(totalForAddress);
 
         const xenFormatted = xenTokens > 0 ? xenTokens.toLocaleString(undefined, {
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         }) : '-';
 
-        const walletFormatted = walletTokens > 0 ? walletTokens.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
-        }) : '-';
-
-        const totalFormatted = totalTokens.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
-        });
-
-        // Calculate USD value for total
+        // Calculate USD value based on maturing mints only
         const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0)
-          ? totalTokens * xenUsdPrice
+          ? xenTokens * xenUsdPrice
           : 0;
         totalUsd += usdValue;
 
@@ -176,7 +162,7 @@ function initializeXenTotalBreakdown() {
 
         html += '<tr>';
         html += `<td style="padding: 2px 6px; opacity: 0.8;">${formatAddress(item.address)}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalFormatted}</td>`;
+        html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${xenFormatted}</td>`;
         html += `<td style="padding: 2px 6px; text-align: right;" class="usd-value">${usdFormatted}</td>`;
         html += '<td></td>';
         html += '</tr>';
