@@ -61,6 +61,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto'
+    },
+    dexscreener: {
+      network: 'ethereum',
+      pairAddress: '0x2a9d2ba41aba912316d16742f259412b681898db'
     }
   },
 
@@ -132,6 +136,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
+    },
+    dexscreener: {
+      network: 'base',
+      pairAddress: '0xe28f5637d009732259fcbb5cea23488a411a5ead'
     }
   },
 
@@ -197,6 +205,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
+    },
+    dexscreener: {
+      network: 'avalanche',
+      pairAddress: '0x90fbfd28f16fa163b914be6b9b3eeeb1c3e02fe5'
     }
   },
 
@@ -262,6 +274,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
+    },
+    dexscreener: {
+      network: 'bsc',
+      pairAddress: '0x85d3f8a47314eeb541e2ee1bc7af44efb7c28cf1'
     }
   },
 
@@ -327,6 +343,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
+    },
+    dexscreener: {
+      network: 'moonbeam',
+      pairAddress: '0x43a094dc0fb493fae9955c32e88d6ef839c5df7e'
     }
   },
 
@@ -392,6 +412,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
+    },
+    dexscreener: {
+      network: 'polygon',
+      pairAddress: '0x97ffb2574257280e0fb2fa522345f0e81faae711'
     }
   },
 
@@ -457,6 +481,10 @@ export const SUPPORTED_CHAINS = {
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
+    },
+    dexscreener: {
+      network: 'optimism',
+      pairAddress: '0xfdf64c32f4a03923547e6061911483b793e8d7e2'
     }
   }
 };

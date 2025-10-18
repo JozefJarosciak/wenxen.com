@@ -41,32 +41,30 @@ function formatTinyPrice(price) {
   if (!Number.isFinite(price)) return 'Unavailable';
 
   // Convert to string with enough precision
-  const priceStr = price.toFixed(20);
-  const parts = priceStr.split('.');
+  const priceStr = price.toExponential(20);
+  const match = priceStr.match(/^(\d+\.\d+)e-(\d+)$/);
 
-  if (parts.length < 2) return `$${price.toFixed(2)}`;
-
-  const fractional = parts[1];
-
-  // Count leading zeros after decimal
-  let zeros = 0;
-  for (let i = 0; i < fractional.length; i++) {
-    if (fractional[i] === '0') {
-      zeros++;
-    } else {
-      break;
-    }
+  if (!match) {
+    // Not in exponential notation, format normally
+    return `$${price.toFixed(6)}`;
   }
 
-  // If less than 4 leading zeros, use normal formatting
+  const mantissa = match[1];
+  const exponent = parseInt(match[2]);
+
+  // Number of leading zeros = exponent - 1
+  const zeros = exponent - 1;
+
   if (zeros < 4) {
-    return `$${price.toFixed(Math.min(6, zeros + 3))}`;
+    // Not that many zeros, show normally with appropriate precision
+    return `$${price.toFixed(zeros + 6)}`;
   }
 
-  // Find the first 4 significant digits after leading zeros
-  const significantPart = fractional.slice(zeros, zeros + 4);
+  // Get 5 significant digits from the mantissa (remove decimal point)
+  const digits = mantissa.replace('.', '').substring(0, 5);
 
-  return `$0.0<sub>${zeros}</sub>${significantPart}`;
+  // Create HTML with subscript for zero count
+  return `$0.0<sub>${zeros}</sub>${digits}`;
 }
 
 // Format USD values with appropriate precision
@@ -144,11 +142,15 @@ async function fetchFromDexscreener(tokenAddress) {
   let url;
   let data;
 
-  if (currentChain === 'BASE') {
-    // Base: Use pair endpoint for Base network
-    url = `https://api.dexscreener.com/latest/dex/pairs/base/0x6b21b1ed8ecec2ff1c1b4ad6c6b8c90b6b6b9b3d`;
+  // Get DexScreener config from centralized chain configuration
+  const chainConfig = window.chainManager?.getCurrentConfig();
+  const dexscreenerConfig = chainConfig?.dexscreener;
+
+  if (dexscreenerConfig) {
+    // Use specific pair endpoint from chain configuration
+    url = `https://api.dexscreener.com/latest/dex/pairs/${dexscreenerConfig.network}/${dexscreenerConfig.pairAddress}`;
   } else {
-    // Ethereum: Use token endpoint
+    // Fallback: Use token endpoint for any unconfigured chain
     url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
   }
 
@@ -157,11 +159,11 @@ async function fetchFromDexscreener(tokenAddress) {
   data = await res.json();
 
   let price;
-  if (currentChain === 'BASE') {
-    // Base: Extract from pair data
+  if (dexscreenerConfig) {
+    // Extract from pair data for configured chains
     price = parseFloat(data?.pair?.priceUsd || 0);
   } else {
-    // Ethereum: Extract from pairs array
+    // Fallback: Extract from pairs array
     const pairs = data?.pairs || [];
     if (pairs.length === 0) throw new Error('No pairs found');
     price = parseFloat(pairs[0]?.priceUsd || 0);

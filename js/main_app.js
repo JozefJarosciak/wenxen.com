@@ -1723,30 +1723,32 @@ let xenPriceLast = { ok: false, price: null, ts: null, source: null };
 // Format very small prices with subscript notation (e.g., $0.0₁₀4410)
 function formatTinyPrice(price) {
   if (!Number.isFinite(price)) return 'Unavailable';
-  
+
   // Convert to string with enough precision
-  const priceStr = price.toFixed(15);
-  
-  // Find the position of first non-zero digit after decimal
-  const match = priceStr.match(/^0\.0*[1-9]/);
+  const priceStr = price.toExponential(20);
+  const match = priceStr.match(/^(\d+\.\d+)e-(\d+)$/);
+
   if (!match) {
-    // Price is not tiny, just format normally
-    return `$${price.toFixed(10)}`;
+    // Not in exponential notation, format normally
+    return `$${price.toFixed(6)}`;
   }
-  
-  // Count the zeros after decimal point
-  const zeros = (match[0].match(/0/g) || []).length - 1; // -1 for the initial 0 before decimal
-  
+
+  const mantissa = match[1];
+  const exponent = parseInt(match[2]);
+
+  // Number of leading zeros = exponent - 1
+  const zeros = exponent - 1;
+
   if (zeros < 4) {
-    // Not that many zeros, show normally
-    return `$${price.toFixed(10)}`;
+    // Not that many zeros, show normally with appropriate precision
+    return `$${price.toFixed(zeros + 6)}`;
   }
-  
-  // Get the significant digits after the zeros
-  const significantPart = priceStr.substring(match[0].length, match[0].length + 4);
-  
+
+  // Get 5 significant digits from the mantissa (remove decimal point)
+  const digits = mantissa.replace('.', '').substring(0, 5);
+
   // Create HTML with subscript for zero count
-  return `$0.0<sub>${zeros}</sub>${significantPart}`;
+  return `$0.0<sub>${zeros}</sub>${digits}`;
 }
 
 function updateXenPriceStatus(){
@@ -1772,38 +1774,42 @@ async function fetchFromDexscreener(tokenAddress){
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
   let url;
   let data;
-  
-  if (currentChain === 'BASE') {
-    // For Base CBXEN, use the pairs endpoint
-    url = `https://api.dexscreener.com/latest/dex/pairs/base/${tokenAddress}`;
+
+  // Get DexScreener config from centralized chain configuration
+  const chainConfig = window.chainManager?.getCurrentConfig();
+  const dexscreenerConfig = chainConfig?.dexscreener;
+
+  if (dexscreenerConfig) {
+    // Use specific pair endpoint from chain configuration
+    url = `https://api.dexscreener.com/latest/dex/pairs/${dexscreenerConfig.network}/${dexscreenerConfig.pairAddress}`;
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Dexscreener HTTP ${res.status}`);
     data = await res.json();
-    
+
     // For pairs endpoint, check if we got a single pair or array
     const pair = data?.pair || (Array.isArray(data?.pairs) && data.pairs[0]);
-    if (!pair) throw new Error('Dexscreener: no pair data for Base');
-    
+    if (!pair) throw new Error(`Dexscreener: no pair data for ${currentChain}`);
+
     const price = parseFloat(pair?.priceUsd);
-    if (!Number.isFinite(price)) throw new Error('Dexscreener: no priceUsd for Base');
-    
-    const dexName = pair?.dexId || 'Aerodrome';
+    if (!Number.isFinite(price)) throw new Error(`Dexscreener: no priceUsd for ${currentChain}`);
+
+    const dexName = pair?.dexId || 'Dex';
     return { price, source: `${dexName} Dexscreener` };
   } else {
-    // For Ethereum XEN, use the tokens endpoint
+    // Fallback: use the tokens endpoint for any unconfigured chain
     url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Dexscreener HTTP ${res.status}`);
     data = await res.json();
-    
-    // Dexscreener returns an array of pairs for the token — pick an Ethereum one if present
+
+    // Dexscreener returns an array of pairs for the token
     const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
     if (!pairs.length) throw new Error('Dexscreener: no pairs');
-    
-    const preferred = pairs.find(p => (p.chainId || p.chain || '').toLowerCase().includes('eth')) || pairs[0];
+
+    const preferred = pairs[0];
     const price = parseFloat(preferred?.priceUsd ?? preferred?.price?.usd ?? preferred?.priceUsd);
     if (!Number.isFinite(price)) throw new Error('Dexscreener: no priceUsd');
-    
+
     const dexName = preferred?.dexId || preferred?.url || 'Dex';
     return { price, source: `${dexName} Dexscreener` };
   }
