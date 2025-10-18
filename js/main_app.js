@@ -7276,15 +7276,33 @@ async function cleanupIncorrectDatabases() {
     'ETH_DB-Xen-Stake', 'ETH_DB-Xenft-Stake',
     'DB-Xen-Stake', 'DB-Xenft-Stake'
   ];
-  
-  // Cleaning up incorrectly named databases
-  
-  for (const dbName of incorrectDatabases) {
+
+  // Check if indexedDB.databases() is available (for checking existence)
+  let existingDatabases = [];
+  if (typeof indexedDB.databases === 'function') {
     try {
-      await deleteDatabaseByName(dbName);
-      // Deleted incorrect database
+      const dbs = await indexedDB.databases();
+      existingDatabases = dbs.map(db => db.name);
     } catch (e) {
-      // Database might not exist, that's ok
+      // If databases() fails, skip the cleanup to avoid console spam
+      console.log('[DB Cleanup] Skipping cleanup - unable to enumerate databases');
+      return;
+    }
+  } else {
+    // If databases() is not supported, skip the cleanup to avoid console spam
+    console.log('[DB Cleanup] Skipping cleanup - indexedDB.databases() not supported');
+    return;
+  }
+
+  // Only attempt to delete databases that actually exist
+  for (const dbName of incorrectDatabases) {
+    if (existingDatabases.includes(dbName)) {
+      try {
+        await deleteDatabaseByName(dbName);
+        console.log(`[DB Cleanup] Deleted incorrect database: ${dbName}`);
+      } catch (e) {
+        console.warn(`[DB Cleanup] Failed to delete ${dbName}:`, e);
+      }
     }
   }
 }
