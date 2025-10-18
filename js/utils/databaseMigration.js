@@ -456,16 +456,7 @@ export class DatabaseMigrator {
 // Create singleton instance
 export const dbMigrator = new DatabaseMigrator();
 
-// Auto-run migration on module load if needed
-if (typeof window !== 'undefined') {
-  // Run migration after a short delay to ensure everything is initialized
-  setTimeout(async () => {
-    const needed = await dbMigrator.isMigrationNeeded();
-    if (needed) {
-      console.log('Database migration needed, running automatically...');
-      await dbMigrator.migrate();
-    }
-  }, 100);
-}
+// Note: Migration is called explicitly in index.html during app initialization
+// No auto-run needed here to avoid duplicate migrations
 
 export default dbMigrator;

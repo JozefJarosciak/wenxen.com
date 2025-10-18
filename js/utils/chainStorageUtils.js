@@ -225,6 +225,13 @@ export function loadGlobalData(key, parseJSON = false) {
 
 // Migrate existing non-chain-specific data on module load
 export function migrateExistingData() {
+  // Check if migration already completed
+  const migrationFlag = localStorage.getItem('chainStorageMigrationCompleted');
+  if (migrationFlag === 'v1') {
+    console.log('[Chain Storage] Migration already completed, skipping');
+    return;
+  }
+
   const keysToMigrate = [
     'trackedAddresses',
     'customRPC',
@@ -234,11 +241,15 @@ export function migrateExistingData() {
     'savedFilters',
     'tableSettings'
   ];
-  
+
   const migrated = chainStorage.migrateToChainStorage(keysToMigrate);
   if (migrated > 0) {
-    console.log(`Migrated ${migrated} items to chain-specific storage`);
+    console.log(`[Chain Storage] Migrated ${migrated} items to chain-specific storage`);
   }
+
+  // Mark migration as completed
+  localStorage.setItem('chainStorageMigrationCompleted', 'v1');
+  console.log('[Chain Storage] Migration completed and marked in localStorage');
 }
 
 // Make available globally
