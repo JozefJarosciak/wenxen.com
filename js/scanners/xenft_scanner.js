@@ -690,7 +690,43 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         }
       }
 
-      const tokenIds = Array.from(ownedTokens);
+      let tokenIds = Array.from(ownedTokens);
+
+      // IMPORTANT: If incremental scan found no new transfers, we still need to check
+      // existing tokens in the database for status updates (like claims)
+      if (tokenIds.length === 0 && !forceRescan) {
+        console.log(`[XENFT] No new transfers found - checking database for tokens needing refresh`);
+        const existingTokens = await getAll(db);
+        const now = Math.floor(Date.now() / 1000);
+        const REFRESH_WINDOW_DAYS = 7;
+        const REFRESH_WINDOW_SECONDS = REFRESH_WINDOW_DAYS * 24 * 60 * 60;
+
+        // Only refresh tokens that are:
+        // 1. Owned by this user
+        // 2. Within 7 days of maturity OR past maturity (not already redeemed)
+        const tokensNeedingRefresh = existingTokens
+          .filter(t => {
+            if ((t.owner || '').toLowerCase() !== addr.toLowerCase()) return false;
+
+            const maturityTs = Number(t.Maturity_Timestamp || t.maturityTs || 0);
+            const isRedeemed = Number(t.redeemed || 0) === 1;
+
+            // Skip if already redeemed
+            if (isRedeemed) return false;
+
+            // Include if within 7 days of maturity or past maturity
+            const timeUntilMaturity = maturityTs - now;
+            return timeUntilMaturity <= REFRESH_WINDOW_SECONDS;
+          })
+          .map(t => t.tokenId || t.Xenft_id);
+
+        if (tokensNeedingRefresh.length > 0) {
+          console.log(`[XENFT] Found ${tokensNeedingRefresh.length} tokens needing refresh (within 7 days of maturity or past maturity)`);
+          tokenIds = tokensNeedingRefresh;
+        } else {
+          console.log(`[XENFT] No tokens need refreshing - all are either far future or already claimed`);
+        }
+      }
 
       // Clear process progress on successful completion
       await clearProcessProgress(db, addr);
@@ -816,6 +852,23 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         try {
           const existing = await getByTokenId(db, tokenId);
 
+          // DEBUG: Track specific token
+          if (tokenId == 64010 || tokenId == 64091) {
+            console.log(`[XENFT DEBUG] ========== Processing Token ${tokenId} ==========`);
+            console.log(`[XENFT DEBUG] Token ${tokenId} - Existing in DB:`, existing ? 'YES' : 'NO');
+            if (existing) {
+              console.log(`[XENFT DEBUG] Token ${tokenId} - DB Data:`, {
+                Xenft_id: existing.Xenft_id,
+                tokenId: existing.tokenId,
+                redeemed: existing.redeemed,
+                Maturity_Timestamp: existing.Maturity_Timestamp,
+                maturityTs: existing.maturityTs,
+                Status: existing.Status,
+                actions: existing.actions
+              });
+            }
+          }
+
           const now = Math.floor(Date.now() / 1000);
           let maturityTs = 0;
           if (existing) {
@@ -829,51 +882,43 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           const isRedeemed = existing ? Number(existing.redeemed || 0) === 1 : false;
           const isFutureMaturing = existing ? (maturityTs > now) : false;
 
-// Skip already-known future or redeemed XENFTs
-          if (existing && (isRedeemed || isFutureMaturing)) {
-            continue;
+          // DEBUG: Track specific token
+          if (tokenId == 64010 || tokenId == 64091) {
+            console.log(`[XENFT DEBUG] Token ${tokenId} - Current timestamp:`, now);
+            console.log(`[XENFT DEBUG] Token ${tokenId} - Maturity timestamp:`, maturityTs);
+            console.log(`[XENFT DEBUG] Token ${tokenId} - Is redeemed (from DB):`, isRedeemed);
+            console.log(`[XENFT DEBUG] Token ${tokenId} - Is future maturing:`, isFutureMaturing);
           }
 
-
-          // --- After tokens: scan EndTorrent logs once for this owner and merge into entries
-          try {
-            let startBlock = 0;
-            try { startBlock = Number(await contract.methods.startBlockNumber().call()); } catch {}
-
-            // Try all RPCs for event fetching
-            const actions = await fetchEndTorrentActions(rpcEndpoints, addr, startBlock);
-            if (actions.length) {
-              const byToken = actions.reduce((acc, a) => {
-                (acc[String(a.tokenId)] ||= []).push(a);
-                return acc;
-              }, {});
-
-              const rows = await getAll(db);
-              for (const row of rows) {
-                if ((row.owner || "").toLowerCase() !== addr.toLowerCase()) continue;
-                const tid = String(row.Xenft_id || row.tokenId || "");
-                const acts = byToken[tid] || [];
-                if (acts.length) {
-                  row.actions = (row.actions || []).concat(acts);
-                  row.latestActionTimestamp = Math.max(
-                    ...row.actions.map(x => Number(x.timeStamp || 0))
-                  );
-                  await save(db, row);
-                }
+          // Skip tokens that are far in the future (more than 7 days away)
+          const REFRESH_WINDOW_DAYS = 7;
+          if (existing && isFutureMaturing) {
+            const daysUntilMaturity = (maturityTs - now) / (24 * 60 * 60);
+            if (daysUntilMaturity > REFRESH_WINDOW_DAYS) {
+              // DEBUG: Track specific token
+              if (tokenId == 64010 || tokenId == 64091) {
+                console.log(`[XENFT DEBUG] Token ${tokenId} - SKIPPING: Future maturing (${daysUntilMaturity.toFixed(2)} days away)`);
+              }
+              // Skip tokens maturing more than 7 days in the future
+              continue;
+            } else {
+              // DEBUG: Track specific token
+              if (tokenId == 64010 || tokenId == 64091) {
+                console.log(`[XENFT DEBUG] Token ${tokenId} - Within 7 day window (${daysUntilMaturity.toFixed(2)} days), will refresh`);
               }
             }
-          } catch (e) {
-            console.warn("EndTorrent scan failed:", e);
           }
-// Occasionally refresh near maturity
-          let refresh = true;
-          if (existing) {
-            const now = Math.floor(Date.now() / 1000);
-            const isRedeemed = Number(existing.redeemed || 0) === 1;
-            const isMaturingFuture = Number(existing.maturityTs || 0) > now;
-            refresh = !(isRedeemed || isMaturingFuture);
+
+          // Always refresh tokens that:
+          // 1. Don't exist in DB yet
+          // 2. Have recently matured (within 7 days of maturity)
+          // 3. Are past maturity (might have been claimed)
+          // This ensures we catch status changes like claiming
+
+          // DEBUG: Track specific token
+          if (tokenId == 64010 || tokenId == 64091) {
+            console.log(`[XENFT DEBUG] Token ${tokenId} - Proceeding to fetch blockchain data...`);
           }
-          if (!refresh) { continue; }
 
           let detail = null;
           
@@ -911,6 +956,13 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               // Use tokenId directly for mintInfo, like in Python code
               const mintInfoRaw = await c.methods.mintInfo(tokenId).call();
               const mintInfo = decodeMintInfo(mintInfoRaw);
+
+              // DEBUG: Track specific token
+              if (tokenId == 64010 || tokenId == 64091) {
+                console.log(`[XENFT DEBUG] Token ${tokenId} - Blockchain mintInfo:`, mintInfo);
+                console.log(`[XENFT DEBUG] Token ${tokenId} - Blockchain redeemed value:`, mintInfo.redeemed);
+              }
+
               const maturityDate = new Date(mintInfo.maturityTs * 1000);
               const localMaturity = (typeof luxon !== "undefined"
                 ? luxon.DateTime.fromJSDate(maturityDate).toFormat('yyyy LLL dd, hh:mm a') // two-digit hour
@@ -964,7 +1016,31 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               try { detail.redeemed = Number(mintInfo.redeemed)||0; } catch(_){}
               // default actions container
               if (!Array.isArray(detail.actions)) detail.actions = [];
+
+              // DEBUG: Track specific token before saving
+              if (tokenId == 64010 || tokenId == 64091) {
+                console.log(`[XENFT DEBUG] Token ${tokenId} - Saving to DB with detail:`, {
+                  Xenft_id: detail.Xenft_id,
+                  tokenId: detail.tokenId,
+                  redeemed: detail.redeemed,
+                  owner: detail.owner,
+                  actions: detail.actions
+                });
+              }
+
               await save(db, detail);
+
+              // DEBUG: Track specific token after saving
+              if (tokenId == 64010 || tokenId == 64091) {
+                const savedRecord = await getByTokenId(db, tokenId);
+                console.log(`[XENFT DEBUG] Token ${tokenId} - Verified DB record after save:`, {
+                  Xenft_id: savedRecord?.Xenft_id,
+                  tokenId: savedRecord?.tokenId,
+                  redeemed: savedRecord?.redeemed,
+                  actions: savedRecord?.actions
+                });
+              }
+
               // Save progress after each token for crash recovery
               await saveProcessProgress(db, addr, tokenId, processed + 1);
               break;
@@ -987,6 +1063,101 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
             _lastUi = now;
           }
         }
+      }
+
+      // After processing all tokens for this address, scan for EndTorrent (claim) events
+      try {
+        console.log(`[XENFT DEBUG] ========== Starting EndTorrent Event Scan for ${addr} ==========`);
+        if (window.progressUI) {
+          window.progressUI.setStage('Scanning for claim events...', 1, 1);
+        }
+
+        // Use the same scan state to determine where to start scanning for events
+        const scanState = await getScanState(db, addr);
+        const lastTransactionBlock = scanState?.lastTransactionBlock || 0;
+
+        // Scan from deployment block or last transaction block (whichever is later)
+        const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
+        let startBlock = lastTransactionBlock > 0
+          ? Math.max(lastTransactionBlock - 100000, deploymentBlock)  // Look back 100k blocks max
+          : deploymentBlock;
+
+        console.log(`[XENFT DEBUG] EndTorrent scan - Starting from block:`, startBlock, `(deployment: ${deploymentBlock}, lastTx: ${lastTransactionBlock})`);
+
+        // Try all RPCs for event fetching
+        const actions = await fetchEndTorrentActions(rpcEndpoints, addr, startBlock);
+        console.log(`[XENFT] Found ${actions.length} EndTorrent (claim) events for ${addr}`);
+
+        // DEBUG: Log all claim events
+        if (actions.length > 0) {
+          console.log(`[XENFT DEBUG] All claim events:`, actions);
+        }
+
+        if (actions.length) {
+          const byToken = actions.reduce((acc, a) => {
+            (acc[String(a.tokenId)] ||= []).push(a);
+            return acc;
+          }, {});
+
+          // DEBUG: Show which tokens have claim events
+          console.log(`[XENFT DEBUG] Tokens with claim events:`, Object.keys(byToken));
+
+          const rows = await getAll(db);
+          console.log(`[XENFT DEBUG] Total rows in DB for processing:`, rows.length);
+
+          for (const row of rows) {
+            if ((row.owner || "").toLowerCase() !== addr.toLowerCase()) continue;
+            const tid = String(row.Xenft_id || row.tokenId || "");
+            const acts = byToken[tid] || [];
+
+            // DEBUG: Track specific tokens
+            if (tid == '64010' || tid == '64091') {
+              console.log(`[XENFT DEBUG] Token ${tid} - Found in DB for event processing`);
+              console.log(`[XENFT DEBUG] Token ${tid} - Has claim events:`, acts.length > 0);
+              console.log(`[XENFT DEBUG] Token ${tid} - Events:`, acts);
+              console.log(`[XENFT DEBUG] Token ${tid} - Current redeemed value:`, row.redeemed);
+            }
+
+            if (acts.length) {
+              row.actions = (row.actions || []).concat(acts);
+              row.latestActionTimestamp = Math.max(
+                ...row.actions.map(x => Number(x.timeStamp || 0))
+              );
+              // If there's a claim action, mark as redeemed
+              if (acts.some(a => a.type === "bulkClaimMintReward")) {
+                row.redeemed = 1;
+                console.log(`[XENFT] Marking token ${tid} as claimed (redeemed=1)`);
+
+                // DEBUG: Track specific tokens
+                if (tid == '64010' || tid == '64091') {
+                  console.log(`[XENFT DEBUG] Token ${tid} - SETTING REDEEMED = 1`);
+                  console.log(`[XENFT DEBUG] Token ${tid} - About to save row:`, {
+                    Xenft_id: row.Xenft_id,
+                    tokenId: row.tokenId,
+                    redeemed: row.redeemed,
+                    actions: row.actions
+                  });
+                }
+              }
+              await save(db, row);
+
+              // DEBUG: Verify save for specific tokens
+              if (tid == '64010' || tid == '64091') {
+                const verifyRow = await getByTokenId(db, tid);
+                console.log(`[XENFT DEBUG] Token ${tid} - Verified after event save:`, {
+                  Xenft_id: verifyRow?.Xenft_id,
+                  tokenId: verifyRow?.tokenId,
+                  redeemed: verifyRow?.redeemed,
+                  actions: verifyRow?.actions?.length
+                });
+              }
+            }
+          }
+        }
+        console.log(`[XENFT DEBUG] ========== EndTorrent Event Scan Complete ==========`);
+      } catch (e) {
+        console.warn("[XENFT] EndTorrent event scan failed:", e);
+        console.error("[XENFT DEBUG] Event scan error details:", e.stack);
       }
     }
 
