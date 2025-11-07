@@ -7981,6 +7981,39 @@ function setStatusHeaderFilter(statusText) {
     }
     initMobileState();
   });
+
+  // Initialize filter labels with dynamic dates
+  function updateFilterLabels() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0..11
+
+    // Calculate next month
+    let nextMonth = currentMonth + 1;
+    let nextMonthYear = currentYear;
+    if (nextMonth > 11) {
+      nextMonth = 0;
+      nextMonthYear += 1;
+    }
+
+    // Update filter button labels
+    const thisMonthBtn = container.querySelector('[data-filter="this-month"]');
+    const nextMonthBtn = container.querySelector('[data-filter="next-month"]');
+    const thisYearBtn = container.querySelector('[data-filter="this-year"]');
+    const nextYearBtn = container.querySelector('[data-filter="next-year"]');
+    const yearPlus2Btn = container.querySelector('[data-filter="year-plus-2"]');
+    const yearPlus3Btn = container.querySelector('[data-filter="year-plus-3"]');
+
+    if (thisMonthBtn) thisMonthBtn.textContent = `This Month (${MONTHS[currentMonth]}, ${currentYear})`;
+    if (nextMonthBtn) nextMonthBtn.textContent = `Next Month (${MONTHS[nextMonth]}, ${nextMonthYear})`;
+    if (thisYearBtn) thisYearBtn.textContent = `This Year (${currentYear})`;
+    if (nextYearBtn) nextYearBtn.textContent = `Next Year (${currentYear + 1})`;
+    if (yearPlus2Btn) yearPlus2Btn.textContent = `Year +2 (${currentYear + 2})`;
+    if (yearPlus3Btn) yearPlus3Btn.textContent = `Year +3 (${currentYear + 3})`;
+  }
+
+  // Update labels on page load
+  updateFilterLabels();
 })();
 
 // Backup & Restore wiring (runs after DOM is available)
