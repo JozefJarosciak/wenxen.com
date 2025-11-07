@@ -555,7 +555,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
     const db = await openDB();
     const CHUNK_SIZE = 50000; // Process 50k blocks at a time
-    const SAFETY_BUFFER_BLOCKS = 100; // Safety buffer for incremental scanning
+    const SAFETY_BUFFER_BLOCKS = 10000; // Safety buffer for incremental scanning (~1 day on Ethereum)
 
     try {
       // Clear progress on force rescan
@@ -574,11 +574,11 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
       console.log(`[XENFT] Deployment block for ${currentChain}:`, deploymentBlock);
 
-      // Use safety buffer approach: always rescan from before last transaction
+      // Use safety buffer approach: always rescan last 10k blocks (~1 day)
       const safeStartBlock = lastTransactionBlock > 0
         ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock)
         : deploymentBlock;
-      console.log(`[XENFT] Safe start block calculated:`, safeStartBlock, `(lastTxBlock: ${lastTransactionBlock}, buffer: ${SAFETY_BUFFER_BLOCKS})`);
+      console.log(`[XENFT] Safe start block calculated:`, safeStartBlock, `(lastTxBlock: ${lastTransactionBlock}, buffer: ${SAFETY_BUFFER_BLOCKS} blocks)`);
 
       // Get current block using Web3 directly
       const rpcEndpoints = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC];
