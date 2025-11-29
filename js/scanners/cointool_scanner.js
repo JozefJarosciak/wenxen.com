@@ -360,11 +360,13 @@ async function fetchMintDetails(address, mintId, etherscanApiKey) {
   const receipt = await makeRpcCall(() => web3Instance.eth.getTransactionReceipt(txHash));
   const block = await getBlockWithCache(blockNumber);
 
-  // Decode transaction data
+  // Decode transaction data to extract salt
   const inputData = tx.input.slice(10); // Remove '0x' and method selector
   const decodedParams = web3Instance.eth.abi.decodeParameters(['uint256', 'bytes', 'bytes'], inputData);
-  
-  const vmUs = decodedParams[0];
+
+  // Cointool batch mints always create 1-VMU proxies
+  // The first param (decodedParams[0]) is "total" count of proxies, NOT VMUs per proxy
+  const vmUs = 1;
   const salt = decodedParams[2];
 
   // Find mint event in receipt
