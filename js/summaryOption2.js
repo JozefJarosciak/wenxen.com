@@ -561,11 +561,16 @@ window.summaryOption2 = {
     return parseInt(str.replace(/[,\s]/g, ''), 10) || 0;
   },
 
-  // Calculate XEN rewards for a data type
+  // Calculate XEN rewards for a data type (only maturing items)
   calculateXenRewards(dataType) {
     if (!window._allUnifiedRows) return { xen: 0, usd: 0 };
 
-    const rows = window._allUnifiedRows.filter(r => r.SourceType === dataType);
+    // Filter by source type AND only include maturing items
+    const rows = window._allUnifiedRows.filter(r => {
+      if (r.SourceType !== dataType) return false;
+      const status = this.computeLiveStatus(r);
+      return status === 'Maturing';
+    });
     let totalXen = 0;
 
     for (const row of rows) {
