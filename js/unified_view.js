@@ -389,7 +389,8 @@ function rowToLocalKey(row){
   if (fromFmt) return fromFmt;
 
   // 2) Fall back to Maturity_Timestamp (seconds), converted to LOCAL time
-  const t = Number(row.Maturity_Timestamp);
+  // Note: Cointool uses Maturity_TS, others use Maturity_Timestamp
+  const t = Number(row.Maturity_Timestamp || row.Maturity_TS);
   if (Number.isFinite(t) && t > 0) {
     if (typeof luxon !== "undefined") {
       return luxon.DateTime.fromSeconds(t)
@@ -786,7 +787,8 @@ function setMaturityHeaderFilterFromDate(dt) {
       if (String(row.Status) === "Claimed" || String(row.status) === "Ended Early" || Number(row.redeemed || 0) === 1) return;
 
       // Only count items that have a valid maturity timestamp
-      const t = Number(row.Maturity_Timestamp || 0);
+      // Note: Cointool uses Maturity_TS, others use Maturity_Timestamp
+      const t = Number(row.Maturity_Timestamp || row.Maturity_TS || 0);
       if (!Number.isFinite(t) || t <= 0) return;
 
       const key = rowToLocalKey(row);
