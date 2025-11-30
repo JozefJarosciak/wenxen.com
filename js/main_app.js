@@ -7535,6 +7535,7 @@ async function importBackupFromFile(file) {
       // For version 6+ backups, directly import to the specified database
       if (data.version >= 6 && !isOldDatabase) {
 
+        try {
         // Import directly to the chain-specific database
         if (name.endsWith("DB_Cointool")) {
           const db = await openDatabaseByName(name);
@@ -7592,12 +7593,17 @@ async function importBackupFromFile(file) {
           await bulkPut(db, "scanState", stores.scanState || []);
           console.log(`[Import] Imported ${(stores.stakes || []).length} XEN stakes to ${name}`);
         }
+        } catch (dbError) {
+          console.error(`[Import] Failed to import ${name}:`, dbError.message);
+          // Continue with other databases
+        }
 
         continue; // Skip old import logic for v6+ backups
       }
       
       // Handle legacy databases and old backup formats
       if (isOldDatabase) {
+        try {
         // Import legacy format databases for migration
         if (name === "DB_Cointool" || chain === "LEGACY") {
           const legacyDb = await openDatabaseByName("DB_Cointool");
@@ -7648,6 +7654,10 @@ async function importBackupFromFile(file) {
           await clearStore(legacyDb, "scanState").catch(() => {});
           await bulkPut(legacyDb, "stakes", stores.stakes || []);
           await bulkPut(legacyDb, "scanState", stores.scanState || []);
+        }
+        } catch (dbError) {
+          console.error(`[Import] Failed to import legacy ${name}:`, dbError.message);
+          // Continue with other databases
         }
       }
     }
@@ -7765,9 +7775,20 @@ function openDatabaseByName(name) {
     if (name.includes("Cointool")) version = 3;
     else if (name.includes("XenftStake")) version = 2;
     else if (name.includes("Xenft")) version = 3; // Updated for scanState and processProgress stores
-    
+
     const request = indexedDB.open(name, version);
-    
+
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      console.warn(`[DB Open] Timeout opening database: ${name}`);
+      reject(new Error(`Timeout opening database: ${name}`));
+    }, 10000);
+
+    request.onblocked = () => {
+      console.warn(`[DB Open] Database ${name} is blocked by another connection`);
+      // Don't reject immediately - wait for it to unblock
+    };
+
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
       
@@ -7813,8 +7834,14 @@ function openDatabaseByName(name) {
       }
     };
     
-    request.onsuccess = (event) => resolve(event.target.result);
-    request.onerror = () => reject(new Error(`Failed to open database: ${name}`));
+    request.onsuccess = (event) => {
+      clearTimeout(timeout);
+      resolve(event.target.result);
+    };
+    request.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error(`Failed to open database: ${name}`));
+    };
   });
 }
 
