@@ -226,7 +226,7 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
     // Process mints sequentially within batch to enable granular progress tracking
     for (let mintId = startId; mintId <= endId; mintId++) {
       try {
-        await processMint(address, mintId, postMintActions, forceRescan);
+        await processMint(address, mintId, postMintActions, forceRescan, etherscanApiKey);
         // Save progress after each mint to enable crash recovery
         await saveMintProgress(address, mintId);
 
@@ -270,7 +270,7 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
 }
 
 // Process a single mint
-async function processMint(address, mintId, postMintActions, forceRescan) {
+async function processMint(address, mintId, postMintActions, forceRescan, etherscanApiKey) {
   const uniqueId = `${mintId}-${address.toLowerCase()}`;
   
   // Check if already processed (unless force rescan) - fast path optimization
