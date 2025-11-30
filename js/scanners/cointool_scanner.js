@@ -143,310 +143,153 @@ async function scanAddressMints(address, etherscanApiKey, forceRescan) {
   // Get or refresh post-mint actions using event-based scanning
   const postMintActions = await fetchPostMintActions(address, etherscanApiKey, forceRescan);
 
-  // First try to get latest mints via event-based scanning for better accuracy
-  const eventBasedMints = await scanEventsForMints(address, etherscanApiKey, forceRescan);
+  // Discover all mints by scanning transactions to the Cointool contract
+  // This works regardless of which salt was used
+  const discoveredMints = await scanEventsForMints(address, etherscanApiKey, forceRescan);
 
-  // Also get max mint ID for this address as fallback
-  const maxId = await makeRpcCall(() =>
-    contractInstance.methods.map(address, COINTOOL_SALT_BYTES).call()
-  );
-
-  // Use the higher of event-based count or contract maxId
-  const totalMints = Math.max(eventBasedMints.length, parseInt(maxId) || 0);
-
-  if (totalMints === 0) {
+  if (discoveredMints.length === 0) {
+    console.log(`[COINTOOL] No mints found for ${address}`);
     return;
   }
 
   // Initialize performance monitoring
-  startPerformanceMonitoring(totalMints);
+  startPerformanceMonitoring(discoveredMints.length);
 
   // Initialize progress UI
-  if (window.progressUI) {
-    if (window.progressUI.setStage) {
-      window.progressUI.setStage(`Initializing Cointool scan for ${totalMints} potential mints`, 0, totalMints);
-    }
+  if (window.progressUI && window.progressUI.setStage) {
+    window.progressUI.setStage(`Processing ${discoveredMints.length} discovered mints`, 0, discoveredMints.length);
   }
-
-  // Process event-based mints first (most recent/accurate)
-  if (eventBasedMints.length > 0) {
-    if (window.progressUI && window.progressUI.setStage) {
-      window.progressUI.setStage(`Found ${eventBasedMints.length} recent mint events`, 0, totalMints);
-    }
-  }
-
-  // Process all mints by ID (covering both old and new)
-  const maxIdToProcess = Math.max(totalMints, parseInt(maxId) || 0);
-
-  // Get last processed mint ID for crash recovery
-  let startFromMintId = 1;
-  if (!forceRescan) {
-    const mintProgress = await getMintProgress(address);
-    if (mintProgress && mintProgress.lastProcessedMintId > 0) {
-      startFromMintId = mintProgress.lastProcessedMintId + 1;
-      if (window.progressUI && window.progressUI.setStage) {
-        window.progressUI.setStage(`Resuming from mint ID ${startFromMintId}`, startFromMintId - 1, maxIdToProcess);
-      }
-    }
-  } else {
-    // Clear mint progress on force rescan
-    await clearMintProgress(address);
-    if (window.progressUI && window.progressUI.setStage) {
-      window.progressUI.setStage(`Starting full rescan of ${maxIdToProcess} mints`, 0, maxIdToProcess);
-    }
-  }
-
-  // Process mints in sequential batches to prevent browser crashes
-  // Configurable batch sizes - smaller batches to prevent memory issues
-  const BATCH_SIZE = window.chainConfigUtils?.getCointoolBatchSize() || 10; // Process 10 mints per batch (reduced from 15)
-  const DELAY_BETWEEN_BATCHES = window.chainConfigUtils?.getCointoolBatchDelay() || 100; // 100ms minimum delay between batches
 
   const startTime = Date.now();
+  const BATCH_SIZE = window.chainConfigUtils?.getCointoolBatchSize() || 50; // Larger batches since we already have the data
+  const DELAY_BETWEEN_BATCHES = window.chainConfigUtils?.getCointoolBatchDelay() || 50;
 
-  for (let startId = startFromMintId; startId <= maxIdToProcess; startId += BATCH_SIZE) {
-    const endId = Math.min(startId + BATCH_SIZE - 1, maxIdToProcess);
+  // Process discovered mints in batches
+  for (let i = 0; i < discoveredMints.length; i += BATCH_SIZE) {
     const batchStart = Date.now();
+    const batchEnd = Math.min(i + BATCH_SIZE, discoveredMints.length);
+    const batch = discoveredMints.slice(i, batchEnd);
 
-    // Update progress UI at start of each batch
-    const overallProgress = Math.floor(((startId - startFromMintId) / (maxIdToProcess - startFromMintId + 1)) * 100);
+    // Update progress UI
     if (window.progressUI) {
       const elapsed = (Date.now() - startTime) / 1000;
-      const processed = startId - startFromMintId;
-      const rate = processed > 0 ? processed / elapsed : 0;
-      const remaining = maxIdToProcess - endId;
+      const rate = i > 0 ? i / elapsed : 0;
+      const remaining = discoveredMints.length - batchEnd;
       const eta = rate > 0 && remaining > 0 ? `${Math.ceil(remaining / rate)}s` : 'calculating...';
 
       if (window.progressUI.setStage) {
-        window.progressUI.setStage(`Processing mints ${startId}-${endId} (${rate.toFixed(1)}/s, ETA: ${eta})`, startId - startFromMintId, maxIdToProcess - startFromMintId + 1);
-      } else if (window.progressUI.setProgress) {
-        window.progressUI.setProgress(overallProgress, `Processing mints ${endId}/${maxIdToProcess} (${rate.toFixed(1)}/s, ETA: ${eta})`);
+        window.progressUI.setStage(`Processing mints ${i + 1}-${batchEnd} of ${discoveredMints.length} (${rate.toFixed(1)}/s, ETA: ${eta})`, i, discoveredMints.length);
       }
     }
 
-    // Process mints sequentially within batch to enable granular progress tracking
-    for (let mintId = startId; mintId <= endId; mintId++) {
+    // Process each mint in the batch
+    for (let j = 0; j < batch.length; j++) {
+      const mintInfo = batch[j];
       try {
-        await processMint(address, mintId, postMintActions, forceRescan, etherscanApiKey);
-        // Save progress after each mint to enable crash recovery
-        await saveMintProgress(address, mintId);
+        await processDiscoveredMint(address, mintInfo, postMintActions, forceRescan);
 
-        // Yield to browser every 5 mints to prevent UI freezing
-        if ((mintId - startId) % 5 === 0) {
+        // Yield to browser every 10 mints
+        if (j % 10 === 0) {
           await new Promise(resolve => setTimeout(resolve, 1));
         }
-
       } catch (error) {
-        console.error(`[COINTOOL] Failed to process mint ${mintId} for ${address}:`, error);
-        // Continue with next mint even if one fails
+        console.warn(`[COINTOOL] Failed to process mint at proxy ${mintInfo.proxyAddress}:`, error.message);
       }
     }
 
     // Record batch performance
-    const batchDuration = Date.now() - batchStart;
-    const actualBatchSize = endId - startId + 1;
-    recordBatchTime(actualBatchSize, batchDuration);
+    recordBatchTime(batch.length, Date.now() - batchStart);
 
-    // Add small delay between batches to avoid overwhelming APIs and allow UI updates
-    if (endId < maxIdToProcess) {
-      await new Promise(resolve => setTimeout(resolve, Math.max(DELAY_BETWEEN_BATCHES, 100)));
-    }
-
-    // Force garbage collection hint (if available) after each batch to prevent memory buildup
-    if (window.gc && typeof window.gc === 'function') {
-      try {
-        window.gc();
-      } catch (e) {
-        // gc() not available in this browser, that's fine
-      }
+    // Small delay between batches
+    if (batchEnd < discoveredMints.length) {
+      await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
     }
   }
-  
+
   // Generate performance summary
   finishPerformanceMonitoring();
-
-  // Clear mint progress on successful completion
-  await clearMintProgress(address);
-  console.log(`[COINTOOL] Scan completed successfully for ${address} - cleared mint progress`);
+  console.log(`[COINTOOL] Scan completed successfully for ${address} - processed ${discoveredMints.length} mints`);
 }
 
-// Process a single mint
-async function processMint(address, mintId, postMintActions, forceRescan, etherscanApiKey) {
-  const uniqueId = `${mintId}-${address.toLowerCase()}`;
-  
-  // Check if already processed (unless force rescan) - fast path optimization
+// Process a mint discovered from transaction scanning
+async function processDiscoveredMint(address, mintInfo, postMintActions, forceRescan) {
+  // Create a unique ID using proxy address (guaranteed unique per mint)
+  const uniqueId = `${mintInfo.proxyAddress.toLowerCase()}-${address.toLowerCase()}`;
+
+  // Check if already processed (unless force rescan)
   if (!forceRescan) {
     const existing = await getMintFromDB(uniqueId);
     if (existing) {
       // Skip if no new actions
       const existingActionCount = (existing.Actions || []).length;
-      const saltKey = `${mintId}-${normalizeSalt(existing.Salt)}`;
+      const saltKey = `proxy-${mintInfo.proxyAddress.toLowerCase()}`;
       const newActionCount = (postMintActions[saltKey] || []).length;
-      
+
       if (newActionCount <= existingActionCount) {
-        return null; // Return null to indicate skipped
+        return null; // Already processed
       }
     }
   }
 
-  try {
-    // Get mint details from blockchain
-    const apiStart = Date.now();
-    const mintData = await fetchMintDetails(address, mintId, etherscanApiKey);
-    recordApiCallTime(Date.now() - apiStart);
-    
-    if (!mintData) return;
-
-    // Combine with post-mint actions
-    const saltKey = `${mintId}-${normalizeSalt(mintData.salt)}`;
-    const actions = postMintActions[saltKey] || [];
-    
-    // Create mint record
-    const mintRecord = createMintRecord(uniqueId, address, mintId, mintData, actions);
-    
-    // Save to database
-    const dbStart = Date.now();
-    await saveMintToDB(mintRecord);
-    recordDbWriteTime(Date.now() - dbStart);
-    
-    console.log(`[COINTOOL] Processed mint ${mintId} for ${address}`);
-    
-  } catch (error) {
-    console.warn(`[COINTOOL] Failed to process mint ${mintId} for ${address}:`, error);
-  }
-}
-
-// Fetch mint details from blockchain
-async function fetchMintDetails(address, mintId, etherscanApiKey) {
-  // Compute proxy address
-  const proxyAddress = computeProxyAddress(mintId, COINTOOL_SALT_BYTES, address);
-  
-  // Get contract creation info using Etherscan V2 multichain API
-  const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
-  const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=contract&action=getcontractcreation&contractaddresses=${proxyAddress}&apikey=${etherscanApiKey}`;
-  
-  // Add timeout to prevent hanging requests
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for contract info
-
-  let data;
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Explorer API failed: ${response.status}`);
-    }
-
-    data = await response.json();
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      console.error(`[COINTOOL] Contract info request timeout`);
-      return null; // Return null on timeout instead of throwing
-    }
-    throw error;
-  }
-  if (data.status !== "1" || !data.result || data.result.length === 0) {
-    return null; // No creation found
-  }
-
-  const txHash = data.result[0].txHash;
-  const blockNumber = data.result[0].blockNumber;
-
-  // Get transaction details
-  const tx = await makeRpcCall(() => web3Instance.eth.getTransaction(txHash));
-  const receipt = await makeRpcCall(() => web3Instance.eth.getTransactionReceipt(txHash));
-  const block = await getBlockWithCache(blockNumber);
-
-  // Decode transaction data to extract salt
-  const inputData = tx.input.slice(10); // Remove '0x' and method selector
-  const decodedParams = web3Instance.eth.abi.decodeParameters(['uint256', 'bytes', 'bytes'], inputData);
-
-  // Cointool batch mints always create 1-VMU proxies
-  // The first param (decodedParams[0]) is "total" count of proxies, NOT VMUs per proxy
-  const vmUs = 1;
-  const salt = decodedParams[2];
-
-  // Find mint event in receipt
-  const mintLog = receipt.logs.find(log => 
-    log.topics[0] === COINTOOL_EVENT_TOPIC && 
-    ('0x' + log.topics[1].slice(26)).toLowerCase() === proxyAddress.toLowerCase()
-  );
-
-  if (!mintLog) {
-    throw new Error(`No mint log found for ${proxyAddress}`);
-  }
-
-  // Decode mint event data
-  const decodedLog = web3Instance.eth.abi.decodeParameters(['uint256', 'uint256'], mintLog.data);
-  const term = decodedLog[0];
-  const baseRank = decodedLog[1];
-
-  return {
-    txHash,
-    blockNumber,
-    timestamp: Number(block.timestamp),
-    vmUs: Number(vmUs),
-    salt,
-    term: Number(term),
-    baseRank: BigInt(baseRank)
-  };
-}
-
-// Create mint record object
-function createMintRecord(uniqueId, address, mintId, mintData, actions) {
-  const lastAction = actions.length > 0 ? actions[actions.length - 1] : null;
-  const mintTimestamp = mintData.timestamp;
-  const latestActionTimestamp = lastAction ? Number(lastAction.timeStamp) : mintTimestamp;
-  
-  let effectiveTermDays = Number(mintData.term);
-  let maturityTimestamp = latestActionTimestamp + (effectiveTermDays * 86400);
-  let status = "Maturing";
-  
-  // Handle ended stakes (term = 0 in last action)
-  if (lastAction && (lastAction.term == null || Number(lastAction.term) === 0)) {
-    maturityTimestamp = 0;
-    status = "Claimed";
-  } else if (actions.length > 0) {
-    // Has actions, determine if claimed or extended
-    status = "Claimed";
+  // Get block timestamp if not available
+  let timestamp = mintInfo.timestamp;
+  if (!timestamp) {
+    const block = await getBlockWithCache(mintInfo.blockNumber);
+    timestamp = Number(block.timestamp);
   } else {
-    // Check if matured
-    const now = Date.now() / 1000;
-    if (maturityTimestamp <= now) {
-      status = "Claimable";
+    timestamp = Number(timestamp);
+  }
+
+  // Calculate maturity
+  const termDays = mintInfo.term;
+  const maturityTimestamp = timestamp + (termDays * 86400);
+
+  // Determine status
+  let status = "Maturing";
+  const now = Date.now() / 1000;
+  if (maturityTimestamp <= now) {
+    status = "Claimable";
+  }
+
+  // Check for actions (claims/remints)
+  const saltKey = `proxy-${mintInfo.proxyAddress.toLowerCase()}`;
+  const actions = postMintActions[saltKey] || [];
+  if (actions.length > 0) {
+    const lastAction = actions[actions.length - 1];
+    if (lastAction.term == null || Number(lastAction.term) === 0) {
+      status = "Claimed";
     }
   }
 
-  const effectiveRank = lastAction && lastAction.rank ? BigInt(lastAction.rank) : mintData.baseRank;
-  const startRank = effectiveRank;
-  const endRank = startRank + BigInt(mintData.vmUs) - 1n;
-  
-  const maturityDate = maturityTimestamp > 0 
-    ? luxon.DateTime.fromSeconds(maturityTimestamp)
-    : null;
+  // Format dates
+  const mintDate = luxon.DateTime.fromSeconds(timestamp);
+  const maturityDate = luxon.DateTime.fromSeconds(maturityTimestamp);
 
-  return {
+  // Create mint record
+  const mintRecord = {
     ID: uniqueId,
-    Mint_id_Start: mintId,
-    TX_Hash: mintData.txHash,
-    Salt: mintData.salt,
-    Term: effectiveTermDays,
-    VMUs: mintData.vmUs,
+    Mint_id_Start: mintInfo.proxyAddress, // Use proxy as identifier since mint IDs depend on salt
+    TX_Hash: mintInfo.txHash,
+    Salt: mintInfo.salt,
+    Term: termDays,
+    VMUs: 1, // Cointool batch mints are always 1 VMU per proxy
     Actions: actions,
     Status: status,
-    Create_TS: mintTimestamp,
-    Mint_Date_Fmt: luxon.DateTime.fromSeconds(mintTimestamp).toFormat('yyyy LLL dd HH:mm'),
-    Maturity_Date_Fmt: maturityDate ? maturityDate.toFormat('yyyy LLL dd HH:mm') : "Ended",
+    Create_TS: timestamp,
+    Mint_Date_Fmt: mintDate.toFormat('yyyy LLL dd HH:mm'),
+    Maturity_Date_Fmt: maturityDate.toFormat('yyyy LLL dd HH:mm'),
     Maturity_TS: maturityTimestamp,
-    Rank_Range: `${startRank.toString()}-${endRank.toString()}`,
+    Rank_Range: `${mintInfo.rank}-${mintInfo.rank}`, // Single rank per 1-VMU mint
     Address: address,
     SourceType: "Cointool",
-    Est_XEN: 0 // Will be calculated elsewhere
+    Est_XEN: 0,
+    ProxyAddress: mintInfo.proxyAddress
   };
+
+  // Save to database
+  await saveMintToDB(mintRecord);
 }
+
 
 // Database helper functions
 async function getMintFromDB(uniqueId) {
@@ -663,10 +506,11 @@ function finishPerformanceMonitoring() {
   console.log(``);
 }
 
-// Scan for Cointool mint events using block-based incremental scanning
+// Scan for Cointool mints by finding transactions where user called the Cointool contract
+// This approach works regardless of which salt was used
 async function scanEventsForMints(address, etherscanApiKey, forceRescan) {
   try {
-    console.log(`[COINTOOL] Scanning events for ${address} mints`);
+    console.log(`[COINTOOL] Scanning transactions for ${address} mints`);
 
     // Get scan state for incremental scanning with safety buffer
     let lastScannedBlock = 0;
@@ -683,84 +527,157 @@ async function scanEventsForMints(address, etherscanApiKey, forceRescan) {
     const currentBlock = await web3Instance.eth.getBlockNumber();
 
     // Always rescan from safety buffer blocks before last known transaction to handle API lag
-    // This ensures we never miss transactions that appear late in APIs
-    const SAFETY_BUFFER_BLOCKS = 50; // Configurable safety margin
+    const SAFETY_BUFFER_BLOCKS = 10000; // Larger buffer for transaction-based scanning
     const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
-    const safeStartBlock = Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock);
+    const safeStartBlock = forceRescan ? deploymentBlock : Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock);
     const fromBlock = safeStartBlock;
 
-    console.log(`[COINTOOL] Using safety buffer: lastTransaction=${lastTransactionBlock}, safeStart=${safeStartBlock}, buffer=${SAFETY_BUFFER_BLOCKS}`);
-
-    console.log(`[COINTOOL] Event scanning from block ${fromBlock} to ${currentBlock} for ${address}`);
+    console.log(`[COINTOOL] Transaction scanning from block ${fromBlock} to ${currentBlock} for ${address}`);
 
     if (fromBlock > currentBlock) {
       console.log(`[COINTOOL] No new blocks to scan for ${address}`);
       return [];
     }
 
-    // Use Etherscan V2 multichain API like other scanners
+    // Use Etherscan API to get all transactions from this address to the Cointool contract
+    // Etherscan has a 10,000 result limit, so we need to paginate
     const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
-    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=logs&action=getLogs&fromBlock=${fromBlock}&toBlock=${currentBlock}&address=${CONTRACT_ADDRESS}&topic0=${COINTOOL_EVENT_TOPIC}&apikey=${etherscanApiKey}`;
 
-    // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    let mintInfos = [];
+    let highestBlockWithMint = lastTransactionBlock;
+    let allCointoolTxs = [];
+    let page = 1;
+    const PAGE_SIZE = 10000;
+    let hasMoreResults = true;
 
-    let data;
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+    console.log(`[COINTOOL] Starting paginated transaction scan for ${address}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    while (hasMoreResults) {
+      const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=txlist&address=${address}&startblock=${fromBlock}&endblock=${currentBlock}&page=${page}&offset=${PAGE_SIZE}&sort=asc&apikey=${etherscanApiKey}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      let data;
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        data = await response.json();
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          console.error(`[COINTOOL] Request timeout for ${address} page ${page}`);
+          throw new Error('Request timeout');
+        }
+        throw error;
       }
 
-      data = await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        console.error(`[COINTOOL] Request timeout for ${address}`);
-        throw new Error('Request timeout');
+      if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+        // Filter transactions that are calls to the Cointool contract
+        const cointoolTxs = data.result.filter(tx =>
+          tx.to && tx.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() &&
+          tx.isError === "0" && // Only successful transactions
+          tx.from.toLowerCase() === address.toLowerCase() // User initiated the tx
+        );
+
+        allCointoolTxs = allCointoolTxs.concat(cointoolTxs);
+        console.log(`[COINTOOL] Page ${page}: Found ${cointoolTxs.length} Cointool txs (${data.result.length} total txs)`);
+
+        // Check if there might be more results
+        if (data.result.length < PAGE_SIZE) {
+          hasMoreResults = false;
+        } else {
+          page++;
+          // Rate limit: wait 200ms between pages
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } else {
+        hasMoreResults = false;
+        if (data.message && data.message !== "OK" && data.message !== "No transactions found") {
+          console.warn(`[COINTOOL] API message on page ${page}: ${data.message}`);
+        }
       }
-      throw error;
     }
 
-    let events = [];
-    let lastBlockWithTransaction = lastScannedBlock; // Start with previous value
+    console.log(`[COINTOOL] Total Cointool transactions found: ${allCointoolTxs.length}`);
 
-    if (data.status === "1" && Array.isArray(data.result)) {
-      events = data.result.filter(event => {
-        // Filter events for this specific address
-        return event.topics && event.topics.length >= 2 &&
-               event.topics[1] && event.topics[1].toLowerCase().includes(address.toLowerCase().replace('0x', ''));
-      });
+    // For each transaction, fetch the receipt to get mint events
+    let processedTxCount = 0;
+    for (const tx of allCointoolTxs) {
+      try {
+        const receipt = await makeRpcCall(() => web3Instance.eth.getTransactionReceipt(tx.hash));
 
-      console.log(`[COINTOOL] Found ${events.length} mint events for ${address}`);
+        // Find all mint events in this transaction
+        const mintEvents = receipt.logs.filter(log =>
+          log.topics && log.topics[0] === COINTOOL_EVENT_TOPIC
+        );
 
-      // Find the highest block number that actually contained transactions
-      if (events.length > 0) {
-        lastBlockWithTransaction = Math.max(...events.map(e => parseInt(e.blockNumber, 16)));
-        console.log(`[COINTOOL] Last block with actual transactions: ${lastBlockWithTransaction}`);
+        if (mintEvents.length > 0) {
+          const blockNum = parseInt(tx.blockNumber);
+          if (blockNum > highestBlockWithMint) {
+            highestBlockWithMint = blockNum;
+          }
+
+          // Decode transaction input to get the salt used
+          const methodSelector = tx.input.slice(0, 10);
+          let salt = COINTOOL_SALT_BYTES; // Default
+
+          try {
+            const inputData = tx.input.slice(10);
+            if (methodSelector === '0xb1ae2ed1') {
+              // t(uint256, bytes, bytes)
+              const decoded = web3Instance.eth.abi.decodeParameters(['uint256', 'bytes', 'bytes'], '0x' + inputData);
+              salt = decoded[2];
+            } else if (methodSelector === '0x9108e811' || methodSelector === '0xd21ba82f') {
+              // t_(uint256[], bytes, bytes) or f(uint256[], bytes, bytes)
+              const decoded = web3Instance.eth.abi.decodeParameters(['uint256[]', 'bytes', 'bytes'], '0x' + inputData);
+              salt = decoded[2];
+            }
+          } catch (e) {
+            console.warn(`[COINTOOL] Could not decode salt from tx ${tx.hash}:`, e.message);
+          }
+
+          // Add each mint event with its metadata
+          for (const event of mintEvents) {
+            const proxyAddress = '0x' + event.topics[1].slice(26);
+            const decodedLog = web3Instance.eth.abi.decodeParameters(['uint256', 'uint256'], event.data);
+
+            mintInfos.push({
+              txHash: tx.hash,
+              blockNumber: tx.blockNumber,
+              timestamp: tx.timeStamp,
+              proxyAddress: proxyAddress,
+              term: Number(decodedLog[0]),
+              rank: decodedLog[1],
+              salt: salt,
+              owner: address
+            });
+          }
+
+          // Log progress every 10 transactions
+          processedTxCount++;
+          if (processedTxCount % 10 === 0) {
+            console.log(`[COINTOOL] Processed ${processedTxCount}/${allCointoolTxs.length} txs, ${mintInfos.length} mints found`);
+          }
+        }
+      } catch (e) {
+        console.warn(`[COINTOOL] Error processing tx ${tx.hash}:`, e.message);
       }
-    } else {
-      console.log(`[COINTOOL] No events found or API error:`, data.message || 'Unknown error');
     }
 
-    // Always update scan progress, but handle transaction tracking carefully
-    await saveScanState(address, currentBlock, lastBlockWithTransaction);
+    // Update scan state
+    await saveScanState(address, currentBlock, highestBlockWithMint);
 
-    if (lastBlockWithTransaction > lastTransactionBlock) {
-      console.log(`[COINTOOL] Found new transactions up to block ${lastBlockWithTransaction} (${events.length} events)`);
-    } else {
-      console.log(`[COINTOOL] Scanned up to block ${currentBlock}, no new transactions found`);
-    }
-
-    return events;
+    console.log(`[COINTOOL] Total mints discovered: ${mintInfos.length}`);
+    return mintInfos;
 
   } catch (error) {
-    console.error(`[COINTOOL] Error scanning events for ${address}:`, error);
+    console.error(`[COINTOOL] Error scanning transactions for ${address}:`, error);
     return [];
   }
 }
