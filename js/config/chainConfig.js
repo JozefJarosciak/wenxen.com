@@ -1,6 +1,24 @@
 // Multi-chain configuration system
 // Each chain has its own contract addresses, RPCs, and explorer URLs
 
+// Helper to split concatenated URLs that may have lost their newlines
+function splitConcatenatedUrls(value) {
+  if (!value || typeof value !== 'string') return [];
+  // If value already contains newlines, split normally
+  if (value.includes('\n')) {
+    return value.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+  // Otherwise, try to detect concatenated URLs (e.g., "https://...https://...")
+  const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|$)/g;
+  const matches = value.match(urlPattern);
+  if (matches && matches.length > 0) {
+    console.log(`[Chain RPC] Split ${matches.length} concatenated URLs`);
+    return matches.map(s => s.trim()).filter(Boolean);
+  }
+  // Single URL or empty
+  return value.trim() ? [value.trim()] : [];
+}
+
 export const SUPPORTED_CHAINS = {
   ETHEREUM: {
     id: 1,
@@ -616,14 +634,15 @@ class ChainManager {
     console.log(`[Chain RPC] Getting RPCs for ${chain}, customRPCKey: ${customRPCKey}, found custom: ${!!customRPCs}, source: ${sourceChain || 'none'}`);
 
     if (customRPCs && (!sourceChain || sourceChain === chain)) {
-      const rpcList = customRPCs.split('\n').map(s => s.trim()).filter(Boolean);
+      // Use helper to handle concatenated URLs that may have lost newlines
+      const rpcList = splitConcatenatedUrls(customRPCs);
       const joined = rpcList.join('\n');
 
       if (!sourceChain) {
         // If we have a last-known value and the stored entry differs, prefer the last-known cache
         if (lastKnown && lastKnown !== joined) {
           console.warn(`[Chain RPC] Detected unexpected change to ${chain} RPCs without metadata. Restoring last known value.`);
-          const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+          const restored = splitConcatenatedUrls(lastKnown);
           localStorage.setItem(customRPCKey, lastKnown);
           localStorage.setItem(customRPCSourceKey, chain);
           return restored.length ? restored : [config.rpcUrls.default, ...config.rpcUrls.fallback];
@@ -636,7 +655,7 @@ class ChainManager {
           if (otherKnown && otherKnown === joined) {
             console.warn(`[Chain RPC] Detected ${chain} RPCs matching ${otherChain} list without metadata. Restoring ${chain} last known value.`);
             if (lastKnown) {
-              const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+              const restored = splitConcatenatedUrls(lastKnown);
               localStorage.setItem(customRPCKey, lastKnown);
               localStorage.setItem(customRPCSourceKey, chain);
               return restored.length ? restored : [config.rpcUrls.default, ...config.rpcUrls.fallback];
@@ -665,14 +684,14 @@ class ChainManager {
       localStorage.removeItem(customRPCSourceKey);
       if (lastKnown) {
         console.log(`[Chain RPC] Restoring ${chain} RPCs from lastKnown after mismatch cleanup.`);
-        const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+        const restored = splitConcatenatedUrls(lastKnown);
         if (restored.length) {
           return restored;
         }
       }
     } else if (!customRPCs && lastKnown) {
       console.log(`[Chain RPC] No stored RPCs for ${chain}, using lastKnown cache.`);
-      const restored = lastKnown.split('\n').map(s => s.trim()).filter(Boolean);
+      const restored = splitConcatenatedUrls(lastKnown);
       if (restored.length) {
         return restored;
       }

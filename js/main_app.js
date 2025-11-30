@@ -4468,6 +4468,37 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
     hideOnboardingModal();
   }
 }
+
+// Helper to normalize addresses/RPCs that may have lost their newlines
+// Detects concatenated Ethereum addresses (0x...0x...) and splits them
+function normalizeMultiLineValue(value, type = 'address') {
+  if (!value || typeof value !== 'string') return value;
+
+  // If value already contains newlines, it's probably fine
+  if (value.includes('\n')) return value;
+
+  if (type === 'address') {
+    // Split concatenated Ethereum addresses: look for 0x followed by 40 hex chars
+    // Pattern: 0x + 40 hex chars, possibly followed by another 0x
+    const addressPattern = /0x[a-fA-F0-9]{40}/g;
+    const matches = value.match(addressPattern);
+    if (matches && matches.length > 1) {
+      console.log(`[Normalize] Found ${matches.length} concatenated addresses, splitting with newlines`);
+      return matches.join('\n');
+    }
+  } else if (type === 'rpc') {
+    // Split concatenated URLs: look for http(s)://
+    const urlPattern = /https?:\/\/[^\s]+/g;
+    const matches = value.match(urlPattern);
+    if (matches && matches.length > 1) {
+      console.log(`[Normalize] Found ${matches.length} concatenated URLs, splitting with newlines`);
+      return matches.join('\n');
+    }
+  }
+
+  return value;
+}
+
 function loadUserPreferences() {
   // Load addresses - chain-specific (migration should have already run)
   let addresses = "";
@@ -4513,7 +4544,9 @@ function loadUserPreferences() {
     // Fallback for when chain system not available - check both formats
     addresses = localStorage.getItem("ETHEREUM_ethAddress") || localStorage.getItem("ethAddress") || "";
   }
-  
+
+  // Normalize addresses in case newlines were lost (defensive fix)
+  addresses = normalizeMultiLineValue(addresses, 'address');
   document.getElementById("ethAddress").value = addresses;
   
   // Load chain-specific RPC
@@ -5315,7 +5348,11 @@ async function fetchPostMintActions(address, etherscanApiKey) {
       // Fallback - check both formats
       saved = localStorage.getItem("ETHEREUM_ethAddress") || localStorage.getItem("ethAddress") || "";
     }
-    
+
+    // Normalize addresses in case newlines were lost (defensive fix)
+    if (saved && typeof normalizeMultiLineValue === 'function') {
+      saved = normalizeMultiLineValue(saved, 'address');
+    }
     if (saved) addrInput.value = saved;
   }
 
