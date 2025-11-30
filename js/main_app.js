@@ -8016,7 +8016,6 @@ function setStatusHeaderFilter(statusText) {
       // Remove download options when switching to desktop
       container.querySelectorAll('.download-option').forEach(option => option.remove());
     }
-    initMobileState();
   });
 
   // Initialize filter labels with dynamic dates
