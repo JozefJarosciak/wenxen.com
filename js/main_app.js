@@ -5399,6 +5399,19 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     if (saved) cointoolBatchDelayInput.value = saved;
   }
 
+  // Load Auto-Rescan Settings
+  const autoRescanEnabledInput = document.getElementById("autoRescanEnabled");
+  if (autoRescanEnabledInput) {
+    const saved = localStorage.getItem("autoRescanEnabled");
+    autoRescanEnabledInput.checked = saved === 'true';
+  }
+
+  const autoRescanDelayInput = document.getElementById("autoRescanDelay");
+  if (autoRescanDelayInput) {
+    const saved = localStorage.getItem("autoRescanDelay");
+    autoRescanDelayInput.value = saved || "120"; // Default 120 seconds (2 minutes)
+  }
+
   // Load Gas Refresh Interval
   const gasInput = document.getElementById("gasRefreshSeconds");
   if (gasInput) {
@@ -5514,6 +5527,48 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     cointoolBatchDelayInput.addEventListener("blur", () => persistCointoolBatchDelay(cointoolBatchDelayInput.value));
     cointoolBatchDelayInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); persistCointoolBatchDelay(cointoolBatchDelayInput.value); }
+    });
+  }
+
+  // Auto-Rescan Enabled (checkbox)
+  const autoRescanEnabledInput = document.getElementById("autoRescanEnabled");
+  if (autoRescanEnabledInput) {
+    autoRescanEnabledInput.addEventListener("change", () => {
+      const enabled = autoRescanEnabledInput.checked;
+      localStorage.setItem("autoRescanEnabled", String(enabled));
+      // Update the manager if it's loaded
+      if (window.autoRescanManager) {
+        window.autoRescanManager.setEnabled(enabled);
+      }
+      if (typeof showToast === "function") {
+        showToast(`Auto-rescan ${enabled ? 'enabled' : 'disabled'}`, "success");
+      }
+    });
+  }
+
+  // Auto-Rescan Delay (validated number 30-300 seconds)
+  const autoRescanDelayInput = document.getElementById("autoRescanDelay");
+  if (autoRescanDelayInput) {
+    const persistAutoRescanDelay = (val) => {
+      const v = parseInt(val, 10);
+      if (Number.isFinite(v) && v >= 30 && v <= 300) {
+        localStorage.setItem("autoRescanDelay", String(v));
+        // Update the manager if it's loaded
+        if (window.autoRescanManager) {
+          window.autoRescanManager.setDelay(v);
+        }
+        if (typeof showToast === "function") showToast(`Auto-rescan delay saved (${v}s)`, "success");
+        markValidity("field-autoRescanDelay", true);
+      } else {
+        if (typeof showToast === "function") showToast("Auto-rescan delay must be between 30 and 300 seconds.", "error");
+        autoRescanDelayInput.value = localStorage.getItem("autoRescanDelay") || "120";
+        markValidity("field-autoRescanDelay", false, "Delay must be between 30 and 300 seconds.");
+      }
+    };
+    autoRescanDelayInput.addEventListener("change", () => persistAutoRescanDelay(autoRescanDelayInput.value));
+    autoRescanDelayInput.addEventListener("blur", () => persistAutoRescanDelay(autoRescanDelayInput.value));
+    autoRescanDelayInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); persistAutoRescanDelay(autoRescanDelayInput.value); }
     });
   }
 })();
@@ -6749,6 +6804,8 @@ function collectSettingsSnapshot() {
     chunkSize: (document.getElementById("chunkSize")?.value ?? "").trim(),
     cointoolBatchSize: (document.getElementById("cointoolBatchSize")?.value ?? "").trim(),
     cointoolBatchDelay: (document.getElementById("cointoolBatchDelay")?.value ?? "").trim(),
+    autoRescanEnabled: document.getElementById("autoRescanEnabled")?.checked ?? false,
+    autoRescanDelay: (document.getElementById("autoRescanDelay")?.value ?? "120").trim(),
     gasRefreshSeconds: (document.getElementById("gasRefreshSeconds")?.value ?? "").trim(),
     mintTermDays: (document.getElementById("mintTermDays")?.value ?? "").trim()
   };
@@ -6847,8 +6904,15 @@ function applySettingsSnapshot(settings) {
       setVal("chunkSize", settings.formValues.chunkSize);
       setVal("cointoolBatchSize", settings.formValues.cointoolBatchSize);
       setVal("cointoolBatchDelay", settings.formValues.cointoolBatchDelay);
+      setVal("autoRescanDelay", settings.formValues.autoRescanDelay);
       setVal("gasRefreshSeconds", settings.formValues.gasRefreshSeconds);
       setVal("mintTermDays", settings.formValues.mintTermDays);
+
+      // Restore auto-rescan checkbox
+      const autoRescanCheckbox = document.getElementById("autoRescanEnabled");
+      if (autoRescanCheckbox && settings.formValues.autoRescanEnabled !== undefined) {
+        autoRescanCheckbox.checked = settings.formValues.autoRescanEnabled;
+      }
     }
 
     // Apply theme if specified
@@ -6928,6 +6992,8 @@ function applySettingsSnapshot(settings) {
   if (settings.chunkSize != null) localStorage.setItem("chunkSize", String(settings.chunkSize));
   if (settings.cointoolBatchSize != null) localStorage.setItem("cointoolBatchSize", String(settings.cointoolBatchSize));
   if (settings.cointoolBatchDelay != null) localStorage.setItem("cointoolBatchDelay", String(settings.cointoolBatchDelay));
+  if (settings.autoRescanEnabled != null) localStorage.setItem("autoRescanEnabled", String(settings.autoRescanEnabled));
+  if (settings.autoRescanDelay != null) localStorage.setItem("autoRescanDelay", String(settings.autoRescanDelay));
   if (typeof settings.etherscanThrottleMs === "string") localStorage.setItem("etherscanThrottleMs", settings.etherscanThrottleMs);
   if (settings.gasRefreshSeconds != null) localStorage.setItem("gasRefreshSeconds", String(settings.gasRefreshSeconds));
   if (settings.mintTermDays != null) {
