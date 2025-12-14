@@ -2401,6 +2401,25 @@ async function getMintByUniqueId(db, id) {
   });
 }
 
+// Find mint by transaction hash (for deduplication)
+async function findMintByTxHash(db, txHash, addr) {
+  return new Promise((resolve, reject) => {
+    if (!db) return reject("DB not initialized");
+    const tx = db.transaction("mints", "readonly");
+    const store = tx.objectStore("mints");
+    const request = store.getAll();
+    request.onsuccess = (event) => {
+      const mints = event.target.result || [];
+      const match = mints.find(m =>
+        m.TX_Hash && m.TX_Hash.toLowerCase() === txHash.toLowerCase() &&
+        m.Owner && m.Owner.toLowerCase() === addr.toLowerCase()
+      );
+      resolve(match || null);
+    };
+    request.onerror = e => reject(e);
+  });
+}
+
 // --- UTILITY FUNCTIONS ---
 function getLocalDateString(date) {
   const year = date.getFullYear();
@@ -5755,6 +5774,10 @@ async function scanMints() {
     const startTime = Date.now();
     let lastUiUpdate = 0;
 
+    // Track processed transaction hashes to prevent duplicates
+    // A single TX can contain multiple batch mints, so we track TX+VMU count
+    const processedTxHashes = new Map(); // txHash -> totalVMUsProcessed
+
     for (let mintId = 1; mintId <= maxId; mintId++) {
       tokenProgressBar.value = mintId;
       tokenProgressText.textContent = `Processing mint ${mintId} of ${maxId}...`;
@@ -5793,6 +5816,19 @@ async function scanMints() {
 
         const txHash = data.result[0].txHash;
         const blockNumber = data.result[0].blockNumber;
+
+        // Check if this transaction was already processed (prevents duplicates from array-based batch mints)
+        if (processedTxHashes.has(txHash)) {
+          // We already have entries from this TX - skip to avoid duplicates
+          // Try to find how many VMUs to skip from the existing database entry
+          const existingByTx = await findMintByTxHash(dbInstance, txHash, addr);
+          if (existingByTx && existingByTx.VMUs) {
+            mintId += Number(existingByTx.VMUs) - 1;
+          }
+          console.log(`[Cointool] Skipping mint ${mintId} - TX ${txHash.slice(0,10)}... already processed`);
+          continue;
+        }
+
         const tx = await makeRpcRequest(() => web3.eth.getTransaction(txHash), `TX Details for ${mintId}`);
         let mintBlockTs = blockTsCache.get(blockNumber);
         if (mintBlockTs === undefined) {
@@ -5805,9 +5841,39 @@ async function scanMints() {
           throw new Error(`Failed to get full details for TX ${txHash}`);
         }
         const inputData = tx.input.slice(10);
-        const decodedTxParams = web3.eth.abi.decodeParameters(['uint256', 'bytes', 'bytes'], inputData);
-        const salt = decodedTxParams[2];
-        const totalMintsInTx = decodedTxParams[0];
+        const methodSelector = tx.input.slice(0, 10);
+
+        // Decode transaction parameters - handle both single and array-based methods
+        let salt, totalMintsInTx;
+        try {
+          if (methodSelector === '0xb1ae2ed1') {
+            // t(uint256, bytes, bytes) - single batch
+            const decodedTxParams = web3.eth.abi.decodeParameters(['uint256', 'bytes', 'bytes'], '0x' + inputData);
+            salt = decodedTxParams[2];
+            totalMintsInTx = Number(decodedTxParams[0]);
+          } else if (methodSelector === '0x9108e811' || methodSelector === '0xd21ba82f') {
+            // t_(uint256[], bytes, bytes) or f(uint256[], bytes, bytes) - array of batches
+            const decodedTxParams = web3.eth.abi.decodeParameters(['uint256[]', 'bytes', 'bytes'], '0x' + inputData);
+            salt = decodedTxParams[2];
+            // Sum all batch sizes from the array
+            const batchSizes = decodedTxParams[0];
+            totalMintsInTx = batchSizes.reduce((sum, size) => sum + Number(size), 0);
+          } else {
+            // Unknown method - try default single batch decoding
+            const decodedTxParams = web3.eth.abi.decodeParameters(['uint256', 'bytes', 'bytes'], '0x' + inputData);
+            salt = decodedTxParams[2];
+            totalMintsInTx = Number(decodedTxParams[0]);
+          }
+        } catch (decodeErr) {
+          console.warn(`[Cointool] Could not decode TX params for ${txHash}:`, decodeErr.message);
+          // Fallback: count events in receipt to determine VMUs
+          const mintEvents = receipt.logs.filter(log => log.topics && log.topics[0] === EVENT_TOPIC);
+          totalMintsInTx = mintEvents.length || 1;
+          salt = SALT_BYTES_TO_QUERY;
+        }
+
+        // Mark this transaction as processed
+        processedTxHashes.set(txHash, totalMintsInTx);
         const proxyAddress = computeProxyAddress(web3, CONTRACT_ADDRESS, mintId, salt, addr);
         const matchingLog = receipt.logs.find(log => log.topics.includes(EVENT_TOPIC) && ('0x' + log.topics[1].slice(26)).toLowerCase() === proxyAddress.toLowerCase());
         if (!matchingLog) {
@@ -8214,8 +8280,245 @@ function setStatusHeaderFilter(statusText) {
   }
 })();
 
+// Database Maintenance - Remove Duplicates
+(function wireRemoveDuplicates() {
+  const removeDuplicatesBtn = document.getElementById("removeDuplicatesBtn");
+  if (!removeDuplicatesBtn) return;
 
+  removeDuplicatesBtn.addEventListener("click", async () => {
+    const ok = confirm(
+      "This will scan all databases and remove duplicate entries based on transaction hash.\n\n" +
+      "Duplicates are kept by keeping the first entry and removing subsequent ones.\n\n" +
+      "Continue?"
+    );
+    if (!ok) return;
 
+    await removeDuplicatesFromAllDatabases();
+  });
+})();
+
+// Remove duplicates from all databases (Cointool, XENFT, XENFT Stakes, XEN Stakes)
+async function removeDuplicatesFromAllDatabases() {
+  const progressContainer = document.getElementById("duplicatesProgress");
+  const progressBar = document.getElementById("duplicatesProgressBar");
+  const progressText = document.getElementById("duplicatesProgressText");
+  const statusText = document.getElementById("duplicatesStatus");
+  const resultText = document.getElementById("duplicatesResult");
+  const btn = document.getElementById("removeDuplicatesBtn");
+
+  if (!progressContainer || !progressBar || !progressText || !statusText || !resultText) {
+    console.error("[Dedup] Missing UI elements");
+    return;
+  }
+
+  // Show progress UI
+  progressContainer.style.display = "block";
+  resultText.textContent = "";
+  btn.disabled = true;
+
+  const updateProgress = (percent, status) => {
+    progressBar.value = percent;
+    progressText.textContent = `${Math.round(percent)}%`;
+    statusText.textContent = status;
+  };
+
+  let totalDuplicatesRemoved = 0;
+  let totalRecordsScanned = 0;
+  const results = []; // Array to preserve order
+
+  try {
+    // Get all chain prefixes to scan
+    const chainPrefixes = ['ETH', 'BASE', 'AVAX', 'BSC', 'GLMR', 'POL', 'OPT'];
+    const dbTypes = [
+      { name: 'Cointool', dbSuffix: '_DB_Cointool', storeName: 'mints', keyField: 'TX_Hash', ownerField: 'Owner' },
+      { name: 'XENFT', dbSuffix: '_DB_Xenft', storeName: 'xenfts', keyField: 'mintTxHash', ownerField: 'owner' },
+      { name: 'XENFT Stakes', dbSuffix: '_DB_XenftStake', storeName: 'stakes', keyField: 'txHash', ownerField: 'owner' },
+      { name: 'XEN Stakes', dbSuffix: '_DB_XenStake', storeName: 'stakes', keyField: 'txHash', ownerField: 'owner' }
+    ];
+
+    const totalDbs = chainPrefixes.length * dbTypes.length;
+    let processedDbs = 0;
+
+    for (const prefix of chainPrefixes) {
+      for (const dbType of dbTypes) {
+        const dbName = `${prefix}${dbType.dbSuffix}`;
+        updateProgress((processedDbs / totalDbs) * 100, `Scanning ${dbName}...`);
+
+        try {
+          const { duplicates, records } = await findAndRemoveDuplicatesInDB(
+            dbName,
+            dbType.storeName,
+            dbType.keyField,
+            dbType.ownerField
+          );
+
+          results.push({
+            dbName,
+            duplicates,
+            records,
+            status: 'ok'
+          });
+
+          totalDuplicatesRemoved += duplicates;
+          totalRecordsScanned += records;
+        } catch (err) {
+          // Database might not exist or have no store - track it
+          results.push({
+            dbName,
+            duplicates: 0,
+            records: 0,
+            status: err.message?.includes("No objectStore") ? 'empty' : 'error',
+            error: err.message
+          });
+        }
+
+        processedDbs++;
+        updateProgress((processedDbs / totalDbs) * 100, `Processed ${dbName}`);
+      }
+    }
+
+    // Complete
+    updateProgress(100, "Complete!");
+
+    // Build result message - show all databases
+    let msg = totalDuplicatesRemoved > 0
+      ? `<span style="color:orange;font-weight:bold;">🧹 Removed ${totalDuplicatesRemoved} duplicate(s)</span><br>`
+      : `<span style="color:green;font-weight:bold;">✓ No duplicates found</span><br>`;
+
+    msg += `<small style="color:#888;">Scanned ${totalRecordsScanned.toLocaleString()} records across ${results.length} databases</small><br><br>`;
+
+    // Group by chain for cleaner display
+    for (const prefix of chainPrefixes) {
+      const chainResults = results.filter(r => r.dbName.startsWith(prefix));
+      const chainHasData = chainResults.some(r => r.records > 0);
+
+      if (chainHasData) {
+        msg += `<strong>${prefix}:</strong><br>`;
+        for (const r of chainResults) {
+          if (r.records > 0) {
+            const icon = r.duplicates > 0 ? '🧹' : '✓';
+            const color = r.duplicates > 0 ? 'orange' : 'green';
+            const dbShort = r.dbName.replace(`${prefix}_DB_`, '');
+            msg += `<span style="color:${color};">&nbsp;&nbsp;${icon} ${dbShort}: ${r.records} records, ${r.duplicates} duplicates</span><br>`;
+          }
+        }
+      }
+    }
+
+    // Show empty chains summary
+    const emptyChains = chainPrefixes.filter(prefix =>
+      results.filter(r => r.dbName.startsWith(prefix)).every(r => r.records === 0)
+    );
+    if (emptyChains.length > 0) {
+      msg += `<br><small style="color:#666;">No data: ${emptyChains.join(', ')}</small>`;
+    }
+
+    resultText.innerHTML = msg;
+
+    // Refresh the table if available
+    if (typeof window.refreshUnified === 'function') {
+      setTimeout(() => window.refreshUnified().catch(() => {}), 500);
+    }
+
+  } catch (err) {
+    console.error("[Dedup] Error:", err);
+    resultText.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    // Hide progress after 3 seconds
+    setTimeout(() => {
+      progressContainer.style.display = "none";
+    }, 3000);
+  }
+}
+
+// Find and remove duplicates in a single database
+// Returns { duplicates: number, records: number }
+async function findAndRemoveDuplicatesInDB(dbName, storeName, keyField, ownerField) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName);
+
+    request.onerror = () => reject(request.error);
+
+    request.onsuccess = () => {
+      const db = request.result;
+
+      // Check if store exists
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.close();
+        resolve({ duplicates: 0, records: 0 });
+        return;
+      }
+
+      const tx = db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+      const getAllReq = store.getAll();
+
+      getAllReq.onsuccess = () => {
+        const records = getAllReq.result || [];
+        const totalRecords = records.length;
+        const seen = new Map(); // key -> first record ID
+        const duplicatesToRemove = [];
+
+        for (const record of records) {
+          const txHash = record[keyField];
+          const owner = record[ownerField];
+
+          // Skip records without transaction hash
+          if (!txHash) continue;
+
+          // Create composite key from tx hash and owner
+          const compositeKey = `${(txHash || '').toLowerCase()}-${(owner || '').toLowerCase()}`;
+
+          if (seen.has(compositeKey)) {
+            // This is a duplicate - mark for removal
+            const primaryKey = record.ID || record.Xenft_id || record.id;
+            if (primaryKey) {
+              duplicatesToRemove.push(primaryKey);
+            }
+          } else {
+            seen.set(compositeKey, record.ID || record.Xenft_id || record.id);
+          }
+        }
+
+        // Remove duplicates
+        if (duplicatesToRemove.length === 0) {
+          db.close();
+          resolve({ duplicates: 0, records: totalRecords });
+          return;
+        }
+
+        console.log(`[Dedup] Removing ${duplicatesToRemove.length} duplicates from ${dbName}/${storeName}`);
+
+        let removed = 0;
+        let errors = 0;
+
+        for (const key of duplicatesToRemove) {
+          const deleteReq = store.delete(key);
+          deleteReq.onsuccess = () => {
+            removed++;
+            if (removed + errors === duplicatesToRemove.length) {
+              db.close();
+              resolve({ duplicates: removed, records: totalRecords });
+            }
+          };
+          deleteReq.onerror = () => {
+            errors++;
+            if (removed + errors === duplicatesToRemove.length) {
+              db.close();
+              resolve({ duplicates: removed, records: totalRecords });
+            }
+          };
+        }
+      };
+
+      getAllReq.onerror = () => {
+        db.close();
+        reject(getAllReq.error);
+      };
+    };
+  });
+}
 
 try { updateNetworkBadge(); } catch {}
 document.getElementById('connectWalletBtn')?.addEventListener('click', handleWalletConnectClick);
