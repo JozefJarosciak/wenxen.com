@@ -2367,14 +2367,22 @@ async function getScanState(db, address) {
   });
 }
 
-async function putScanState(db, address, lastScannedBlock) {
-  return new Promise((resolve, reject) => {
+async function putScanState(db, address, lastScannedBlock, lastProcessedMintId = null) {
+  return new Promise(async (resolve, reject) => {
     if (!db) return reject("DB not initialized");
+
+    // Get existing state to preserve fields not being updated
+    let existingState = {};
+    try {
+      existingState = await getScanState(db, address) || {};
+    } catch (_) {}
+
     const tx = db.transaction("scanState", "readwrite");
     const store = tx.objectStore("scanState");
     store.put({
       address: cleanHexAddr(address),
-      lastScannedBlock: Number(lastScannedBlock) || 0,
+      lastScannedBlock: Number(lastScannedBlock) || existingState.lastScannedBlock || 0,
+      lastProcessedMintId: lastProcessedMintId !== null ? Number(lastProcessedMintId) : (existingState.lastProcessedMintId || 0),
       updatedAt: Date.now()
     }).onsuccess = () => resolve();
     tx.onerror = e => reject(e);
@@ -5431,6 +5439,13 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     autoRescanDelayInput.value = saved || "120"; // Default 120 seconds (2 minutes)
   }
 
+  // Load Rescan Block Depth
+  const rescanBlockDepthInput = document.getElementById("rescanBlockDepth");
+  if (rescanBlockDepthInput) {
+    const saved = localStorage.getItem("rescanBlockDepth");
+    rescanBlockDepthInput.value = saved || "1000"; // Default 1000 blocks
+  }
+
   // Load Gas Refresh Interval
   const gasInput = document.getElementById("gasRefreshSeconds");
   if (gasInput) {
@@ -5589,6 +5604,81 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     autoRescanDelayInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); persistAutoRescanDelay(autoRescanDelayInput.value); }
     });
+  }
+
+  // Rescan Block Depth (incremental scanning)
+  const rescanBlockDepthInput = document.getElementById("rescanBlockDepth");
+  const rescanBlockPreview = document.getElementById("rescanBlockPreview");
+
+  // Function to update the preview with current block info
+  const updateRescanBlockPreview = async (depth) => {
+    if (!rescanBlockPreview) return;
+
+    const depthNum = parseInt(depth, 10) || 1000;
+
+    try {
+      // Try to get current block from web3
+      let currentBlock = null;
+      if (window.web3 && typeof window.web3.eth?.getBlockNumber === 'function') {
+        currentBlock = await window.web3.eth.getBlockNumber();
+      }
+
+      if (currentBlock) {
+        const cutoffBlock = Math.max(0, currentBlock - depthNum);
+        // Estimate time: ~12 seconds per block
+        const secondsBack = depthNum * 12;
+        const hoursBack = (secondsBack / 3600).toFixed(1);
+        const daysBack = (secondsBack / 86400).toFixed(1);
+
+        const timeAgo = secondsBack < 3600
+          ? `~${Math.round(secondsBack / 60)} minutes ago`
+          : secondsBack < 86400
+            ? `~${hoursBack} hours ago`
+            : `~${daysBack} days ago`;
+
+        rescanBlockPreview.innerHTML =
+          `<strong>Current block:</strong> ${currentBlock.toLocaleString()}<br>` +
+          `<strong>Will scan from:</strong> block ${cutoffBlock.toLocaleString()} (${timeAgo})`;
+      } else {
+        // No web3 connection, show estimate only
+        const secondsBack = depthNum * 12;
+        const hoursBack = (secondsBack / 3600).toFixed(1);
+        rescanBlockPreview.innerHTML =
+          `Will re-check mints from the last ~${hoursBack} hours (${depthNum.toLocaleString()} blocks)`;
+      }
+    } catch (e) {
+      rescanBlockPreview.innerHTML = `Will re-check last ${depthNum.toLocaleString()} blocks`;
+    }
+  };
+
+  if (rescanBlockDepthInput) {
+    const persistRescanBlockDepth = (val) => {
+      const v = parseInt(val, 10);
+      if (Number.isFinite(v) && v >= 0 && v <= 100000) {
+        localStorage.setItem("rescanBlockDepth", String(v));
+        if (typeof showToast === "function") showToast(`Scan depth saved (${v} blocks)`, "success");
+        markValidity("field-rescanBlockDepth", true);
+        updateRescanBlockPreview(v);
+      } else {
+        if (typeof showToast === "function") showToast("Scan depth must be between 0 and 100,000 blocks.", "error");
+        rescanBlockDepthInput.value = localStorage.getItem("rescanBlockDepth") || "1000";
+        markValidity("field-rescanBlockDepth", false, "Must be between 0 and 100,000 blocks.");
+      }
+    };
+
+    rescanBlockDepthInput.addEventListener("change", () => persistRescanBlockDepth(rescanBlockDepthInput.value));
+    rescanBlockDepthInput.addEventListener("blur", () => persistRescanBlockDepth(rescanBlockDepthInput.value));
+    rescanBlockDepthInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); persistRescanBlockDepth(rescanBlockDepthInput.value); }
+    });
+
+    // Live preview on input
+    rescanBlockDepthInput.addEventListener("input", () => {
+      updateRescanBlockPreview(rescanBlockDepthInput.value);
+    });
+
+    // Initial preview
+    updateRescanBlockPreview(rescanBlockDepthInput.value || localStorage.getItem("rescanBlockDepth") || "1000");
   }
 })();
 
@@ -5771,6 +5861,64 @@ async function scanMints() {
       continue;
     }
 
+    // For incremental scanning, use block-based cutoff
+    let startMintId = 1;
+    let currentBlock = null;
+    const rescanBlockDepth = parseInt(localStorage.getItem("rescanBlockDepth") || "1000", 10);
+
+    if (!forceRescan && dbInstance) {
+      try {
+        // Get current block number
+        currentBlock = await web3.eth.getBlockNumber();
+        const cutoffBlock = Math.max(0, currentBlock - rescanBlockDepth);
+
+        const existingMints = await getAllMints(dbInstance);
+        // Filter mints for this address
+        const addressMints = existingMints.filter(m =>
+          m.Owner && m.Owner.toLowerCase() === addr.toLowerCase()
+        );
+
+        if (addressMints.length > 0) {
+          // Find mints that are BEFORE the cutoff block (fully scanned, don't need re-check)
+          // For mints without block number, assume they need re-checking
+          let highestMintEndBeforeCutoff = 0;
+
+          for (const mint of addressMints) {
+            const mintBlock = Number(mint.Block_Number) || 0;
+            const mintStart = Number(mint.Mint_id_Start) || 0;
+            const vmus = Number(mint.VMUs) || 1;
+            const mintEnd = mintStart + vmus - 1;
+
+            // Only consider mints from blocks before the cutoff as "done"
+            if (mintBlock > 0 && mintBlock <= cutoffBlock) {
+              if (mintEnd > highestMintEndBeforeCutoff) {
+                highestMintEndBeforeCutoff = mintEnd;
+              }
+            }
+          }
+
+          if (highestMintEndBeforeCutoff > 0) {
+            startMintId = highestMintEndBeforeCutoff + 1;
+            const blocksToScan = currentBlock - cutoffBlock;
+            console.log(`[Cointool] Incremental scan for ${shortAddr(addr)}: cutoff block ${cutoffBlock}, starting from mint ID ${startMintId} (re-checking last ${blocksToScan} blocks)`);
+          }
+        }
+      } catch (e) {
+        console.warn(`[Cointool] Could not determine scan start point:`, e);
+      }
+    }
+
+    // If we're starting from a high ID, show that we're doing incremental scan
+    if (startMintId > 1 && startMintId <= maxId) {
+      const newMints = maxId - startMintId + 1;
+      const hoursBack = ((rescanBlockDepth * 12) / 3600).toFixed(1);
+      tokenProgressText.textContent = `Incremental scan: checking ${newMints} mint(s) from last ~${hoursBack}h (${startMintId} to ${maxId})...`;
+    } else if (startMintId > maxId) {
+      tokenProgressText.textContent = `No new mints found for ${shortAddr(addr)}`;
+      console.log(`[Cointool] No new mints for ${shortAddr(addr)} - already have up to ${startMintId - 1}, max is ${maxId}`);
+      continue; // Skip to next address
+    }
+
     const startTime = Date.now();
     let lastUiUpdate = 0;
 
@@ -5778,9 +5926,10 @@ async function scanMints() {
     // A single TX can contain multiple batch mints, so we track TX+VMU count
     const processedTxHashes = new Map(); // txHash -> totalVMUsProcessed
 
-    for (let mintId = 1; mintId <= maxId; mintId++) {
+    for (let mintId = startMintId; mintId <= maxId; mintId++) {
       tokenProgressBar.value = mintId;
-      tokenProgressText.textContent = `Processing mint ${mintId} of ${maxId}...`;
+      const remaining = maxId - mintId;
+      tokenProgressText.textContent = `Processing mint ${mintId} of ${maxId}... (${remaining} remaining)`;
 
       const uniqueId = `${mintId}-${addr.toLowerCase()}`;
       const existingMint = await getMintByUniqueId(dbInstance, uniqueId);
@@ -5943,6 +6092,7 @@ async function scanMints() {
           ID: uniqueId,
           Mint_id_Start: mintId,
           TX_Hash: txHash,
+          Block_Number: Number(blockNumber) || 0, // Store block number for incremental scanning
           Salt: salt,
           Rank_Range: `${startRank.toString()}-${endRank.toString()}`,
           Term: String(effectiveTermDays),
@@ -5973,7 +6123,7 @@ async function scanMints() {
       if (now - lastUiUpdate > 1000) {
         const elapsedSeconds = (now - startTime) / 1000;
         if (elapsedSeconds > 3) {
-          const rate = mintId / Math.max(elapsedSeconds, 0.0001);
+          const rate = (mintId - startMintId + 1) / Math.max(elapsedSeconds, 0.0001);
           const remainingItems = Math.max(0, maxId - mintId);
           const remainingSeconds = remainingItems / Math.max(rate, 0.0001);
           progressUI.setEta(remainingSeconds);
@@ -5982,6 +6132,7 @@ async function scanMints() {
         lastUiUpdate = now;
       }
     }
+
     etrText.textContent = "";
   }
 
@@ -6872,6 +7023,7 @@ function collectSettingsSnapshot() {
     cointoolBatchDelay: (document.getElementById("cointoolBatchDelay")?.value ?? "").trim(),
     autoRescanEnabled: document.getElementById("autoRescanEnabled")?.checked ?? false,
     autoRescanDelay: (document.getElementById("autoRescanDelay")?.value ?? "120").trim(),
+    rescanBlockDepth: (document.getElementById("rescanBlockDepth")?.value ?? "1000").trim(),
     gasRefreshSeconds: (document.getElementById("gasRefreshSeconds")?.value ?? "").trim(),
     mintTermDays: (document.getElementById("mintTermDays")?.value ?? "").trim()
   };
@@ -6971,6 +7123,7 @@ function applySettingsSnapshot(settings) {
       setVal("cointoolBatchSize", settings.formValues.cointoolBatchSize);
       setVal("cointoolBatchDelay", settings.formValues.cointoolBatchDelay);
       setVal("autoRescanDelay", settings.formValues.autoRescanDelay);
+      setVal("rescanBlockDepth", settings.formValues.rescanBlockDepth);
       setVal("gasRefreshSeconds", settings.formValues.gasRefreshSeconds);
       setVal("mintTermDays", settings.formValues.mintTermDays);
 
@@ -7060,6 +7213,7 @@ function applySettingsSnapshot(settings) {
   if (settings.cointoolBatchDelay != null) localStorage.setItem("cointoolBatchDelay", String(settings.cointoolBatchDelay));
   if (settings.autoRescanEnabled != null) localStorage.setItem("autoRescanEnabled", String(settings.autoRescanEnabled));
   if (settings.autoRescanDelay != null) localStorage.setItem("autoRescanDelay", String(settings.autoRescanDelay));
+  if (settings.rescanBlockDepth != null) localStorage.setItem("rescanBlockDepth", String(settings.rescanBlockDepth));
   if (typeof settings.etherscanThrottleMs === "string") localStorage.setItem("etherscanThrottleMs", settings.etherscanThrottleMs);
   if (settings.gasRefreshSeconds != null) localStorage.setItem("gasRefreshSeconds", String(settings.gasRefreshSeconds));
   if (settings.mintTermDays != null) {
