@@ -8439,6 +8439,30 @@ function setStatusHeaderFilter(statusText) {
   const removeDuplicatesBtn = document.getElementById("removeDuplicatesBtn");
   if (!removeDuplicatesBtn) return;
 
+  // Function to update the last cleanup time display
+  const updateLastCleanupDisplay = () => {
+    const lastCleanupEl = document.getElementById("lastCleanupTime");
+    if (!lastCleanupEl) return;
+
+    const lastCleanup = localStorage.getItem("duplicatesLastCleanup");
+    if (lastCleanup) {
+      const date = new Date(parseInt(lastCleanup, 10));
+      const formatted = date.toLocaleString();
+      lastCleanupEl.textContent = `Last cleanup: ${formatted}`;
+    } else {
+      lastCleanupEl.textContent = "Never cleaned up";
+    }
+  };
+
+  // Function to record cleanup time
+  const recordCleanupTime = () => {
+    localStorage.setItem("duplicatesLastCleanup", String(Date.now()));
+    updateLastCleanupDisplay();
+  };
+
+  // Show initial last cleanup time
+  updateLastCleanupDisplay();
+
   removeDuplicatesBtn.addEventListener("click", async () => {
     const ok = confirm(
       "This will scan all databases and remove duplicate entries based on transaction hash.\n\n" +
@@ -8447,12 +8471,34 @@ function setStatusHeaderFilter(statusText) {
     );
     if (!ok) return;
 
-    await removeDuplicatesFromAllDatabases();
+    await removeDuplicatesFromAllDatabases(false); // false = show UI
+    recordCleanupTime();
   });
+
+  // Auto-run duplicate cleanup on first visit (one-time)
+  if (!localStorage.getItem("duplicatesCleanupDone")) {
+    // Delay to let page fully load
+    setTimeout(async () => {
+      console.log("[Dedup] Running automatic first-time duplicate cleanup...");
+      const removed = await removeDuplicatesFromAllDatabases(true); // true = silent mode
+      localStorage.setItem("duplicatesCleanupDone", "1");
+      recordCleanupTime();
+      if (removed > 0) {
+        console.log(`[Dedup] Automatic cleanup completed: removed ${removed} duplicate(s)`);
+        if (typeof showToast === "function") {
+          showToast(`Auto-cleanup: removed ${removed} duplicate(s)`, "info");
+        }
+      } else {
+        console.log("[Dedup] Automatic cleanup completed: no duplicates found");
+      }
+    }, 3000); // Wait 3 seconds for page to stabilize
+  }
 })();
 
 // Remove duplicates from all databases (Cointool, XENFT, XENFT Stakes, XEN Stakes)
-async function removeDuplicatesFromAllDatabases() {
+// silent = true: run without UI updates (for automatic cleanup)
+// Returns total number of duplicates removed
+async function removeDuplicatesFromAllDatabases(silent = false) {
   const progressContainer = document.getElementById("duplicatesProgress");
   const progressBar = document.getElementById("duplicatesProgressBar");
   const progressText = document.getElementById("duplicatesProgressText");
@@ -8460,20 +8506,26 @@ async function removeDuplicatesFromAllDatabases() {
   const resultText = document.getElementById("duplicatesResult");
   const btn = document.getElementById("removeDuplicatesBtn");
 
-  if (!progressContainer || !progressBar || !progressText || !statusText || !resultText) {
+  const hasUI = progressContainer && progressBar && progressText && statusText && resultText;
+
+  if (!silent && !hasUI) {
     console.error("[Dedup] Missing UI elements");
-    return;
+    return 0;
   }
 
-  // Show progress UI
-  progressContainer.style.display = "block";
-  resultText.textContent = "";
-  btn.disabled = true;
+  // Show progress UI (only in non-silent mode)
+  if (!silent && hasUI) {
+    progressContainer.style.display = "block";
+    resultText.textContent = "";
+    if (btn) btn.disabled = true;
+  }
 
   const updateProgress = (percent, status) => {
-    progressBar.value = percent;
-    progressText.textContent = `${Math.round(percent)}%`;
-    statusText.textContent = status;
+    if (!silent && hasUI) {
+      progressBar.value = percent;
+      progressText.textContent = `${Math.round(percent)}%`;
+      statusText.textContent = status;
+    }
   };
 
   let totalDuplicatesRemoved = 0;
@@ -8567,23 +8619,32 @@ async function removeDuplicatesFromAllDatabases() {
       msg += `<br><small style="color:#666;">No data: ${emptyChains.join(', ')}</small>`;
     }
 
-    resultText.innerHTML = msg;
+    // Update UI (only in non-silent mode)
+    if (!silent && hasUI) {
+      resultText.innerHTML = msg;
+    }
 
-    // Refresh the table if available
-    if (typeof window.refreshUnified === 'function') {
+    // Refresh the table if available (and duplicates were removed)
+    if (totalDuplicatesRemoved > 0 && typeof window.refreshUnified === 'function') {
       setTimeout(() => window.refreshUnified().catch(() => {}), 500);
     }
 
   } catch (err) {
     console.error("[Dedup] Error:", err);
-    resultText.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+    if (!silent && hasUI) {
+      resultText.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+    }
   } finally {
-    btn.disabled = false;
-    // Hide progress after 3 seconds
-    setTimeout(() => {
-      progressContainer.style.display = "none";
-    }, 3000);
+    if (!silent && hasUI) {
+      if (btn) btn.disabled = false;
+      // Hide progress after 3 seconds
+      setTimeout(() => {
+        progressContainer.style.display = "none";
+      }, 3000);
+    }
   }
+
+  return totalDuplicatesRemoved;
 }
 
 // Find and remove duplicates in a single database
