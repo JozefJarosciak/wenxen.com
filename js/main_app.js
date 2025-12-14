@@ -5836,29 +5836,64 @@ async function scanMints() {
       } catch (_) { /* ignore */ }
     }
 
-    const { actions: postMintActions, fetched, newActionCount } =
-      await fetchPostMintActions(addr, etherscanApiKey);
-
-    if (!forceRescan && fetched === 0) {
-      tokenProgressBar.value = 0;
-      tokenProgressBar.max = 1;
-      tokenProgressText.textContent =
-        `No new transactions!`;
-      continue;
-    }
-
-    if (newActionCount === 0) {
-      tokenProgressText.textContent = `No new remint actions for ${shortAddr(addr)}, checking for new mints…`;
-    }
-
+    // FIRST: Get maxId from the contract - this is the AUTHORITATIVE source of truth
+    // The blockchain knows about ALL mints immediately, no Etherscan indexing delay
     let maxId;
     try {
       maxId = await makeRpcRequest(() => contract.methods.map(addr, SALT_BYTES_TO_QUERY).call(), `Get Max ID for ${addr}`);
+      maxId = Number(maxId);
       tokenProgressBar.max = maxId;
-      tokenProgressText.textContent = `Found ${maxId} potential mints for salt ${SALT_BYTES_TO_QUERY}. Analyzing...`;
+      tokenProgressText.textContent = `Contract shows ${maxId} mint(s). Checking for new ones...`;
     } catch(e) {
       alert(`Failed to fetch mint count for ${addr}. Check console for details.`);
       continue;
+    }
+
+    // Calculate highest mint ID we already have in the database
+    let highestExistingMintEnd = 0;
+    if (dbInstance) {
+      try {
+        const existingMints = await getAllMints(dbInstance);
+        const addressMints = existingMints.filter(m =>
+          m.Owner && m.Owner.toLowerCase() === addr.toLowerCase()
+        );
+        for (const mint of addressMints) {
+          const mintStart = Number(mint.Mint_id_Start) || 0;
+          const vmus = Number(mint.VMUs) || 1;
+          const mintEnd = mintStart + vmus - 1;
+          if (mintEnd > highestExistingMintEnd) {
+            highestExistingMintEnd = mintEnd;
+          }
+        }
+        console.log(`[Cointool] ${shortAddr(addr)}: contract maxId=${maxId}, our highest=${highestExistingMintEnd}`);
+      } catch (e) {
+        console.warn('[Cointool] Could not get existing mints:', e);
+      }
+    }
+
+    // Check if contract knows about mints we don't have yet
+    const hasNewMints = maxId > highestExistingMintEnd;
+    if (hasNewMints) {
+      const newMintCount = maxId - highestExistingMintEnd;
+      console.log(`[Cointool] NEW MINTS DETECTED: ${newMintCount} new mint(s) from ${highestExistingMintEnd + 1} to ${maxId}`);
+      tokenProgressText.textContent = `Found ${newMintCount} new mint(s)! (${highestExistingMintEnd + 1} to ${maxId})`;
+    }
+
+    // Fetch post-mint actions (remints/claims) from Etherscan
+    const { actions: postMintActions, fetched, newActionCount } =
+      await fetchPostMintActions(addr, etherscanApiKey);
+
+    // Only skip if: NOT force rescan AND no new Etherscan txs AND contract shows no new mints
+    if (!forceRescan && fetched === 0 && !hasNewMints) {
+      tokenProgressBar.value = maxId;
+      tokenProgressBar.max = maxId;
+      tokenProgressText.textContent = `${shortAddr(addr)}: No new mints or transactions`;
+      console.log(`[Cointool] Skipping ${shortAddr(addr)} - no new txs and no new mints`);
+      continue;
+    }
+
+    if (!hasNewMints && newActionCount === 0) {
+      tokenProgressText.textContent = `No new remint actions for ${shortAddr(addr)}, verifying existing mints…`;
     }
 
     // For incremental scanning, use block-based cutoff
@@ -5899,24 +5934,44 @@ async function scanMints() {
 
           if (highestMintEndBeforeCutoff > 0) {
             startMintId = highestMintEndBeforeCutoff + 1;
-            const blocksToScan = currentBlock - cutoffBlock;
-            console.log(`[Cointool] Incremental scan for ${shortAddr(addr)}: cutoff block ${cutoffBlock}, starting from mint ID ${startMintId} (re-checking last ${blocksToScan} blocks)`);
+            console.log(`[Cointool] Block-based cutoff: starting from mint ID ${startMintId} (cutoff block ${cutoffBlock})`);
+          } else if (hasNewMints && highestExistingMintEnd > 0) {
+            // No block data before cutoff, but we know there are new mints
+            // Start from where we left off
+            startMintId = highestExistingMintEnd + 1;
+            console.log(`[Cointool] No block data for cutoff, but hasNewMints=true. Starting from ${startMintId}`);
           }
         }
       } catch (e) {
         console.warn(`[Cointool] Could not determine scan start point:`, e);
+        // Fallback: if we have new mints, start from highest existing
+        if (hasNewMints && highestExistingMintEnd > 0) {
+          startMintId = highestExistingMintEnd + 1;
+          console.log(`[Cointool] Error in cutoff logic, falling back to startMintId=${startMintId}`);
+        }
       }
     }
 
-    // If we're starting from a high ID, show that we're doing incremental scan
+    // Show scan range info and handle edge cases
     if (startMintId > 1 && startMintId <= maxId) {
-      const newMints = maxId - startMintId + 1;
+      const mintsToCheck = maxId - startMintId + 1;
       const hoursBack = ((rescanBlockDepth * 12) / 3600).toFixed(1);
-      tokenProgressText.textContent = `Incremental scan: checking ${newMints} mint(s) from last ~${hoursBack}h (${startMintId} to ${maxId})...`;
+      tokenProgressText.textContent = `Scanning mint IDs ${startMintId} to ${maxId} (${mintsToCheck} to check, ~${hoursBack}h window)...`;
     } else if (startMintId > maxId) {
-      tokenProgressText.textContent = `No new mints found for ${shortAddr(addr)}`;
-      console.log(`[Cointool] No new mints for ${shortAddr(addr)} - already have up to ${startMintId - 1}, max is ${maxId}`);
-      continue; // Skip to next address
+      // Block-based cutoff suggests we've scanned everything
+      // BUT we MUST check if contract knows about mints we don't have
+      if (hasNewMints) {
+        // Contract says there are new mints - override startMintId
+        startMintId = highestExistingMintEnd + 1;
+        const mintsToScan = maxId - startMintId + 1;
+        console.log(`[Cointool] OVERRIDE: Block cutoff said skip, but contract shows new mints. Scanning ${startMintId} to ${maxId}`);
+        tokenProgressText.textContent = `Found ${mintsToScan} new mint(s)! Scanning ${startMintId} to ${maxId}...`;
+      } else {
+        // Truly no new mints
+        tokenProgressText.textContent = `${shortAddr(addr)}: All mints up to date`;
+        console.log(`[Cointool] No new mints for ${shortAddr(addr)} - startMintId ${startMintId} > maxId ${maxId}`);
+        continue; // Skip to next address
+      }
     }
 
     const startTime = Date.now();
