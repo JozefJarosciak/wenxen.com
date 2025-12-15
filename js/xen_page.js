@@ -452,7 +452,7 @@
   }
 
   /**
-   * Fetch user account data
+   * Fetch user account data (XEN balance only)
    */
   async function fetchUserAccountData(address) {
     const rpcs = getRpcList();
@@ -465,17 +465,11 @@
         const web3 = new Web3(rpc);
         const xenContract = new web3.eth.Contract(window.xenAbi, xenAddress);
 
-        const [balance, userMint, userStake] = await Promise.all([
-          xenContract.methods.balanceOf(address).call(),
-          xenContract.methods.userMints(address).call().catch(() => null),
-          xenContract.methods.userStakes(address).call().catch(() => null)
-        ]);
+        const balance = await xenContract.methods.balanceOf(address).call();
 
         return {
           address,
-          balance: balance.toString(),
-          mint: userMint,
-          stake: userStake
+          balance: balance.toString()
         };
       } catch (err) {
         console.warn(`[XEN Page] Failed to fetch user data from ${rpc}:`, err.message);
@@ -518,34 +512,6 @@
 
       if (data) {
         const shortAddr = address.slice(0, 6) + '...' + address.slice(-4);
-        const hasMint = data.mint && parseInt(data.mint.term) > 0;
-        const hasStake = data.stake && parseInt(data.stake.amount) > 0;
-
-        let mintInfo = '';
-        if (hasMint) {
-          const maturityDate = new Date(parseInt(data.mint.maturityTs) * 1000);
-          const isMatured = maturityDate <= new Date();
-          mintInfo = `
-            <div class="xen-account-mint ${isMatured ? 'matured' : ''}">
-              <span class="xen-account-label">Active Mint:</span>
-              <span>Term: ${data.mint.term} days, Rank: ${parseInt(data.mint.rank).toLocaleString()}</span>
-              <span class="xen-account-maturity">${isMatured ? 'Matured!' : 'Matures: ' + maturityDate.toLocaleDateString()}</span>
-            </div>
-          `;
-        }
-
-        let stakeInfo = '';
-        if (hasStake) {
-          const maturityDate = new Date(parseInt(data.stake.maturityTs) * 1000);
-          const isMatured = maturityDate <= new Date();
-          stakeInfo = `
-            <div class="xen-account-stake ${isMatured ? 'matured' : ''}">
-              <span class="xen-account-label">Active Stake:</span>
-              <span>${formatXenAmount(data.stake.amount)} XEN @ ${data.stake.apy}% APY</span>
-              <span class="xen-account-maturity">${isMatured ? 'Matured!' : 'Matures: ' + maturityDate.toLocaleDateString()}</span>
-            </div>
-          `;
-        }
 
         accountsHtml.push(`
           <div class="xen-account-item">
@@ -553,9 +519,6 @@
               <span class="xen-account-address" title="${address}">${shortAddr}</span>
               <span class="xen-account-balance">${formatXenAmount(data.balance)} XEN</span>
             </div>
-            ${mintInfo}
-            ${stakeInfo}
-            ${!hasMint && !hasStake ? '<div class="xen-account-empty">No active mints or stakes</div>' : ''}
           </div>
         `);
       }
