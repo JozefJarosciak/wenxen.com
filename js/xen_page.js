@@ -59,20 +59,40 @@
   }
 
   /**
-   * Format USD price with appropriate precision
+   * Format USD price with subscript notation for tiny prices (e.g., $0.0<sub>10</sub>4410)
+   * Matches the format used in main_app.js formatTinyPrice()
    */
   function formatPrice(price) {
-    if (price === null || price === undefined || isNaN(price)) return '-';
+    if (price === null || price === undefined || !Number.isFinite(price)) return '-';
 
-    if (price < 0.00000001) {
-      return '$' + price.toExponential(4);
-    } else if (price < 0.0001) {
-      return '$' + price.toFixed(10);
-    } else if (price < 1) {
-      return '$' + price.toFixed(8);
-    } else {
-      return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Convert to string with enough precision
+    const priceStr = price.toExponential(20);
+    const match = priceStr.match(/^(\d+\.\d+)e-(\d+)$/);
+
+    if (!match) {
+      // Not in exponential notation or positive exponent, format normally
+      if (price >= 1) {
+        return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      return '$' + price.toFixed(6);
     }
+
+    const mantissa = match[1];
+    const exponent = parseInt(match[2]);
+
+    // Number of leading zeros = exponent - 1
+    const zeros = exponent - 1;
+
+    if (zeros < 4) {
+      // Not that many zeros, show normally with appropriate precision
+      return '$' + price.toFixed(zeros + 6);
+    }
+
+    // Get 5 significant digits from the mantissa (remove decimal point)
+    const digits = mantissa.replace('.', '').substring(0, 5);
+
+    // Create HTML with subscript for zero count
+    return `$0.0<sub>${zeros}</sub>${digits}`;
   }
 
   /**
@@ -302,7 +322,7 @@
     const fdvEl = document.getElementById('xenPriceFDV');
 
     if (priceValueEl) {
-      priceValueEl.textContent = formatPrice(priceData.price);
+      priceValueEl.innerHTML = formatPrice(priceData.price);
     }
 
     if (priceChangeEl) {
