@@ -312,6 +312,7 @@
   <div class="tab-buttons" role="tablist" aria-label="Main navigation">
     <button class="tab-button active" data-target="tab-dashboard" role="tab" aria-selected="true">Dashboard</button>
     <button class="tab-button" data-target="tab-mint" role="tab" aria-selected="false">Mint/Stake</button>
+    <button class="tab-button" data-target="tab-xen" role="tab" aria-selected="false">XEN</button>
     <button class="tab-button" data-target="tab-settings" role="tab" aria-selected="false">Settings</button>
     <button class="tab-button" data-target="tab-about" role="tab" aria-selected="false">About</button>
   </div>
@@ -627,6 +628,162 @@
       <div id="stakeXenftConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to mint.</div>
     </div>
   </section>
+
+  <!-- XEN Stats Tab -->
+  <section id="tab-xen" class="tab-panel" role="tabpanel" aria-labelledby="XEN">
+    <div class="xen-page">
+      <!-- Header with refresh button -->
+      <div class="xen-page-header">
+        <h2>XEN Network Stats</h2>
+        <button id="refreshXenStatsBtn" class="xen-refresh-btn" title="Refresh all XEN data">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <!-- Main content grid -->
+      <div class="xen-content-grid">
+        <!-- Left column: Stats cards -->
+        <div class="xen-stats-column">
+          <!-- Global XEN Stats Card -->
+          <div class="xen-card xen-global-stats">
+            <div class="xen-card-header">
+              <h3>Global XEN Statistics</h3>
+              <span class="xen-chain-badge" id="xenChainBadge">Ethereum</span>
+            </div>
+            <div class="xen-stats-grid">
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Global Rank (cRank)</span>
+                <span class="xen-stat-value" id="xenGlobalRank">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Total Supply</span>
+                <span class="xen-stat-value" id="xenTotalSupply">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Total Staked</span>
+                <span class="xen-stat-value" id="xenTotalStaked">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Active Minters</span>
+                <span class="xen-stat-value" id="xenActiveMinters">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Active Stakes</span>
+                <span class="xen-stat-value" id="xenActiveStakes">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Current AMP</span>
+                <span class="xen-stat-value" id="xenCurrentAMP">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Current APY</span>
+                <span class="xen-stat-value" id="xenCurrentAPY">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Max Mint Term</span>
+                <span class="xen-stat-value" id="xenMaxTerm">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Genesis Timestamp</span>
+                <span class="xen-stat-value" id="xenGenesisTs">-</span>
+              </div>
+              <div class="xen-stat-item">
+                <span class="xen-stat-label">Days Since Genesis</span>
+                <span class="xen-stat-value" id="xenDaysSinceGenesis">-</span>
+              </div>
+            </div>
+            <div class="xen-stat-footer">
+              <span class="xen-last-update" id="xenStatsLastUpdate">Last updated: -</span>
+            </div>
+          </div>
+
+          <!-- Price Stats Card -->
+          <div class="xen-card xen-price-card">
+            <div class="xen-card-header">
+              <h3>XEN Price</h3>
+            </div>
+            <div class="xen-price-display">
+              <div class="xen-price-main">
+                <span class="xen-price-value" id="xenPriceValue">-</span>
+                <span class="xen-price-change" id="xenPriceChange"></span>
+              </div>
+              <div class="xen-price-details">
+                <div class="xen-price-detail">
+                  <span class="xen-price-detail-label">24h Change</span>
+                  <span class="xen-price-detail-value" id="xenPrice24hChange">-</span>
+                </div>
+                <div class="xen-price-detail">
+                  <span class="xen-price-detail-label">24h Volume</span>
+                  <span class="xen-price-detail-value" id="xenPrice24hVolume">-</span>
+                </div>
+                <div class="xen-price-detail">
+                  <span class="xen-price-detail-label">Liquidity</span>
+                  <span class="xen-price-detail-value" id="xenPriceLiquidity">-</span>
+                </div>
+                <div class="xen-price-detail">
+                  <span class="xen-price-detail-label">FDV</span>
+                  <span class="xen-price-detail-value" id="xenPriceFDV">-</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Accounts Card -->
+          <div class="xen-card xen-accounts-card">
+            <div class="xen-card-header">
+              <h3>Your Accounts</h3>
+              <span class="xen-account-count" id="xenAccountCount">0 addresses</span>
+            </div>
+            <div class="xen-accounts-container" id="xenAccountsContainer">
+              <div class="xen-accounts-empty">
+                <p>No addresses configured. Add addresses in Settings to see account-specific data.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column: Chart and trades -->
+        <div class="xen-chart-column">
+          <!-- DexScreener Chart Card -->
+          <div class="xen-card xen-chart-card">
+            <div class="xen-card-header">
+              <h3>XEN Chart</h3>
+              <a href="#" id="xenDexscreenerLink" class="xen-external-link" target="_blank" rel="noopener noreferrer">
+                Open on DexScreener
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </a>
+            </div>
+            <div class="xen-chart-container">
+              <iframe id="xenDexscreenerChart" class="xen-dexscreener-iframe" frameborder="0" allowfullscreen></iframe>
+            </div>
+          </div>
+
+          <!-- Recent Trades Card -->
+          <div class="xen-card xen-trades-card">
+            <div class="xen-card-header">
+              <h3>Recent Trades</h3>
+              <div class="xen-trades-filter">
+                <button class="xen-trade-filter-btn active" data-filter="all">All</button>
+                <button class="xen-trade-filter-btn" data-filter="buy">Buys</button>
+                <button class="xen-trade-filter-btn" data-filter="sell">Sells</button>
+              </div>
+            </div>
+            <div class="xen-trades-container" id="xenTradesContainer">
+              <div class="xen-trades-loading">Loading recent trades...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="Settings">
     <div class="settings-grid">
 
@@ -1199,6 +1356,7 @@
 <script src="./js/unified_view.js?v=PLACEHOLDER"></script>
 <script src="./js/main_app.js?v=PLACEHOLDER"></script>
 <script src="./js/xen-breakdown.js?v=PLACEHOLDER"></script>
+<script src="./js/xen_page.js?v=PLACEHOLDER"></script>
 <!-- Markdown parser for About tab -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
