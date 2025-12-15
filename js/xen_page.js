@@ -506,18 +506,24 @@
     container.innerHTML = '<div class="xen-accounts-loading">Loading account data...</div>';
 
     const accountsHtml = [];
+    const xenPrice = xenPageCache.priceData?.price || null;
 
     for (const address of addresses) {
       const data = await fetchUserAccountData(address);
 
       if (data) {
         const shortAddr = address.slice(0, 6) + '...' + address.slice(-4);
+        const xenAmount = parseFloat(data.balance) / 1e18;
+        const usdValue = xenPrice ? xenAmount * xenPrice : null;
 
         accountsHtml.push(`
           <div class="xen-account-item">
             <div class="xen-account-header">
               <span class="xen-account-address" title="${address}">${shortAddr}</span>
-              <span class="xen-account-balance">${formatXenAmount(data.balance)} XEN</span>
+              <span class="xen-account-balance-wrap">
+                <span class="xen-account-balance">${formatLargeNumber(xenAmount, 2)} XEN</span>
+                <span class="xen-account-usd">${usdValue !== null ? formatUsdValue(usdValue) : ''}</span>
+              </span>
             </div>
           </div>
         `);

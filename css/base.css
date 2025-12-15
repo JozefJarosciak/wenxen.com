@@ -4597,7 +4597,6 @@ body.dark-mode .usd-value {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
 }
 
 .xen-account-address {
@@ -4607,10 +4606,27 @@ body.dark-mode .usd-value {
   font-weight: 500;
 }
 
+.xen-account-balance-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .xen-account-balance {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-color, #111827);
+}
+
+.xen-account-usd {
+  font-size: 12px;
+  color: #059669;
+  font-weight: 500;
+}
+
+body.dark-mode .xen-account-usd {
+  color: #34d399;
 }
 
 .xen-account-mint,
