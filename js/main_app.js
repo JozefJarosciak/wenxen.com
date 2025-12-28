@@ -8492,7 +8492,7 @@ function setStatusHeaderFilter(statusText) {
 // Database Maintenance - Remove Duplicates
 (function wireRemoveDuplicates() {
   const removeDuplicatesBtn = document.getElementById("removeDuplicatesBtn");
-  if (!removeDuplicatesBtn) return;
+  const autoDedupeCheckbox = document.getElementById("autoDedupeAfterScan");
 
   // Function to update the last cleanup time display
   const updateLastCleanupDisplay = () => {
@@ -8509,6 +8509,9 @@ function setStatusHeaderFilter(statusText) {
     }
   };
 
+  // Expose globally for use in unified_view.js
+  window.updateLastCleanupDisplay = updateLastCleanupDisplay;
+
   // Function to record cleanup time
   const recordCleanupTime = () => {
     localStorage.setItem("duplicatesLastCleanup", String(Date.now()));
@@ -8518,17 +8521,32 @@ function setStatusHeaderFilter(statusText) {
   // Show initial last cleanup time
   updateLastCleanupDisplay();
 
-  removeDuplicatesBtn.addEventListener("click", async () => {
-    const ok = confirm(
-      "This will scan all databases and remove duplicate entries based on transaction hash.\n\n" +
-      "Duplicates are kept by keeping the first entry and removing subsequent ones.\n\n" +
-      "Continue?"
-    );
-    if (!ok) return;
+  // Initialize auto-dedupe checkbox state (default: enabled)
+  if (autoDedupeCheckbox) {
+    const savedState = localStorage.getItem("autoDedupeAfterScan");
+    // Default to true if not set
+    autoDedupeCheckbox.checked = savedState !== "false";
 
-    await removeDuplicatesFromAllDatabases(false); // false = show UI
-    recordCleanupTime();
-  });
+    // Save state on change
+    autoDedupeCheckbox.addEventListener("change", () => {
+      localStorage.setItem("autoDedupeAfterScan", autoDedupeCheckbox.checked ? "true" : "false");
+      console.log(`[Dedup] Auto-dedupe after scan: ${autoDedupeCheckbox.checked ? 'enabled' : 'disabled'}`);
+    });
+  }
+
+  if (removeDuplicatesBtn) {
+    removeDuplicatesBtn.addEventListener("click", async () => {
+      const ok = confirm(
+        "This will scan all databases and remove duplicate entries based on transaction hash.\n\n" +
+        "Duplicates are kept by keeping the first entry and removing subsequent ones.\n\n" +
+        "Continue?"
+      );
+      if (!ok) return;
+
+      await removeDuplicatesFromAllDatabases(false); // false = show UI
+      recordCleanupTime();
+    });
+  }
 
   // Auto-run duplicate cleanup on first visit (one-time)
   if (!localStorage.getItem("duplicatesCleanupDone")) {

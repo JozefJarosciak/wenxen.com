@@ -296,6 +296,30 @@ function updateStakeSummaryLine(){
 
     // Finally, uncheck the Force Rescan option after a completed scan
     try { const cb = document.getElementById('forceRescan'); if (cb) cb.checked = false; } catch {}
+
+    // Auto-remove duplicates after scan if enabled
+    try {
+      const autoDedupeEnabled = localStorage.getItem('autoDedupeAfterScan') !== 'false'; // Default true
+      if (autoDedupeEnabled && typeof window.removeDuplicatesFromAllDatabases === 'function') {
+        console.log('[Scan] Running auto-dedupe after scan...');
+        const removed = await window.removeDuplicatesFromAllDatabases(true); // silent mode
+        if (removed > 0) {
+          console.log(`[Scan] Auto-dedupe removed ${removed} duplicates`);
+          // Update last cleanup time
+          localStorage.setItem('duplicatesLastCleanup', String(Date.now()));
+          // Update the display if function exists
+          if (typeof window.updateLastCleanupDisplay === 'function') {
+            window.updateLastCleanupDisplay();
+          }
+          // Refresh the UI again to show deduplicated data
+          if (typeof window.refreshUnified === 'function') {
+            await window.refreshUnified();
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Scan] Auto-dedupe failed:', e);
+    }
   }
 
   // open/close menu
