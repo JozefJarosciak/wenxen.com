@@ -6571,19 +6571,25 @@ async function scanMints() {
           if (subId === mintId) continue; // headline proxy already tracked by Maturity_*
           const subActs = postMintActions[`${subId}-${saltKeyForFailed}`];
           if (!Array.isArray(subActs) || subActs.length === 0) continue;
-          // Find the most recent SUCCESSFUL action with a positive term.
-          // (Skips `failed: true` and pure-claim actions with term=0.)
-          let lastSuccRemint = null;
+          // Find the LATEST non-failed action — this represents the current
+          // on-chain state of this sub-proxy. If it's a claim (term=0) the
+          // proxy has been claimed, no pending maturity. If it's a remint
+          // (term>0) the proxy is currently maturing on that new term.
+          // Crucial: don't iterate past a claim action looking for an
+          // earlier remint — a claim wipes the prior maturity.
+          let latestAct = null;
           for (let i = subActs.length - 1; i >= 0; i--) {
             const a = subActs[i];
             if (!a || a.failed === true) continue;
-            const t = Number(a.term);
-            if (Number.isFinite(t) && t > 0) { lastSuccRemint = a; break; }
+            latestAct = a;
+            break;
           }
-          if (!lastSuccRemint) continue;
-          const subTs = Number(lastSuccRemint.timeStamp);
-          const subTerm = Number(lastSuccRemint.term);
-          if (!Number.isFinite(subTs) || subTs <= 0 || !Number.isFinite(subTerm) || subTerm <= 0) continue;
+          if (!latestAct) continue;
+          const subTerm = Number(latestAct.term);
+          // Claim action (term=0/missing) → proxy already claimed, skip.
+          if (!Number.isFinite(subTerm) || subTerm <= 0) continue;
+          const subTs = Number(latestAct.timeStamp);
+          if (!Number.isFinite(subTs) || subTs <= 0) continue;
           const subMatTs = subTs + subTerm * 86400;
           const subDt = luxon.DateTime.fromSeconds(subMatTs);
           const subKey = subDt.toFormat('yyyy-MM-dd');
