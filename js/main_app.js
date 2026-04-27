@@ -3433,33 +3433,42 @@ function __getXenMintInfoContract(web3Instance, xenAddress) {
 }
 
 // Probe XEN.userMints(proxy) for an array of (mintId, proxyAddress) tuples
-// and split the input ids into:
-//   recoverable: ids whose proxy reports term>0 (pending mint exists,
-//                claimMintReward will succeed once matured)
-//   lost:        ids whose proxy reports term==0 (proxy never deployed
-//                OR already claimed — claimMintReward will revert)
+// and split the input ids into THREE buckets based on XEN's truth:
+//   recoverableNow:  term>0 AND maturityTs <= now → claimable right now,
+//                    cointool.f() with claim/remint data will succeed.
+//   pendingMaturity: term>0 BUT maturityTs > now → pending mint exists but
+//                    the maturity hasn't been reached. Calling claimMintReward
+//                    now reverts inside XEN ("MintInfo: maturity not reached").
+//                    Will become claimable when maturityTs passes.
+//   lost:            term==0 → proxy has no pending XEN mint (never deployed
+//                    OR already claimed). claimMintReward reverts. Unrecoverable
+//                    via Re-claim Failed (would need a fresh mint).
 // Sequential calls are intentional — a stampede of 100+ parallel eth_calls
 // trips most public RPC endpoints. ~50ms each, so 100 ids ≈ 5s extra per
 // affected row. Only called when failedIds is non-empty (rare).
 async function probeXenMintInfoForIds(web3Instance, xenAddress, ids, mintToProxy) {
-  const recoverable = [];
+  const recoverableNow = [];
+  const pendingMaturity = []; // [{ id, maturityTs, term }]
   const lost = [];
-  if (!Array.isArray(ids) || ids.length === 0) return { recoverable, lost };
+  if (!Array.isArray(ids) || ids.length === 0) return { recoverableNow, pendingMaturity, lost };
   const xen = __getXenMintInfoContract(web3Instance, xenAddress);
+  const nowSec = Math.floor(Date.now() / 1000);
   for (const id of ids) {
     const proxy = mintToProxy.get(id);
     if (!proxy) { lost.push(id); continue; }
     try {
       const info = await xen.methods.userMints(proxy).call();
       const term = Number(info.term);
-      if (Number.isFinite(term) && term > 0) recoverable.push(id);
-      else lost.push(id);
+      const matTs = Number(info.maturityTs);
+      if (!Number.isFinite(term) || term <= 0) { lost.push(id); continue; }
+      if (Number.isFinite(matTs) && matTs <= nowSec) recoverableNow.push(id);
+      else pendingMaturity.push({ id, maturityTs: matTs, term });
     } catch (e) {
       // RPC error — be conservative and treat as lost so we don't waste gas.
       lost.push(id);
     }
   }
-  return { recoverable, lost };
+  return { recoverableNow, pendingMaturity, lost };
 }
 
 // Normalize salt hex (handles '0x01' vs '0x0001')
@@ -4211,6 +4220,16 @@ function populateTable(mints) {
           for (const grp of recovered) {
             if (grp && matchOne(grp.dateFmt)) return true;
           }
+          // Failed-but-not-yet-matured XEN maturity dates.
+          const notYet = Array.isArray(rowData?.FailedIds_NotYetMatured) ? rowData.FailedIds_NotYetMatured : [];
+          if (notYet.length > 0 && typeof luxon !== 'undefined') {
+            for (const e of notYet) {
+              const ts = Number(e && e.maturityTs);
+              if (!Number.isFinite(ts) || ts <= 0) continue;
+              const fmt = luxon.DateTime.fromSeconds(ts).toFormat('yyyy LLL dd, hh:mm a');
+              if (matchOne(fmt)) return true;
+            }
+          }
           return false;
         },
         // ✅ Tabulator tooltip (console-debugged)
@@ -4242,12 +4261,15 @@ function populateTable(mints) {
 
           // Compose a multi-date display when the row has either still-pending
           // failed VMUs (original date), recovered sub-proxies (one or more
-          // recovered dates), or lost-at-mint VMUs (proxy never deployed).
+          // recovered dates), lost-at-mint VMUs (proxy never deployed), or
+          // pending-future-maturity failed VMUs (term>0 but maturityTs not
+          // yet reached).
           const hasFailedOrigDate = failedCount > 0 && origDate && origDate !== text;
           const hasRecovered = recovered.length > 0;
           const hasLostOnly = (Array.isArray(row.FailedIds_Lost) ? row.FailedIds_Lost.length : 0) > 0;
+          const hasPendingNotYet = Array.isArray(row.FailedIds_NotYetMatured) && row.FailedIds_NotYetMatured.length > 0;
 
-          if (hasFailedOrigDate || hasRecovered || hasLostOnly) {
+          if (hasFailedOrigDate || hasRecovered || hasLostOnly || hasPendingNotYet) {
             const hl = document.createElement("span");
             hl.textContent = text || "(no headline maturity)";
             content.appendChild(hl);
@@ -4277,6 +4299,34 @@ function populateTable(mints) {
               content.appendChild(lost);
             }
 
+            // Pending-future-maturity failed sub-proxies (term>0, maturityTs
+            // not yet reached). Group by maturity date and show a yellow
+            // "pending N → date" badge so the user knows when to come back.
+            const notYetEntries = Array.isArray(row.FailedIds_NotYetMatured) ? row.FailedIds_NotYetMatured : [];
+            if (notYetEntries.length > 0 && typeof luxon !== 'undefined') {
+              const byDay = new Map();
+              for (const e of notYetEntries) {
+                if (!e) continue;
+                const ts = Number(e.maturityTs);
+                if (!Number.isFinite(ts) || ts <= 0) continue;
+                const dt = luxon.DateTime.fromSeconds(ts);
+                const k = dt.toFormat('yyyy LLL dd, hh:mm a');
+                if (!byDay.has(k)) byDay.set(k, 0);
+                byDay.set(k, byDay.get(k) + 1);
+              }
+              for (const [dateFmt, cnt] of byDay) {
+                const sep = document.createElement("span");
+                sep.textContent = " · ";
+                sep.style.opacity = "0.6";
+                const pend = document.createElement("span");
+                pend.textContent = `pending ${cnt} → ${dateFmt}`;
+                pend.style.color = "#e67e22"; // orange — pending, not actionable yet
+                pend.style.fontWeight = "bold";
+                content.appendChild(sep);
+                content.appendChild(pend);
+              }
+            }
+
             for (const grp of recovered) {
               if (!grp || !grp.dateFmt) continue;
               const sep = document.createElement("span");
@@ -4304,6 +4354,10 @@ function populateTable(mints) {
             // lostCount already declared above for the inline indicator.
             if (lostCount > 0) {
               tip += `\n\n✗ ${lostCount} VMU(s) reverted at original mint time — proxy was never deployed and XEN has no pending mint for it. These are unrecoverable and excluded from the Re-claim Failed action.`;
+            }
+            const pendCount = Array.isArray(row.FailedIds_NotYetMatured) ? row.FailedIds_NotYetMatured.length : 0;
+            if (pendCount > 0) {
+              tip += `\n\n⏳ ${pendCount} VMU(s) reverted in a prior batch but their proxies are still maturing — claiming them now would revert. They will move into the Re-claim Failed button automatically once their on-chain maturity passes.`;
             }
             for (const grp of recovered) {
               const cnt = Array.isArray(grp.ids) ? grp.ids.length : 0;
@@ -6688,23 +6742,29 @@ async function scanMints() {
             failedProxyByMintId.set(subId, computeProxyAddress(web3, CONTRACT_ADDRESS, subId, salt, addr));
           }
         }
-        // Split failed ids by XEN's truth: only ids whose proxy actually has
-        // a pending mint (XEN.userMints(proxy).term > 0) are re-claimable.
-        // The rest (term=0) either had their original mint sub-call revert
-        // too — proxy never deployed — or were already claimed; either way
-        // calling cointool.f() on them just wastes gas via internal revert.
+        // Split failed ids by XEN's truth into three buckets:
+        //   FailedIds              — claimable right now (term>0, matured).
+        //                            getActionableIdsForRow returns these only.
+        //   FailedIds_NotYetMatured — term>0 but maturityTs > now. Will become
+        //                            recoverable later; surfaced on calendar
+        //                            on their respective maturity dates.
+        //   FailedIds_Lost          — term=0. Proxy never deployed OR already
+        //                            claimed. Unrecoverable; excluded from the
+        //                            Re-claim Failed action.
         let failedIds = failedIdsRaw;
         let failedIdsLost = [];
+        let failedIdsNotYetMatured = []; // [{ id, maturityTs, term }]
         if (failedIdsRaw.length > 0) {
           try {
             const probe = await probeXenMintInfoForIds(web3, XEN_ETH, failedIdsRaw, failedProxyByMintId);
-            failedIds = probe.recoverable;
+            failedIds = probe.recoverableNow;
+            failedIdsNotYetMatured = probe.pendingMaturity;
             failedIdsLost = probe.lost;
-            if (failedIdsLost.length > 0) {
-              console.log(`[Cointool] mint ${mintId}: split ${failedIdsRaw.length} reverted sub-calls → ${failedIds.length} recoverable, ${failedIdsLost.length} lost (proxy has no pending XEN mint)`);
+            if (failedIdsLost.length > 0 || failedIdsNotYetMatured.length > 0) {
+              console.log(`[Cointool] mint ${mintId}: split ${failedIdsRaw.length} reverted sub-calls → ${failedIds.length} claimable now, ${failedIdsNotYetMatured.length} pending future maturity, ${failedIdsLost.length} lost (no pending XEN mint)`);
             }
           } catch (e) {
-            console.warn(`[Cointool] mint ${mintId}: XEN probe failed, keeping all ${failedIdsRaw.length} as recoverable:`, e && e.message);
+            console.warn(`[Cointool] mint ${mintId}: XEN probe failed, keeping all ${failedIdsRaw.length} as actionable (may revert):`, e && e.message);
           }
         }
         // If any sub-call failed AND the mint is past maturity, the batch is
@@ -6793,6 +6853,13 @@ async function scanMints() {
           // no pending XEN mint. Re-claim attempts on these will revert. Kept
           // for tooltip/tracking; getActionableIdsForRow excludes them.
           FailedIds_Lost: failedIdsLost,
+          // Sub-calls that reverted in a prior batch but whose proxy DOES have
+          // a pending XEN mint that hasn't matured yet. Surfaced on the
+          // calendar on their respective maturity dates and excluded from the
+          // current-day Re-claim Failed action so we don't burn gas on a
+          // tx that XEN will revert. Becomes part of FailedIds on the next
+          // scan that runs after maturity passes.
+          FailedIds_NotYetMatured: failedIdsNotYetMatured,
           Actions: actions,
           Latest_Action_Timestamp: latestActionTimestamp,
           Maturity_Timestamp: maturityTimestamp,

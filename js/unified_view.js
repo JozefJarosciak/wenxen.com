@@ -853,6 +853,23 @@ function setMaturityHeaderFilterFromDate(dt) {
         const n = grp && Array.isArray(grp.ids) ? grp.ids.length : 0;
         if (k && n > 0) dateMap[k] = (dateMap[k] || 0) + n;
       }
+
+      // Failed-but-not-yet-matured sub-proxies: same partial-failure pattern
+      // as FailedIds, but XEN hasn't matured them yet. Surface on the calendar
+      // on their actual XEN maturity date so the user sees when to come back.
+      const notYet = Array.isArray(row.FailedIds_NotYetMatured) ? row.FailedIds_NotYetMatured : [];
+      if (notYet.length > 0 && typeof luxon !== 'undefined') {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const byDay = Object.create(null);
+        for (const e of notYet) {
+          if (!e) continue;
+          const ts = Number(e.maturityTs);
+          if (!Number.isFinite(ts) || ts <= 0) continue;
+          const k = luxon.DateTime.fromSeconds(ts).setZone(tz).toFormat('yyyy-LL-dd');
+          byDay[k] = (byDay[k] || 0) + 1;
+        }
+        for (const k of Object.keys(byDay)) dateMap[k] = (dateMap[k] || 0) + byDay[k];
+      }
     }
 
     ctRows.forEach(addFromRow);
