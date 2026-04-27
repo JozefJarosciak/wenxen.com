@@ -3401,6 +3401,67 @@ function computeProxyAddress(web3, deployer, mintId, salt, minter) {
   return web3.utils.toChecksumAddress('0x' + computedHash.slice(-40));
 }
 
+// Minimal ABI for XEN.userMints — used to check whether a proxy has a
+// pending mint that XEN will actually pay out on. If `term==0`, calling
+// claimMintReward on that proxy reverts (the proxy was never deployed,
+// or already claimed). We use this to split FailedIds into two buckets
+// so Re-claim Failed only retries proxies XEN will accept.
+const XEN_USERMINTS_ABI = [{
+  inputs: [{ name: '', type: 'address' }],
+  name: 'userMints',
+  outputs: [
+    { name: 'user',       type: 'address' },
+    { name: 'term',       type: 'uint256' },
+    { name: 'maturityTs', type: 'uint256' },
+    { name: 'rank',       type: 'uint256' },
+    { name: 'amplifier',  type: 'uint256' },
+    { name: 'eaaRate',    type: 'uint256' },
+  ],
+  stateMutability: 'view',
+  type: 'function',
+}];
+
+// Cached single XEN contract instance keyed by xenAddress so repeated
+// probes within a single scan run reuse the same Contract object.
+const __xenMintInfoContractCache = new Map();
+function __getXenMintInfoContract(web3Instance, xenAddress) {
+  const key = (xenAddress || '').toLowerCase();
+  if (!__xenMintInfoContractCache.has(key)) {
+    __xenMintInfoContractCache.set(key, new web3Instance.eth.Contract(XEN_USERMINTS_ABI, xenAddress));
+  }
+  return __xenMintInfoContractCache.get(key);
+}
+
+// Probe XEN.userMints(proxy) for an array of (mintId, proxyAddress) tuples
+// and split the input ids into:
+//   recoverable: ids whose proxy reports term>0 (pending mint exists,
+//                claimMintReward will succeed once matured)
+//   lost:        ids whose proxy reports term==0 (proxy never deployed
+//                OR already claimed — claimMintReward will revert)
+// Sequential calls are intentional — a stampede of 100+ parallel eth_calls
+// trips most public RPC endpoints. ~50ms each, so 100 ids ≈ 5s extra per
+// affected row. Only called when failedIds is non-empty (rare).
+async function probeXenMintInfoForIds(web3Instance, xenAddress, ids, mintToProxy) {
+  const recoverable = [];
+  const lost = [];
+  if (!Array.isArray(ids) || ids.length === 0) return { recoverable, lost };
+  const xen = __getXenMintInfoContract(web3Instance, xenAddress);
+  for (const id of ids) {
+    const proxy = mintToProxy.get(id);
+    if (!proxy) { lost.push(id); continue; }
+    try {
+      const info = await xen.methods.userMints(proxy).call();
+      const term = Number(info.term);
+      if (Number.isFinite(term) && term > 0) recoverable.push(id);
+      else lost.push(id);
+    } catch (e) {
+      // RPC error — be conservative and treat as lost so we don't waste gas.
+      lost.push(id);
+    }
+  }
+  return { recoverable, lost };
+}
+
 // Normalize salt hex (handles '0x01' vs '0x0001')
 function normalizeSalt(s) {
   if (!s || typeof s !== 'string') return s;
@@ -4180,12 +4241,13 @@ function populateTable(mints) {
           const content = document.createElement("span");
 
           // Compose a multi-date display when the row has either still-pending
-          // failed VMUs (original date) or recovered sub-proxies (one or more
-          // recovered dates) that differ from the headline.
+          // failed VMUs (original date), recovered sub-proxies (one or more
+          // recovered dates), or lost-at-mint VMUs (proxy never deployed).
           const hasFailedOrigDate = failedCount > 0 && origDate && origDate !== text;
           const hasRecovered = recovered.length > 0;
+          const hasLostOnly = (Array.isArray(row.FailedIds_Lost) ? row.FailedIds_Lost.length : 0) > 0;
 
-          if (hasFailedOrigDate || hasRecovered) {
+          if (hasFailedOrigDate || hasRecovered || hasLostOnly) {
             const hl = document.createElement("span");
             hl.textContent = text || "(no headline maturity)";
             content.appendChild(hl);
@@ -4200,6 +4262,19 @@ function populateTable(mints) {
               orig.style.fontWeight = "bold";
               content.appendChild(sep);
               content.appendChild(orig);
+            }
+
+            const lostCount = Array.isArray(row.FailedIds_Lost) ? row.FailedIds_Lost.length : 0;
+            if (lostCount > 0) {
+              const sep = document.createElement("span");
+              sep.textContent = " · ";
+              sep.style.opacity = "0.6";
+              const lost = document.createElement("span");
+              lost.textContent = `lost ${lostCount} at mint`;
+              lost.style.color = "#7f8c8d";
+              lost.style.fontStyle = "italic";
+              content.appendChild(sep);
+              content.appendChild(lost);
             }
 
             for (const grp of recovered) {
@@ -4225,6 +4300,10 @@ function populateTable(mints) {
             let tip = baseTip;
             if (hasFailedOrigDate) {
               tip += `\n\n⚠ ${failedCount} VMU(s) reverted in a prior batch — those are still on the original mint term (${origDate}) and need re-claiming.`;
+            }
+            // lostCount already declared above for the inline indicator.
+            if (lostCount > 0) {
+              tip += `\n\n✗ ${lostCount} VMU(s) reverted at original mint time — proxy was never deployed and XEN has no pending mint for it. These are unrecoverable and excluded from the Re-claim Failed action.`;
             }
             for (const grp of recovered) {
               const cnt = Array.isArray(grp.ids) ? grp.ids.length : 0;
@@ -6597,13 +6676,36 @@ async function scanMints() {
         // are the VMUs we still need to claim/remint. Surfaces partial-failure
         // batches (Etherscan tx Success but some sub-claims reverted).
         const saltKeyForFailed = normalizeSalt(salt);
-        const failedIds = [];
+        const failedIdsRaw = [];
+        const failedProxyByMintId = new Map();
         for (let off = 0; off < Number(totalMintsInTx); off++) {
           const subId = mintId + off;
           const subActions = postMintActions[`${subId}-${saltKeyForFailed}`];
           if (!Array.isArray(subActions) || subActions.length === 0) continue;
           const subLast = subActions[subActions.length - 1];
-          if (subLast && subLast.failed === true) failedIds.push(subId);
+          if (subLast && subLast.failed === true) {
+            failedIdsRaw.push(subId);
+            failedProxyByMintId.set(subId, computeProxyAddress(web3, CONTRACT_ADDRESS, subId, salt, addr));
+          }
+        }
+        // Split failed ids by XEN's truth: only ids whose proxy actually has
+        // a pending mint (XEN.userMints(proxy).term > 0) are re-claimable.
+        // The rest (term=0) either had their original mint sub-call revert
+        // too — proxy never deployed — or were already claimed; either way
+        // calling cointool.f() on them just wastes gas via internal revert.
+        let failedIds = failedIdsRaw;
+        let failedIdsLost = [];
+        if (failedIdsRaw.length > 0) {
+          try {
+            const probe = await probeXenMintInfoForIds(web3, XEN_ETH, failedIdsRaw, failedProxyByMintId);
+            failedIds = probe.recoverable;
+            failedIdsLost = probe.lost;
+            if (failedIdsLost.length > 0) {
+              console.log(`[Cointool] mint ${mintId}: split ${failedIdsRaw.length} reverted sub-calls → ${failedIds.length} recoverable, ${failedIdsLost.length} lost (proxy has no pending XEN mint)`);
+            }
+          } catch (e) {
+            console.warn(`[Cointool] mint ${mintId}: XEN probe failed, keeping all ${failedIdsRaw.length} as recoverable:`, e && e.message);
+          }
         }
         // If any sub-call failed AND the mint is past maturity, the batch is
         // only partially claimed. Force the row back to Claimable so the UI
@@ -6687,6 +6789,10 @@ async function scanMints() {
           VMUs: totalMintsInTx.toString(),
           Status: effectiveStatus,
           FailedIds: failedIds,
+          // Sub-calls that reverted in a prior batch AND whose proxy reports
+          // no pending XEN mint. Re-claim attempts on these will revert. Kept
+          // for tooltip/tracking; getActionableIdsForRow excludes them.
+          FailedIds_Lost: failedIdsLost,
           Actions: actions,
           Latest_Action_Timestamp: latestActionTimestamp,
           Maturity_Timestamp: maturityTimestamp,
@@ -7165,10 +7271,14 @@ async function connectWallet() {
     const sources = [];
     if (failedIds.length > 0) sources.push(`${failedIds.length} reverted in a prior batch`);
     if (maturedRecovered.length > 0) sources.push(`${maturedRecovered.length} sub-proxies matured early (reminted with a shorter term)`);
+    const lostCount = Array.isArray(row.FailedIds_Lost) ? row.FailedIds_Lost.length : 0;
+    const lostNote = lostCount > 0
+      ? `\n\nNote: ${lostCount} more VMU(s) reverted at original mint time and are unrecoverable (proxy never deployed). They are excluded from this action.`
+      : '';
     const proceed = confirm(
       `Stranded VMUs detected on this batch.\n\n` +
       `${succeeded}/${vmuCount} VMUs are on the row's headline term and not actionable yet.\n\n` +
-      `${strandedIds.length} stranded — ${sources.join('; ')}.\n\n` +
+      `${strandedIds.length} stranded — ${sources.join('; ')}.${lostNote}\n\n` +
       `OK → ${action} ONLY the ${strandedIds.length} stranded VMU${strandedIds.length === 1 ? '' : 's'} ` +
       `(ids ${strandedIds[0]}..${strandedIds[strandedIds.length - 1]}).\n\n` +
       `Cancel → ${action} all ${vmuCount} VMUs ` +
