@@ -4151,7 +4151,13 @@ function populateTable(mints) {
               sep.style.opacity = "0.6";
               const rec = document.createElement("span");
               const cnt = Array.isArray(grp.ids) ? grp.ids.length : 0;
-              rec.textContent = `recovered ${cnt} → ${grp.dateFmt}`;
+              // Neutral "+N on <date>" rather than "recovered" — these are
+              // sub-proxies of the batch that mature on a different date than
+              // the headline (could be from a Re-claim Failed remint, an
+              // earlier partial-success batch, or any other reason their term
+              // diverged). We don't store per-id failure history, so we can't
+              // assert these were "recovered" specifically.
+              rec.textContent = `+${cnt} on ${grp.dateFmt}`;
               rec.style.color = "#27ae60";
               rec.style.fontWeight = "bold";
               content.appendChild(sep);
@@ -4164,7 +4170,7 @@ function populateTable(mints) {
             }
             for (const grp of recovered) {
               const cnt = Array.isArray(grp.ids) ? grp.ids.length : 0;
-              tip += `\n\n✓ ${cnt} VMU(s) recovered via Re-claim Failed remint — now mature on ${grp.dateFmt} (${grp.term}d term). Sub-proxy ids: ${grp.ids.slice(0, 10).join(', ')}${grp.ids.length > 10 ? '…' : ''}.`;
+              tip += `\n\n+${cnt} sub-proxies in this batch mature on ${grp.dateFmt} (${grp.term}d term — differs from the row's headline because those sub-proxies were reminted with a different term). Sub-proxy ids: ${grp.ids.slice(0, 10).join(', ')}${grp.ids.length > 10 ? '…' : ''}.`;
             }
             content.title = tip;
             addLongPressTooltip(content, tip);
