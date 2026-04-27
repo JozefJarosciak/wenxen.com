@@ -620,8 +620,16 @@ if (window.chainManager) {
 const selectedRows = new Set();
 // This address is hard-coded in the Python remint path (Ethereum)
 const REMINT_HELPER_ETH = '0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98';
-// Safety cap: CoinTool can handle up to this many VMUs per tx
+// Hard contract cap: CoinTool itself cannot handle more than this many VMUs per tx
 const MAX_VMU_PER_TX = 128;
+
+// User-configurable chunk size to keep each tx under Ethereum's per-tx gas cap
+// (EIP-7825, 16,777,216 gas / 2^24). Default 64 — empirically safe for remints.
+function getCointoolMaxVmuPerTx() {
+  const raw = parseInt(localStorage.getItem("cointoolMaxVmuPerTx") || "", 10);
+  if (!Number.isFinite(raw) || raw < 1) return 64;
+  return Math.min(MAX_VMU_PER_TX, raw);
+}
 const blockTsCache = new Map();
 // Small date formatter for remint dialog
 function _formatRemintDate(termDays){
@@ -729,15 +737,16 @@ async function sendCointoolTx({ ids, dataHex, salt, w3, action }) {
 
   const c = new w3.eth.Contract(cointoolAbi, COINTOOL_MAIN);
   const uniq = Array.from(new Set(ids)).sort((a,b)=>a-b);
+  const chunkSize = getCointoolMaxVmuPerTx();
 
-  // If exceeds cap, alert once with planned tx count
-  if (uniq.length > MAX_VMU_PER_TX) {
-    const txCount = Math.ceil(uniq.length / MAX_VMU_PER_TX);
-    alert(`This mint has ${uniq.length} VMUs. The contract allows up to ${MAX_VMU_PER_TX} VMUs per transaction. Your request will be sent in ${txCount} transaction(s).`);
+  // If exceeds chunk size, alert once with planned tx count
+  if (uniq.length > chunkSize) {
+    const txCount = Math.ceil(uniq.length / chunkSize);
+    alert(`This mint has ${uniq.length} VMUs. With your chunk size of ${chunkSize} VMUs/tx, it will be sent in ${txCount} transaction(s) to stay under Ethereum's per-tx gas cap.`);
   }
 
-  for (let i = 0; i < uniq.length; i += MAX_VMU_PER_TX) {
-    const chunk = uniq.slice(i, i + MAX_VMU_PER_TX);
+  for (let i = 0; i < uniq.length; i += chunkSize) {
+    const chunk = uniq.slice(i, i + chunkSize);
     try {
       const tx = await executeWithAutoRescan(
         c.methods.f(chunk, dataHex, salt).send({ from: connectedAccount }),
@@ -880,6 +889,8 @@ window.getChainConfig = () => {
 let DEFAULT_RPC = 'https://ethereum-rpc.publicnode.com';
 let CONTRACT_ADDRESS = "0x0dE8bf93dA2f7eecb3d9169422413A9bef4ef628";
 let EVENT_TOPIC = "0xe9149e1b5059238baed02fa659dbf4bd932fbcf760a431330df4d934bc942f37";
+// XEN MintClaimed(address indexed user, uint256 rewardAmount) — emitted by claimMintReward
+const MINT_CLAIMED_TOPIC = "0xd74752b13281df13701575f3a507e9b1242e0b5fb040143211c481c1fce573a6";
 let SALT_BYTES_TO_QUERY = '0x01';
 let REMINT_SELECTOR = '0xc2580804';
 let XEN_CRYPTO_ADDRESS = '0x06450dee7fd2fb8e39061434babcfc05599a6fb8';
@@ -1340,8 +1351,18 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     // Track status distribution for debugging
     statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
 
+    // Always exclude closed positions (Claimed, Ended Early) from the Total —
+    // their value has already been realized and shouldn't show up as pending XEN.
+    if (status === 'Claimed' || status === 'Ended Early' || Number(rowData.redeemed || 0) === 1) {
+      skippedCount++;
+      if (index < 5) {
+        console.log(`[XEN Badge DEBUG] Row ${index}: SKIPPED (closed) - Status="${status}", ID=${rowData.ID}, Type=${rowData.SourceType}`);
+      }
+      return;
+    }
+
     // Only filter by "Maturing" status if NOT showing "All" filter
-    // When "All" filter is active, count all visible rows (Maturing, Claimed, Claimable, etc.)
+    // When "All" filter is active, count all visible rows (Maturing, Claimable, etc.)
     // When specific filters are active (dates, All Maturing), only count Maturing rows
     if (status !== 'Maturing' && !isAllFilterActive) {
       skippedCount++;
@@ -2051,19 +2072,30 @@ function refreshBulkUI(){
   let anyClaimable = false;
   let anyCointoolClaimable = false;
   let ctMintCount = 0;
-  let ctVMUs = 0;
+  let ctVMUs = 0;        // total VMUs covered by selection (for context)
+  let ctActionable = 0;  // VMUs that will actually be sent (failed-only when partial)
+  let anyPartial = false;
   for (const id of ids) {
     try {
       const rowObj = cointoolTable.getRow(id);
       const data = rowObj?.getData?.();
       if (!data) continue;
-      if (computeLiveStatus(data) === 'Claimable') {
+      const rowFailed = Array.isArray(data.FailedIds) && data.FailedIds.length > 0;
+      const live = computeLiveStatus(data);
+      // A partial-failure row is always actionable (failed sub-VMUs are on
+      // their original term, independent of the row's headline maturity).
+      if (live === 'Claimable' || rowFailed) {
         anyClaimable = true;
         if (String(data.SourceType) !== 'XENFT') anyCointoolClaimable = true;
       }
       if (String(data.SourceType) !== 'XENFT') {
         ctMintCount += 1;
         try { ctVMUs += getIdsForRow(data).length; } catch {}
+        try {
+          const actionable = getActionableIdsForRow(data);
+          ctActionable += actionable.length;
+          if (rowFailed) anyPartial = true;
+        } catch {}
       }
     } catch {}
   }
@@ -2073,12 +2105,23 @@ function refreshBulkUI(){
   if (ct) {
     if (ctMintCount > 0) {
       const vmusText = ctVMUs.toLocaleString();
-      ct.textContent = `(${ctMintCount} mints, ${vmusText} VMUs selected)`;
+      if (anyPartial && ctActionable !== ctVMUs) {
+        ct.textContent = `(${ctMintCount} mints, ${ctActionable.toLocaleString()} of ${vmusText} VMUs to claim)`;
+      } else {
+        ct.textContent = `(${ctMintCount} mints, ${vmusText} VMUs selected)`;
+      }
     } else {
       ct.textContent = ids.length ? `(${ids.length} selected)` : '';
     }
   }
-  if (claimBtn) claimBtn.disabled = !show;
+  if (claimBtn) {
+    claimBtn.disabled = !show;
+    if (anyPartial && anyCointoolClaimable) {
+      claimBtn.textContent = `Re-claim Failed (${ctActionable})`;
+    } else {
+      claimBtn.textContent = 'Claim';
+    }
+  }
   if (remintBtn) remintBtn.style.display = anyCointoolClaimable ? '' : 'none';
 }
 
@@ -2086,6 +2129,18 @@ function getIdsForRow(rowData){
   const startId  = Number(rowData.Mint_id_Start);
   const vmuCount = Number(rowData.VMUs || 1);
   return Array.from({ length: vmuCount }, (_, i) => startId + i);
+}
+
+// Returns the ids that still need claim/remint for this row. If a prior batch
+// reverted some sub-calls, only the failed VMU ids are returned. Otherwise the
+// full batch is returned. Used by both per-row and bulk claim flows so that
+// retrying never re-attempts the already-successful VMUs.
+function getActionableIdsForRow(rowData){
+  const failed = Array.isArray(rowData.FailedIds)
+    ? rowData.FailedIds.filter(n => Number.isFinite(Number(n))).map(Number)
+    : [];
+  if (failed.length > 0) return failed.slice().sort((a,b) => a - b);
+  return getIdsForRow(rowData);
 }
 
 function buildClaimData(minter, xen = XEN_ETH) {
@@ -2186,34 +2241,37 @@ async function handleBulkAction(mode){
     const minter = connectedAccount;
     const dataHex = (mode === 'claim') ? buildClaimData(minter, XEN_ETH) : buildRemintData(minter, term);
 
-    // Group by salt for CoinTool
+    // Group by salt for CoinTool. Use the actionable id set (failed-only when
+    // a row is partially claimed) so retrying a partial batch does not
+    // re-attempt VMUs that already succeeded.
     const bySalt = {};
     for (const r of ctRows) {
       const key = (ensureBytes(r.Salt) || '').toLowerCase();
       if (!bySalt[key]) bySalt[key] = { salt: ensureBytes(r.Salt), ids: [] };
-      bySalt[key].ids.push(...getIdsForRow(r));
+      bySalt[key].ids.push(...getActionableIdsForRow(r));
     }
 
     const c = new web3Wallet.eth.Contract(cointoolAbi, COINTOOL_MAIN);
 
     // Preflight: compute total selected VMUs and exact tx count
+    const chunkSize = getCointoolMaxVmuPerTx();
     let totalVMUs = 0;
     let totalTxCount = 0;
     for (const key of Object.keys(bySalt)) {
       const uniq = Array.from(new Set(bySalt[key].ids));
       totalVMUs += uniq.length;
-      totalTxCount += Math.ceil(uniq.length / MAX_VMU_PER_TX);
+      totalTxCount += Math.ceil(uniq.length / chunkSize);
     }
-    if (totalVMUs > MAX_VMU_PER_TX) {
-      alert(`You selected ${totalVMUs} VMUs across CoinTool mints. The contract allows up to ${MAX_VMU_PER_TX} VMUs per transaction. Your request will be sent in ${totalTxCount} transaction(s).`);
+    if (totalVMUs > chunkSize) {
+      alert(`You selected ${totalVMUs} VMUs across CoinTool mints. With your chunk size of ${chunkSize} VMUs/tx, it will be sent in ${totalTxCount} transaction(s) to stay under Ethereum's per-tx gas cap.`);
     }
 
-    // Send per-salt in chunks of MAX_VMU_PER_TX
+    // Send per-salt in chunks of cointoolMaxVmuPerTx
     for (const key of Object.keys(bySalt)) {
       const grp = bySalt[key];
       const uniq = Array.from(new Set(grp.ids)).sort((a,b)=>a-b);
-      for (let i = 0; i < uniq.length; i += MAX_VMU_PER_TX) {
-        const chunk = uniq.slice(i, i + MAX_VMU_PER_TX);
+      for (let i = 0; i < uniq.length; i += chunkSize) {
+        const chunk = uniq.slice(i, i + chunkSize);
         try {
           const tx = await executeWithAutoRescan(
             c.methods.f(chunk, dataHex, grp.salt).send({ from: connectedAccount }),
@@ -3891,23 +3949,45 @@ function populateTable(mints) {
         formatter: function(cell){
           const rowData = cell.getRow().getData();
           const live = computeLiveStatus(rowData);
-          if (live === 'Claimable') {
-            if (connectedAccount && connectedAccount.toLowerCase() === rowData.Owner.toLowerCase()) {
-              return `<span class="claim-button">Claimable</span>`;
+          const failedCount = Array.isArray(rowData.FailedIds) ? rowData.FailedIds.length : 0;
+          const isPartial = failedCount > 0;
+          const ownsRow = !!(connectedAccount && connectedAccount.toLowerCase() === (rowData.Owner || '').toLowerCase());
+          const total = Number(rowData.VMUs) || 0;
+
+          // Partial-failure rows: show the Re-claim Failed action regardless of
+          // the row's main maturity. The failed sub-proxies were never claimed
+          // /reminted, so they're still on their *original* term; if the user
+          // already attempted to claim/remint the batch (which they did, hence
+          // the failed entries), those originals were past maturity at that
+          // moment and are still claimable now. The main mint may be Maturing
+          // (post-remint), but the failed subset still needs attention.
+          if (isPartial) {
+            if (ownsRow) {
+              const succeeded = total - failedCount;
+              const tip = `Partial failure: ${succeeded}/${total} VMUs claimed/reminted, ${failedCount} reverted. Click to retry the ${failedCount} failed VMU${failedCount === 1 ? '' : 's'}. Row main status: ${live}.`;
+              return `<span class="claim-button" title="${tip}">Re-claim Failed (${failedCount})</span>`;
             }
+            return `Partially Claimed (${total - failedCount}/${total})`;
+          }
+
+          if (live === 'Claimable' && ownsRow) {
+            return `<span class="claim-button">Claimable</span>`;
           }
           return live;
         },
         cellClick: function(e, cell){
           const rowData = cell.getRow().getData();
           const liveStatus = computeLiveStatus(rowData);
+          const failedCount = Array.isArray(rowData.FailedIds) ? rowData.FailedIds.length : 0;
+          const ownsRow = !!(connectedAccount && rowData.Owner &&
+            connectedAccount.toLowerCase() === rowData.Owner.toLowerCase());
 
-          // If the status is claimable and the user clicked the button, handle the action
-          if (liveStatus === 'Claimable' &&
-            e.target.classList.contains('claim-button') &&
-            connectedAccount &&
-            connectedAccount.toLowerCase() === rowData.Owner.toLowerCase())
-          {
+          if (!e.target.classList.contains('claim-button') || !ownsRow) return;
+
+          // Allow click for partial-failure rows (Re-claim Failed) even when the
+          // row's main status is still Maturing — the failed subset is on the
+          // original term and is independently claimable.
+          if (liveStatus === 'Claimable' || failedCount > 0) {
             handleClaimAction(rowData);
           }
         }
@@ -3942,6 +4022,10 @@ function populateTable(mints) {
               const endRank = startRank + vmus - 1n;
               tooltipText += `\ncRank Range: ${startRank}-${endRank}`;
             }
+            if (action.failed) {
+              tooltipText += `\n⚠ This sub-call reverted inside the cointool batch — proxy was NOT claimed.`;
+              return `<a href="${href}" title="${tooltipText}" target="_blank" style="color:#e74c3c;text-decoration:line-through;">${index + 1}</a>`;
+            }
 
             return `<a href="${href}" title="${tooltipText}" target="_blank">${index + 1}</a>`;
           });
@@ -3971,26 +4055,38 @@ function populateTable(mints) {
           return pa - pb;
         },
 
-        // same filter logic you already have...
-        headerFilterFunc: function (headerValue, rowValue) {
+        // Filter by either headline maturity OR original-mint maturity.
+        // For partial-failure rows (FailedIds non-empty) the failed sub-VMUs
+        // are still on the original mint term, so the row should appear when
+        // the user filters by that earlier date too.
+        headerFilterFunc: function (headerValue, rowValue, rowData) {
           const qRaw = String(headerValue || "").trim();
           if (!qRaw) return true;
-          const rv = String(rowValue || "");
           const q = qRaw.toLowerCase().replace(/\s+/g, " ");
-          const rvNorm = rv.toLowerCase();
-          const m = q.match(/^(\d{4})\s+([a-z]{3})(?:\s+(\d{1,2}))?$/i);
-          if (m) {
-            const year = m[1];
-            const mon  = m[2].slice(0,3);
-            if (m[3]) {
-              const day = String(parseInt(m[3], 10));
-              const re = new RegExp(`^${year}\\s+${mon}\\s+0?${day}\\b`, "i"); // ← handles 2 and 02
-              return re.test(rv);
+          const matchOne = (rv) => {
+            const s = String(rv || "");
+            const sNorm = s.toLowerCase();
+            const m = q.match(/^(\d{4})\s+([a-z]{3})(?:\s+(\d{1,2}))?$/i);
+            if (m) {
+              const year = m[1];
+              const mon  = m[2].slice(0,3);
+              if (m[3]) {
+                const day = String(parseInt(m[3], 10));
+                const re = new RegExp(`^${year}\\s+${mon}\\s+0?${day}\\b`, "i");
+                return re.test(s);
+              }
+              const prefix = `${year} ${mon}`;
+              return sNorm.startsWith(prefix.toLowerCase());
             }
-            const prefix = `${year} ${mon}`;
-            return rvNorm.startsWith(prefix.toLowerCase());
+            return sNorm.includes(q);
+          };
+          if (matchOne(rowValue)) return true;
+          // Only consider OriginalMaturity if there are still-pending failed VMUs.
+          const failedCount = Array.isArray(rowData?.FailedIds) ? rowData.FailedIds.length : 0;
+          if (failedCount > 0 && rowData?.OriginalMaturity_Date_Fmt) {
+            return matchOne(rowData.OriginalMaturity_Date_Fmt);
           }
-          return rvNorm.includes(q);
+          return false;
         },
         // ✅ Tabulator tooltip (console-debugged)
         tooltip: function(cell){
@@ -4012,19 +4108,38 @@ function populateTable(mints) {
         formatter: function(cell){
           const row = cell.getRow().getData();
           const text = cell.getValue() || "";
-          const tip = computeMaturityTooltip(row) || "";
+          const baseTip = computeMaturityTooltip(row) || "";
+          const failedCount = Array.isArray(row.FailedIds) ? row.FailedIds.length : 0;
+          const origDate = row.OriginalMaturity_Date_Fmt || "";
 
-          // Create a span element for the cell's content
           const content = document.createElement("span");
+
+          // For partial-failure rows, show the headline maturity AND the
+          // original maturity (when the failed sub-VMUs were/are claimable).
+          if (failedCount > 0 && origDate && origDate !== text) {
+            const hl = document.createElement("span");
+            hl.textContent = text || "(no headline maturity)";
+            const sep = document.createElement("span");
+            sep.textContent = " · ";
+            sep.style.opacity = "0.6";
+            const orig = document.createElement("span");
+            orig.textContent = `failed → ${origDate}`;
+            orig.style.color = "#e74c3c";
+            orig.style.fontWeight = "bold";
+            content.appendChild(hl);
+            content.appendChild(sep);
+            content.appendChild(orig);
+            const tip = `${baseTip}\n\n⚠ ${failedCount} VMU(s) reverted in a prior batch — those are still on the original mint term (${origDate}) and need re-claiming.`;
+            content.title = tip;
+            addLongPressTooltip(content, tip);
+            return content;
+          }
+
           content.textContent = text;
+          content.title = baseTip;
+          addLongPressTooltip(content, baseTip);
 
-          // This keeps the original hover tooltip for desktop users
-          content.title = tip;
-
-          // This adds the new tap-and-hold functionality for mobile users
-          addLongPressTooltip(content, tip);
-
-          return content; // Return the new element to Tabulator
+          return content;
         },
       },
 
@@ -4331,6 +4446,11 @@ function computeLiveStatus(row) {
   // Fallback for Cointool mints
   const acts = Array.isArray(data.Actions) ? data.Actions : [];
   const hasActs = acts.length > 0;
+  const failedIds = Array.isArray(data.FailedIds) ? data.FailedIds : [];
+
+  // Partial-failure batch: Etherscan tx Success but some sub-claims reverted.
+  // Re-expose as Claimable past maturity so the user can re-claim the failed VMUs.
+  if (matured && failedIds.length > 0) return 'Claimable';
 
   if (matured && !hasActs) return 'Claimable';
   if (!matured) return 'Maturing';
@@ -4379,14 +4499,16 @@ async function performStatusTick() {
     }
 
     const effTs = (Number.isFinite(maturity) && maturity > 0) ? maturity : (recomputedTs || 0);
+    const failedCount = Array.isArray(r.FailedIds) ? r.FailedIds.length : 0;
 
     let desired;
     if (effTs > nowSec) {
       desired = "Maturing";
     } else if (effTs > 0) {
-      desired = hasActs ? "Claimed" : "Claimable";
+      // Past maturity: re-expose as Claimable if any sub-claims reverted in a prior batch.
+      desired = (hasActs && failedCount === 0) ? "Claimed" : "Claimable";
     } else {
-      desired = hasActs ? "Claimed" : "Maturing";
+      desired = (hasActs && failedCount === 0) ? "Claimed" : "Maturing";
     }
 
     const needRangeUpdate = (recomputedStartRank !== null);
@@ -5093,7 +5215,36 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   //          normalizeSalt, computeProxyAddress, makeRpcRequest
   // caches/db: remintCache (in-memory), dbInstance (IndexedDB handle)
 
-  const latestBlock = await web3.eth.getBlockNumber();
+  // Resolve latest block from web3 + Etherscan and use the higher value.
+  // Some RPCs (especially Alchemy/QuickNode under load) can return a stale head
+  // that's hours behind chain tip, which silently shrinks the scan window.
+  let latestBlock = 0;
+  try {
+    latestBlock = Number(await web3.eth.getBlockNumber());
+  } catch (e) {
+    console.warn("[Cointool] web3.getBlockNumber failed:", e?.message || e);
+  }
+  try {
+    const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
+    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=proxy&action=eth_blockNumber&apikey=${etherscanApiKey}`;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const resp = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data?.result) {
+        const esBlock = parseInt(data.result, 16);
+        if (Number.isFinite(esBlock) && esBlock > latestBlock) {
+          console.log(`[Cointool] latestBlock from RPC=${latestBlock}, Etherscan=${esBlock} — using Etherscan value`);
+          latestBlock = esBlock;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Cointool] Etherscan eth_blockNumber failed:", e?.message || e);
+  }
+  if (!latestBlock) throw new Error("Could not determine latest block from any source");
   const CHUNK_SIZE = getChunkSize();
 
   // --- UI handles ---
@@ -5118,6 +5269,12 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   try {
     if (forceRescan && dbInstance) {
       await clearScanState(dbInstance, address);
+      // Also drop the cached actions map so a force rescan can re-derive
+      // per-action flags (e.g. `failed: true`) from the receipt logs. Without
+      // this, the merge below dedups by (hash|timestamp) and silently keeps
+      // the older action that lacked the flag.
+      try { await clearActionsCache(dbInstance, address); } catch (_) {}
+      try { delete remintCache[address]; } catch (_) {}
     } else if (dbInstance) {
       const st = await getScanState(dbInstance, address);
       if (st && Number.isFinite(st.lastScannedBlock)) {
@@ -5126,6 +5283,20 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     }
   } catch (e) {
     console.warn("resume cursor read/clear failed:", e);
+  }
+
+  // Honor the "Incremental Scan Depth (blocks)" setting from the Settings page:
+  // always look back at least that many blocks from the chain tip, even if our
+  // resume cursor is more recent. Catches remints/claims that landed in blocks
+  // before the saved cursor (e.g. when a prior scan saved cursor=N+1 right
+  // before activity at block N).
+  const rescanBlockDepthForActions = parseInt(localStorage.getItem("rescanBlockDepth") || "1000", 10);
+  if (!forceRescan && Number.isFinite(rescanBlockDepthForActions) && rescanBlockDepthForActions > 0) {
+    const lookback = Math.max(xenDeploymentBlock, latestBlock - rescanBlockDepthForActions);
+    if (lookback < resumeFrom) {
+      console.log(`[Cointool] Honoring rescanBlockDepth=${rescanBlockDepthForActions}: lowering resumeFrom from ${resumeFrom} to ${lookback}`);
+      resumeFrom = lookback;
+    }
   }
 
   // Pre-skip early empty ranges by finding the address' first tx once
@@ -5220,12 +5391,33 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   }
 
   // -------- Prefilter candidate remint txs to the Cointool contract --------
+  // The website calls cointool's `f(uint256[],bytes,bytes)` for batch
+  // claim/remint; the on-chain selector for that signature is `0xd21ba82f`.
+  // Older builds and other UIs use `REMINT_SELECTOR` (`0xc2580804`). Accept
+  // either, plus the array variant `t_(uint256[],bytes,bytes)` (`0x9108e811`).
+  // Anything else with the same `(uint256[],bytes,bytes)` shape will still
+  // decode below, so this list is a fast prefilter, not a strict gate — the
+  // structural decode acts as the real validator.
   const lowerContract = CONTRACT_ADDRESS.toLowerCase();
-  const candidates = allTransactions.filter(tx =>
-    tx.to && tx.to.toLowerCase() === lowerContract &&
-    tx.input && tx.input.startsWith(REMINT_SELECTOR) &&
-    tx.isError !== "1"
-  );
+  const BATCH_SELECTORS = new Set([
+    String(REMINT_SELECTOR || '').toLowerCase(),
+    '0xd21ba82f', // f(uint256[],bytes,bytes)
+    '0x9108e811', // t_(uint256[],bytes,bytes)
+  ].filter(Boolean));
+  const candidates = allTransactions.filter(tx => {
+    if (!tx.to || tx.to.toLowerCase() !== lowerContract) return false;
+    if (!tx.input || tx.input.length < 10) return false;
+    if (tx.isError === "1") return false;
+    return BATCH_SELECTORS.has(tx.input.slice(0, 10).toLowerCase());
+  });
+  if (candidates.length > 0) {
+    const selectorCounts = candidates.reduce((acc, tx) => {
+      const s = tx.input.slice(0, 10).toLowerCase();
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    }, {});
+    console.log(`[Cointool] Found ${candidates.length} candidate batch tx(s) by selector:`, selectorCounts);
+  }
 
   // -------- Decode per-tx actions into a map: "<mintId>-<saltKey>" -> [actions] --------
   const info = {};
@@ -5252,11 +5444,20 @@ async function fetchPostMintActions(address, etherscanApiKey) {
 
       // tx.input = 0x + 4-byte selector + encoded params, so slice(10)
       const inputData = tx.input.slice(10);
-      // ABI: function remint(uint256[] ids, bytes proof, bytes salt)
-      const params = web3.eth.abi.decodeParameters(['uint256[]', 'bytes', 'bytes'], inputData);
+      // ABI: cointool batch shape is (uint256[] ids, bytes data, bytes salt).
+      let params;
+      try {
+        params = web3.eth.abi.decodeParameters(['uint256[]', 'bytes', 'bytes'], inputData);
+      } catch (e) {
+        // Selector matched our prefilter but the param shape differs (e.g. a
+        // single-batch `t(uint256,bytes,bytes)` with no array). Skip — the
+        // single-batch path is already covered by the original-mint scan.
+        continue;
+      }
 
       let actedOnIds = params[0];
       if (!Array.isArray(actedOnIds)) actedOnIds = [actedOnIds];
+      if (actedOnIds.length === 0) continue;
 
       const saltRaw = params[2];
       const saltKey = normalizeSalt(saltRaw); // for map keys only
@@ -5273,18 +5474,33 @@ async function fetchPostMintActions(address, etherscanApiKey) {
 
         const uniqueKey = `${mintId}-${saltKey}`;
 
-        // Find the event log that corresponds to this proxy (topics[1] encodes the proxy)
-        const matchingLog = logs.find(
-          log => log.topics?.includes(EVENT_TOPIC) &&
-            ('0x' + log.topics[1].slice(26)).toLowerCase() === proxyAddress.toLowerCase()
+        const proxyLower = proxyAddress.toLowerCase();
+        // RankClaimed → emitted by XEN.claimRank (i.e. a remint started a new mint)
+        const matchingRankLog = logs.find(
+          log => log.topics?.[0] === EVENT_TOPIC &&
+            ('0x' + log.topics[1].slice(26)).toLowerCase() === proxyLower
+        );
+        // MintClaimed → emitted by XEN.claimMintReward (i.e. a successful claim)
+        const matchingClaimLog = logs.find(
+          log => log.topics?.[0] === MINT_CLAIMED_TOPIC &&
+            ('0x' + log.topics[1].slice(26)).toLowerCase() === proxyLower
         );
 
         const actionData = { hash: tx.hash, timeStamp: Number(tx.timeStamp) };
-        if (matchingLog) {
-          // event carries term & rank (uint256, uint256)
-          const decodedLog = web3.eth.abi.decodeParameters(['uint256', 'uint256'], matchingLog.data);
+        if (matchingRankLog) {
+          // Remint: claimMintReward + claimRank were both successful for this proxy.
+          const decodedLog = web3.eth.abi.decodeParameters(['uint256', 'uint256'], matchingRankLog.data);
           actionData.term = decodedLog[0];
           actionData.rank = decodedLog[1];
+        } else if (matchingClaimLog) {
+          // Pure claim: only claimMintReward succeeded (no new mint started).
+          actionData.term = "0";
+        } else {
+          // Neither event emitted → this sub-call reverted inside the cointool batch.
+          // The outer tx still succeeded (cointool swallows sub-call reverts), but
+          // this specific proxy was NOT claimed/reminted. Flag it so downstream
+          // status logic can re-expose the row as Claimable.
+          actionData.failed = true;
         }
 
         if (!info[uniqueKey]) info[uniqueKey] = [];
@@ -5304,17 +5520,36 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   const merged = { ...prior };
   let newActionCount = 0;
 
+  // True if the new analysis carries information the cached one didn't:
+  // a `failed` flag, a non-zero term, or a rank. This lets a re-scan upgrade
+  // an older "bare" action (no flag, no term/rank) into a properly classified
+  // success/failure without requiring a full force rescan.
+  const isMoreInformative = (incoming, existing) => {
+    if (!existing) return true;
+    if (incoming?.failed === true && existing.failed !== true) return true;
+    const hasTerm = (a) => a && a.term != null && Number(a.term) > 0;
+    const hasRank = (a) => a && a.rank != null && String(a.rank) !== "";
+    if (hasTerm(incoming) && !hasTerm(existing)) return true;
+    if (hasRank(incoming) && !hasRank(existing)) return true;
+    return false;
+  };
+
   for (const key of Object.keys(info)) {
     const existing = Array.isArray(merged[key]) ? merged[key] : [];
     const incoming = info[key];
 
-    // de-dupe by (hash|timestamp) signature
-    const seen = new Set(existing.map(a => `${a.hash}|${a.timeStamp}`));
+    // Index existing by (hash|timestamp) so we can either skip or upgrade.
+    const idxByKey = new Map();
+    existing.forEach((a, i) => idxByKey.set(`${a.hash}|${a.timeStamp}`, i));
+
     for (const a of incoming) {
       const sig = `${a.hash}|${a.timeStamp}`;
-      if (!seen.has(sig)) {
+      if (!idxByKey.has(sig)) {
         existing.push(a);
-        seen.add(sig);
+        idxByKey.set(sig, existing.length - 1);
+        newActionCount++;
+      } else if (isMoreInformative(a, existing[idxByKey.get(sig)])) {
+        existing[idxByKey.get(sig)] = a;
         newActionCount++;
       }
     }
@@ -5424,6 +5659,11 @@ async function fetchPostMintActions(address, etherscanApiKey) {
   if (cointoolBatchDelayInput) {
     const saved = localStorage.getItem("cointoolBatchDelay");
     if (saved) cointoolBatchDelayInput.value = saved;
+  }
+
+  const cointoolMaxVmuPerTxInput = document.getElementById("cointoolMaxVmuPerTx");
+  if (cointoolMaxVmuPerTxInput) {
+    cointoolMaxVmuPerTxInput.value = String(getCointoolMaxVmuPerTx());
   }
 
   // Load Auto-Rescan Settings
@@ -5561,6 +5801,28 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     cointoolBatchDelayInput.addEventListener("blur", () => persistCointoolBatchDelay(cointoolBatchDelayInput.value));
     cointoolBatchDelayInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); persistCointoolBatchDelay(cointoolBatchDelayInput.value); }
+    });
+  }
+
+  // Cointool Claim/Remint chunk size (validated 1..MAX_VMU_PER_TX)
+  const cointoolMaxVmuPerTxInput = document.getElementById("cointoolMaxVmuPerTx");
+  if (cointoolMaxVmuPerTxInput) {
+    const persistCointoolMaxVmuPerTx = (val) => {
+      const v = parseInt(val, 10);
+      if (Number.isFinite(v) && v >= 1 && v <= MAX_VMU_PER_TX) {
+        localStorage.setItem("cointoolMaxVmuPerTx", String(v));
+        if (typeof showToast === "function") showToast(`Cointool chunk size saved (${v} VMUs/tx)`, "success");
+        markValidity("field-cointoolMaxVmuPerTx", true);
+      } else {
+        if (typeof showToast === "function") showToast(`Chunk size must be between 1 and ${MAX_VMU_PER_TX}.`, "error");
+        cointoolMaxVmuPerTxInput.value = String(getCointoolMaxVmuPerTx());
+        markValidity("field-cointoolMaxVmuPerTx", false, `Chunk size must be between 1 and ${MAX_VMU_PER_TX}.`);
+      }
+    };
+    cointoolMaxVmuPerTxInput.addEventListener("change", () => persistCointoolMaxVmuPerTx(cointoolMaxVmuPerTxInput.value));
+    cointoolMaxVmuPerTxInput.addEventListener("blur", () => persistCointoolMaxVmuPerTx(cointoolMaxVmuPerTxInput.value));
+    cointoolMaxVmuPerTxInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); persistCointoolMaxVmuPerTx(cointoolMaxVmuPerTxInput.value); }
     });
   }
 
@@ -5884,12 +6146,35 @@ async function scanMints() {
       await fetchPostMintActions(addr, etherscanApiKey);
 
     // Only skip if: NOT force rescan AND no new Etherscan txs AND contract shows no new mints
+    // AND no cached actions remain unapplied (e.g. from a prior scan that loaded actions
+    // but couldn't iterate the affected mintIds because of the rescanBlockDepth cutoff).
     if (!forceRescan && fetched === 0 && !hasNewMints) {
-      tokenProgressBar.value = maxId;
-      tokenProgressBar.max = maxId;
-      tokenProgressText.textContent = `${shortAddr(addr)}: No new mints or transactions`;
-      console.log(`[Cointool] Skipping ${shortAddr(addr)} - no new txs and no new mints`);
-      continue;
+      let hasUnappliedActions = false;
+      if (dbInstance && Object.keys(postMintActions).length > 0) {
+        try {
+          const allMintsForCheck = await getAllMints(dbInstance);
+          for (const mint of allMintsForCheck) {
+            if (!mint.Owner || mint.Owner.toLowerCase() !== addr.toLowerCase()) continue;
+            const mintIdNum = Number(mint.Mint_id_Start) || 0;
+            if (mintIdNum <= 0) continue;
+            const saltKey = normalizeSalt(mint.Salt || SALT_BYTES_TO_QUERY);
+            const cached = (postMintActions[`${mintIdNum}-${saltKey}`] || []).length;
+            const stored = (mint.Actions || []).length;
+            if (cached > stored) { hasUnappliedActions = true; break; }
+          }
+        } catch (e) {
+          console.warn(`[Cointool] Could not check for unapplied cached actions:`, e);
+        }
+      }
+
+      if (!hasUnappliedActions) {
+        tokenProgressBar.value = maxId;
+        tokenProgressBar.max = maxId;
+        tokenProgressText.textContent = `${shortAddr(addr)}: No new mints or transactions`;
+        console.log(`[Cointool] Skipping ${shortAddr(addr)} - no new txs and no new mints`);
+        continue;
+      }
+      console.log(`[Cointool] ${shortAddr(addr)}: cached actions await application, proceeding`);
     }
 
     if (!hasNewMints && newActionCount === 0) {
@@ -5952,6 +6237,38 @@ async function scanMints() {
       }
     }
 
+    // Lower startMintId if any existing mints below the cutoff have post-mint
+    // actions (claims/remints) we haven't recorded yet. Without this, a remint
+    // of an old mint is missed because the block-based cutoff treats it as "done".
+    // We also collect the exact affected mintIds so the loop can fast-skip every
+    // other below-cutoff mintId instead of doing a DB read per iteration.
+    const originalStartMintId = startMintId;
+    const affectedMintIdsBelowCutoff = new Set();
+    if (!forceRescan && dbInstance && startMintId > 1) {
+      try {
+        const existingMintsForCutoff = await getAllMints(dbInstance);
+        let lowestAffected = startMintId;
+        for (const mint of existingMintsForCutoff) {
+          if (!mint.Owner || mint.Owner.toLowerCase() !== addr.toLowerCase()) continue;
+          const mintIdNum = Number(mint.Mint_id_Start) || 0;
+          if (mintIdNum <= 0 || mintIdNum >= startMintId) continue;
+          const saltKey = normalizeSalt(mint.Salt || SALT_BYTES_TO_QUERY);
+          const scannedCount = (postMintActions[`${mintIdNum}-${saltKey}`] || []).length;
+          const storedCount = (mint.Actions || []).length;
+          if (scannedCount > storedCount) {
+            affectedMintIdsBelowCutoff.add(mintIdNum);
+            if (mintIdNum < lowestAffected) lowestAffected = mintIdNum;
+          }
+        }
+        if (lowestAffected < startMintId) {
+          console.log(`[Cointool] New post-mint actions detected for ${affectedMintIdsBelowCutoff.size} mintId(s) below cutoff (lowest: ${lowestAffected}). Lowering startMintId from ${startMintId} to ${lowestAffected}.`);
+          startMintId = lowestAffected;
+        }
+      } catch (e) {
+        console.warn(`[Cointool] Could not scan for affected mints below cutoff:`, e);
+      }
+    }
+
     // Show scan range info and handle edge cases
     if (startMintId > 1 && startMintId <= maxId) {
       const mintsToCheck = maxId - startMintId + 1;
@@ -5982,6 +6299,13 @@ async function scanMints() {
     const processedTxHashes = new Map(); // txHash -> totalVMUsProcessed
 
     for (let mintId = startMintId; mintId <= maxId; mintId++) {
+      // Fast-skip below-cutoff mintIds that don't have any unapplied actions.
+      // Avoids a DB read per iteration when we lowered startMintId just to reach
+      // a few specific mintIds with cached remint/claim actions.
+      if (mintId < originalStartMintId && !affectedMintIdsBelowCutoff.has(mintId)) {
+        continue;
+      }
+
       tokenProgressBar.value = mintId;
       const remaining = maxId - mintId;
       tokenProgressText.textContent = `Processing mint ${mintId} of ${maxId}... (${remaining} remaining)`;
@@ -6107,27 +6431,44 @@ async function scanMints() {
         }
 
         const mintTimestamp = mintBlockTs;
-        const lastAction = actions.length > 0 ? actions[actions.length - 1] : null;
-        const latestActionTimestamp = lastAction ? Number(lastAction.timeStamp) : mintTimestamp;
+        // Find the most recent action that was NOT a reverted sub-call. A
+        // failed action shouldn't reset the row's term/maturity — the proxy is
+        // still in its pre-batch state on-chain.
+        let lastAction = null;
+        let lastSuccessfulAction = null;
+        for (let i = actions.length - 1; i >= 0; i--) {
+          const a = actions[i];
+          if (lastAction == null) lastAction = a;
+          if (a && a.failed !== true) { lastSuccessfulAction = a; break; }
+        }
+        const lastActionWasFailed = !!(lastAction && lastAction.failed === true);
+        const referenceAction = lastSuccessfulAction;
+        const latestActionTimestamp = referenceAction ? Number(referenceAction.timeStamp) : mintTimestamp;
         let effectiveTermDays;
         let maturityTimestamp;
 
-        if (lastAction && (lastAction.term == null || Number(lastAction.term) === 0)) {
+        if (referenceAction && (referenceAction.term == null || Number(referenceAction.term) === 0)) {
+          // Pure claim succeeded — no new mint.
           effectiveTermDays = Number(term);
           maturityTimestamp = 0;
         } else {
-          effectiveTermDays = lastAction && lastAction.term != null
-            ? Number(lastAction.term)
+          effectiveTermDays = referenceAction && referenceAction.term != null
+            ? Number(referenceAction.term)
             : Number(term);
-
           maturityTimestamp = latestActionTimestamp + (effectiveTermDays * 86400);
         }
 
         let status;
         const now = luxon.DateTime.now().toSeconds();
-        if (maturityTimestamp > now) {
+        const matured = maturityTimestamp > 0 && maturityTimestamp <= now;
+        // A reverted sub-call for proxy mintId means the original mint is still
+        // pending → treat as Claimable past maturity, even though `actions` has
+        // an entry for the failed batch.
+        if (lastActionWasFailed && !lastSuccessfulAction) {
+          status = matured ? "Claimable" : "Maturing";
+        } else if (maturityTimestamp > now) {
           status = "Maturing";
-        } else if (actions.length > 0) {
+        } else if (actions.length > 0 && lastSuccessfulAction) {
           status = "Claimed";
         } else {
           status = "Claimable";
@@ -6143,6 +6484,38 @@ async function scanMints() {
           ? luxon.DateTime.fromSeconds(maturityTimestamp)
           : null;
 
+        // Walk every proxy in this batch and find the ones whose latest action
+        // is `failed: true` (sub-call reverted inside the cointool batch). These
+        // are the VMUs we still need to claim/remint. Surfaces partial-failure
+        // batches (Etherscan tx Success but some sub-claims reverted).
+        const saltKeyForFailed = normalizeSalt(salt);
+        const failedIds = [];
+        for (let off = 0; off < Number(totalMintsInTx); off++) {
+          const subId = mintId + off;
+          const subActions = postMintActions[`${subId}-${saltKeyForFailed}`];
+          if (!Array.isArray(subActions) || subActions.length === 0) continue;
+          const subLast = subActions[subActions.length - 1];
+          if (subLast && subLast.failed === true) failedIds.push(subId);
+        }
+        // If any sub-call failed AND the mint is past maturity, the batch is
+        // only partially claimed. Force the row back to Claimable so the UI
+        // exposes a Re-claim Failed action.
+        let effectiveStatus = status;
+        if (failedIds.length > 0 && matured) {
+          effectiveStatus = "Claimable";
+        }
+
+        // For partial-failure rows, also persist the ORIGINAL mint maturity
+        // (mint block ts + term decoded from the original RankClaimed event).
+        // The failed sub-proxies are still on this term — never reminted —
+        // so the calendar should surface the row on this date too, in
+        // addition to the post-remint headline maturity.
+        const originalTermSecs = Number(term) * 86400;
+        const originalMaturityTs = Number(mintBlockTs) + originalTermSecs;
+        const originalMaturityDate = (originalMaturityTs > 0)
+          ? luxon.DateTime.fromSeconds(originalMaturityTs)
+          : null;
+
         const groupedMintDetails = {
           ID: uniqueId,
           Mint_id_Start: mintId,
@@ -6152,12 +6525,21 @@ async function scanMints() {
           Rank_Range: `${startRank.toString()}-${endRank.toString()}`,
           Term: String(effectiveTermDays),
           VMUs: totalMintsInTx.toString(),
-          Status: status,
+          Status: effectiveStatus,
+          FailedIds: failedIds,
           Actions: actions,
           Latest_Action_Timestamp: latestActionTimestamp,
           Maturity_Timestamp: maturityTimestamp,
           Maturity_Date_Fmt: maturityDate ? maturityDate.toFormat('yyyy LLL dd, hh:mm a') : "",
           maturityDateOnly:   maturityDate ? maturityDate.toFormat('yyyy-MM-dd') : "",
+          // Always store original maturity on every row — cheap, and lets the
+          // calendar/filter logic uniformly check `OriginalMaturity_*` without
+          // a presence test. Becomes load-bearing only when FailedIds.length>0.
+          OriginalMint_Term: Number(term),
+          OriginalMint_Timestamp: Number(mintBlockTs),
+          OriginalMaturity_Timestamp: originalMaturityTs,
+          OriginalMaturity_Date_Fmt: originalMaturityDate ? originalMaturityDate.toFormat('yyyy LLL dd, hh:mm a') : "",
+          originalMaturityDateOnly: originalMaturityDate ? originalMaturityDate.toFormat('yyyy-MM-dd') : "",
           Owner: addr
         };
 
@@ -6590,7 +6972,7 @@ async function connectWallet() {
     return;
   }
 
-  // CoinTool path (unchanged)
+  // CoinTool path
   const action = await chooseActionDialog('claim', row);
   if (!action || (action !== 'claim' && action !== 'remint')) return;
 
@@ -6600,7 +6982,33 @@ async function connectWallet() {
     alert("Bad Mint_id_Start or VMUs.");
     return;
   }
-  const ids  = Array.from({ length: vmuCount }, (_, i) => startId + i);
+
+  // Re-claim Failed: if a prior batch had reverted sub-calls, only retry those.
+  // Confirm with the user so a habitual claim/remint click doesn't silently
+  // narrow the scope to the failed subset. Note: the row may still display as
+  // Maturing — the headline maturity tracks the proxy at Mint_id_Start (which
+  // was successfully reminted), while the failed subset is still on its
+  // original term and likely already past maturity.
+  let ids;
+  const failedIds = Array.isArray(row.FailedIds) ? row.FailedIds.filter(n => Number.isFinite(Number(n))).map(Number) : [];
+  if (failedIds.length > 0 && failedIds.length < vmuCount) {
+    const succeeded = vmuCount - failedIds.length;
+    const proceed = confirm(
+      `Partial-failure batch detected.\n\n` +
+      `${succeeded} of ${vmuCount} VMUs in this batch were already claimed/reminted in a prior tx; ` +
+      `${failedIds.length} reverted (cointool batch sub-call out-of-gas under EIP-7825 cap).\n\n` +
+      `OK → ${action} ONLY the ${failedIds.length} failed VMU${failedIds.length === 1 ? '' : 's'} ` +
+      `(ids ${failedIds[0]}..${failedIds[failedIds.length - 1]}).\n\n` +
+      `Cancel → ${action} all ${vmuCount} VMUs ` +
+      `(the ${succeeded} already-processed ones will revert again — wastes gas).`
+    );
+    ids = proceed
+      ? failedIds.slice().sort((a,b) => a - b)
+      : Array.from({ length: vmuCount }, (_, i) => startId + i);
+  } else {
+    ids = Array.from({ length: vmuCount }, (_, i) => startId + i);
+  }
+
   const salt = ensureBytes(row.Salt);
 
   const minter = connectedAccount;
@@ -7076,6 +7484,7 @@ function collectSettingsSnapshot() {
     chunkSize: (document.getElementById("chunkSize")?.value ?? "").trim(),
     cointoolBatchSize: (document.getElementById("cointoolBatchSize")?.value ?? "").trim(),
     cointoolBatchDelay: (document.getElementById("cointoolBatchDelay")?.value ?? "").trim(),
+    cointoolMaxVmuPerTx: (document.getElementById("cointoolMaxVmuPerTx")?.value ?? "").trim(),
     autoRescanEnabled: document.getElementById("autoRescanEnabled")?.checked ?? false,
     autoRescanDelay: (document.getElementById("autoRescanDelay")?.value ?? "120").trim(),
     rescanBlockDepth: (document.getElementById("rescanBlockDepth")?.value ?? "1000").trim(),
@@ -7177,6 +7586,7 @@ function applySettingsSnapshot(settings) {
       setVal("chunkSize", settings.formValues.chunkSize);
       setVal("cointoolBatchSize", settings.formValues.cointoolBatchSize);
       setVal("cointoolBatchDelay", settings.formValues.cointoolBatchDelay);
+      setVal("cointoolMaxVmuPerTx", settings.formValues.cointoolMaxVmuPerTx);
       setVal("autoRescanDelay", settings.formValues.autoRescanDelay);
       setVal("rescanBlockDepth", settings.formValues.rescanBlockDepth);
       setVal("gasRefreshSeconds", settings.formValues.gasRefreshSeconds);
@@ -7237,6 +7647,7 @@ function applySettingsSnapshot(settings) {
   setVal("chunkSize", settings.chunkSize);
   setVal("cointoolBatchSize", settings.cointoolBatchSize);
   setVal("cointoolBatchDelay", settings.cointoolBatchDelay);
+  setVal("cointoolMaxVmuPerTx", settings.cointoolMaxVmuPerTx);
   setVal("gasRefreshSeconds", settings.gasRefreshSeconds);
   setVal("mintTermDays", settings.mintTermDays);
 
@@ -7266,6 +7677,7 @@ function applySettingsSnapshot(settings) {
   if (settings.chunkSize != null) localStorage.setItem("chunkSize", String(settings.chunkSize));
   if (settings.cointoolBatchSize != null) localStorage.setItem("cointoolBatchSize", String(settings.cointoolBatchSize));
   if (settings.cointoolBatchDelay != null) localStorage.setItem("cointoolBatchDelay", String(settings.cointoolBatchDelay));
+  if (settings.cointoolMaxVmuPerTx != null) localStorage.setItem("cointoolMaxVmuPerTx", String(settings.cointoolMaxVmuPerTx));
   if (settings.autoRescanEnabled != null) localStorage.setItem("autoRescanEnabled", String(settings.autoRescanEnabled));
   if (settings.autoRescanDelay != null) localStorage.setItem("autoRescanDelay", String(settings.autoRescanDelay));
   if (settings.rescanBlockDepth != null) localStorage.setItem("rescanBlockDepth", String(settings.rescanBlockDepth));

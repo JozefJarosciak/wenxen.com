@@ -807,19 +807,42 @@ function setMaturityHeaderFilterFromDate(dt) {
     const dateMap = Object.create(null);
 
     function addFromRow(row){
-      // Exclude anything already claimed, ended, or redeemed
-      if (String(row.Status) === "Claimed" || String(row.status) === "Ended Early" || Number(row.redeemed || 0) === 1) return;
+      // Exclude anything already claimed, ended, or redeemed.
+      // Normalize because some rows carry only Status (TitleCase) and others only status.
+      const st = String(row.Status || row.status || "");
+      if (st === "Claimed" || st === "Ended Early" || Number(row.redeemed || 0) === 1) return;
 
       // Only count items that have a valid maturity timestamp
       // Note: Cointool uses Maturity_TS, others use Maturity_Timestamp
       const t = Number(row.Maturity_Timestamp || row.Maturity_TS || 0);
-      if (!Number.isFinite(t) || t <= 0) return;
+      const totalVm = Number(row.VMUs || 0) || 0;
+      const failedIds = Array.isArray(row.FailedIds) ? row.FailedIds : [];
+      const failedCount = failedIds.length;
 
-      const key = rowToLocalKey(row);
-      if (!key) return;
+      // Headline maturity (post-remint, etc): contributes the non-failed VMUs.
+      if (Number.isFinite(t) && t > 0) {
+        const key = rowToLocalKey(row);
+        if (key) {
+          // If row has FailedIds, only the SUCCESSFUL portion of the batch is
+          // actually maturing on the headline date. The failed subset is on
+          // the original term — added separately below.
+          const headlineVm = failedCount > 0 ? Math.max(0, totalVm - failedCount) : totalVm;
+          if (headlineVm > 0) dateMap[key] = (dateMap[key] || 0) + headlineVm;
+        }
+      }
 
-      const vm = Number(row.VMUs || 0) || 0;
-      if (vm > 0) dateMap[key] = (dateMap[key] || 0) + vm;
+      // Original-mint maturity for partial-failure rows: contributes the
+      // failed sub-VMUs which were never reminted and are still on the
+      // original term. Surfaces 6001/6265 etc on the Apr 25 calendar pill.
+      if (failedCount > 0) {
+        const origKey = row.originalMaturityDateOnly ||
+          (row.OriginalMaturity_Timestamp && typeof luxon !== 'undefined'
+            ? luxon.DateTime.fromSeconds(Number(row.OriginalMaturity_Timestamp))
+                .setZone(Intl.DateTimeFormat().resolvedOptions().timeZone)
+                .toFormat('yyyy-LL-dd')
+            : '');
+        if (origKey) dateMap[origKey] = (dateMap[origKey] || 0) + failedCount;
+      }
     }
 
     ctRows.forEach(addFromRow);
