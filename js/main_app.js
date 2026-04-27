@@ -4055,10 +4055,11 @@ function populateTable(mints) {
           return pa - pb;
         },
 
-        // Filter by either headline maturity OR original-mint maturity.
-        // For partial-failure rows (FailedIds non-empty) the failed sub-VMUs
-        // are still on the original mint term, so the row should appear when
-        // the user filters by that earlier date too.
+        // Filter by headline maturity OR original-mint maturity OR any
+        // recovered-sub-proxy maturity. The row may now legitimately appear
+        // on multiple dates: the headline (proxy at Mint_id_Start), the
+        // original mint date (still-pending FailedIds), and one or more
+        // recovered dates (sub-proxies reminted via Re-claim Failed).
         headerFilterFunc: function (headerValue, rowValue, rowData) {
           const qRaw = String(headerValue || "").trim();
           if (!qRaw) return true;
@@ -4081,10 +4082,15 @@ function populateTable(mints) {
             return sNorm.includes(q);
           };
           if (matchOne(rowValue)) return true;
-          // Only consider OriginalMaturity if there are still-pending failed VMUs.
+          // Original mint date — only consider if still-pending failed VMUs.
           const failedCount = Array.isArray(rowData?.FailedIds) ? rowData.FailedIds.length : 0;
           if (failedCount > 0 && rowData?.OriginalMaturity_Date_Fmt) {
-            return matchOne(rowData.OriginalMaturity_Date_Fmt);
+            if (matchOne(rowData.OriginalMaturity_Date_Fmt)) return true;
+          }
+          // Recovered sub-proxy maturities.
+          const recovered = Array.isArray(rowData?.RecoveredMaturities) ? rowData.RecoveredMaturities : [];
+          for (const grp of recovered) {
+            if (grp && matchOne(grp.dateFmt)) return true;
           }
           return false;
         },
@@ -4111,25 +4117,55 @@ function populateTable(mints) {
           const baseTip = computeMaturityTooltip(row) || "";
           const failedCount = Array.isArray(row.FailedIds) ? row.FailedIds.length : 0;
           const origDate = row.OriginalMaturity_Date_Fmt || "";
+          const recovered = Array.isArray(row.RecoveredMaturities) ? row.RecoveredMaturities : [];
 
           const content = document.createElement("span");
 
-          // For partial-failure rows, show the headline maturity AND the
-          // original maturity (when the failed sub-VMUs were/are claimable).
-          if (failedCount > 0 && origDate && origDate !== text) {
+          // Compose a multi-date display when the row has either still-pending
+          // failed VMUs (original date) or recovered sub-proxies (one or more
+          // recovered dates) that differ from the headline.
+          const hasFailedOrigDate = failedCount > 0 && origDate && origDate !== text;
+          const hasRecovered = recovered.length > 0;
+
+          if (hasFailedOrigDate || hasRecovered) {
             const hl = document.createElement("span");
             hl.textContent = text || "(no headline maturity)";
-            const sep = document.createElement("span");
-            sep.textContent = " · ";
-            sep.style.opacity = "0.6";
-            const orig = document.createElement("span");
-            orig.textContent = `failed → ${origDate}`;
-            orig.style.color = "#e74c3c";
-            orig.style.fontWeight = "bold";
             content.appendChild(hl);
-            content.appendChild(sep);
-            content.appendChild(orig);
-            const tip = `${baseTip}\n\n⚠ ${failedCount} VMU(s) reverted in a prior batch — those are still on the original mint term (${origDate}) and need re-claiming.`;
+
+            if (hasFailedOrigDate) {
+              const sep = document.createElement("span");
+              sep.textContent = " · ";
+              sep.style.opacity = "0.6";
+              const orig = document.createElement("span");
+              orig.textContent = `failed → ${origDate}`;
+              orig.style.color = "#e74c3c";
+              orig.style.fontWeight = "bold";
+              content.appendChild(sep);
+              content.appendChild(orig);
+            }
+
+            for (const grp of recovered) {
+              if (!grp || !grp.dateFmt) continue;
+              const sep = document.createElement("span");
+              sep.textContent = " · ";
+              sep.style.opacity = "0.6";
+              const rec = document.createElement("span");
+              const cnt = Array.isArray(grp.ids) ? grp.ids.length : 0;
+              rec.textContent = `recovered ${cnt} → ${grp.dateFmt}`;
+              rec.style.color = "#27ae60";
+              rec.style.fontWeight = "bold";
+              content.appendChild(sep);
+              content.appendChild(rec);
+            }
+
+            let tip = baseTip;
+            if (hasFailedOrigDate) {
+              tip += `\n\n⚠ ${failedCount} VMU(s) reverted in a prior batch — those are still on the original mint term (${origDate}) and need re-claiming.`;
+            }
+            for (const grp of recovered) {
+              const cnt = Array.isArray(grp.ids) ? grp.ids.length : 0;
+              tip += `\n\n✓ ${cnt} VMU(s) recovered via Re-claim Failed remint — now mature on ${grp.dateFmt} (${grp.term}d term). Sub-proxy ids: ${grp.ids.slice(0, 10).join(', ')}${grp.ids.length > 10 ? '…' : ''}.`;
+            }
             content.title = tip;
             addLongPressTooltip(content, tip);
             return content;
@@ -6516,6 +6552,52 @@ async function scanMints() {
           ? luxon.DateTime.fromSeconds(originalMaturityTs)
           : null;
 
+        // Per-sub-proxy "recovered" maturities. When the user clicks Re-claim
+        // Failed and picks Remint, the failed sub-proxies get reminted into a
+        // fresh term that differs from the row's headline maturity (which
+        // tracks proxy `mintId` only). Walk the batch and group sub-proxies
+        // by their post-recovery maturity so the calendar can place each
+        // group on its own date.
+        const headlineKey = maturityDate ? maturityDate.toFormat('yyyy-MM-dd') : "";
+        const recoveredByDay = new Map(); // dateOnly -> { ts, dateFmt, term, ids: [] }
+        for (let off = 0; off < Number(totalMintsInTx); off++) {
+          const subId = mintId + off;
+          if (subId === mintId) continue; // headline proxy already tracked by Maturity_*
+          const subActs = postMintActions[`${subId}-${saltKeyForFailed}`];
+          if (!Array.isArray(subActs) || subActs.length === 0) continue;
+          // Find the most recent SUCCESSFUL action with a positive term.
+          // (Skips `failed: true` and pure-claim actions with term=0.)
+          let lastSuccRemint = null;
+          for (let i = subActs.length - 1; i >= 0; i--) {
+            const a = subActs[i];
+            if (!a || a.failed === true) continue;
+            const t = Number(a.term);
+            if (Number.isFinite(t) && t > 0) { lastSuccRemint = a; break; }
+          }
+          if (!lastSuccRemint) continue;
+          const subTs = Number(lastSuccRemint.timeStamp);
+          const subTerm = Number(lastSuccRemint.term);
+          if (!Number.isFinite(subTs) || subTs <= 0 || !Number.isFinite(subTerm) || subTerm <= 0) continue;
+          const subMatTs = subTs + subTerm * 86400;
+          const subDt = luxon.DateTime.fromSeconds(subMatTs);
+          const subKey = subDt.toFormat('yyyy-MM-dd');
+          // Skip if this sub-proxy matures on the same day as the headline —
+          // already covered by Maturity_*.
+          if (subKey === headlineKey) continue;
+          if (!recoveredByDay.has(subKey)) {
+            recoveredByDay.set(subKey, {
+              maturityTs: subMatTs,
+              dateOnly: subKey,
+              dateFmt: subDt.toFormat('yyyy LLL dd, hh:mm a'),
+              term: subTerm,
+              ids: [],
+            });
+          }
+          recoveredByDay.get(subKey).ids.push(subId);
+        }
+        const RecoveredMaturities = Array.from(recoveredByDay.values())
+          .sort((a, b) => a.maturityTs - b.maturityTs);
+
         const groupedMintDetails = {
           ID: uniqueId,
           Mint_id_Start: mintId,
@@ -6540,6 +6622,11 @@ async function scanMints() {
           OriginalMaturity_Timestamp: originalMaturityTs,
           OriginalMaturity_Date_Fmt: originalMaturityDate ? originalMaturityDate.toFormat('yyyy LLL dd, hh:mm a') : "",
           originalMaturityDateOnly: originalMaturityDate ? originalMaturityDate.toFormat('yyyy-MM-dd') : "",
+          // Sub-proxy recoveries: each entry { maturityTs, dateOnly, dateFmt,
+          // term, ids[] } represents a group of sub-proxies that were
+          // reminted in a Re-claim Failed action and now mature on a date
+          // different from the row's headline maturity.
+          RecoveredMaturities,
           Owner: addr
         };
 

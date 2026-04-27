@@ -843,6 +843,16 @@ function setMaturityHeaderFilterFromDate(dt) {
             : '');
         if (origKey) dateMap[origKey] = (dateMap[origKey] || 0) + failedCount;
       }
+
+      // Recovered sub-proxies: when a Re-claim Failed remint succeeded, the
+      // recovered VMUs now mature on a fresh date independent of the row's
+      // headline. Surface each recovered group on its own date.
+      const recovered = Array.isArray(row.RecoveredMaturities) ? row.RecoveredMaturities : [];
+      for (const grp of recovered) {
+        const k = grp && grp.dateOnly;
+        const n = grp && Array.isArray(grp.ids) ? grp.ids.length : 0;
+        if (k && n > 0) dateMap[k] = (dateMap[k] || 0) + n;
+      }
     }
 
     ctRows.forEach(addFromRow);
