@@ -807,19 +807,29 @@ function setMaturityHeaderFilterFromDate(dt) {
     const dateMap = Object.create(null);
 
     function addFromRow(row){
-      // Exclude anything already claimed, ended, or redeemed.
-      // Normalize because some rows carry only Status (TitleCase) and others only status.
       const st = String(row.Status || row.status || "");
-      if (st === "Claimed" || st === "Ended Early" || Number(row.redeemed || 0) === 1) return;
+      const isHeadlineDone = (st === "Claimed" || st === "Ended Early" || Number(row.redeemed || 0) === 1);
+
+      // For non-cointool rows (XENFTs, stakes), Status reflects the whole
+      // row's state — bail out early on Claimed.
+      if (isHeadlineDone && row.SourceType !== "Cointool") return;
+
+      // For Cointool, Status === 'Claimed' only means the HEADLINE proxy
+      // (Mint_id_Start) was claimed; the row's other 127 sub-proxies may
+      // still hold pending mints in RecoveredMaturities / FailedIds_NotYetMatured
+      // / FailedIds. Don't suppress the row entirely — just suppress the
+      // headline-date contribution further down by treating maturity ts as 0.
 
       // Only count items that have a valid maturity timestamp
       // Note: Cointool uses Maturity_TS, others use Maturity_Timestamp
-      const t = Number(row.Maturity_Timestamp || row.Maturity_TS || 0);
+      const t = isHeadlineDone ? 0 : Number(row.Maturity_Timestamp || row.Maturity_TS || 0);
       const totalVm = Number(row.VMUs || 0) || 0;
       const failedIds = Array.isArray(row.FailedIds) ? row.FailedIds : [];
       const failedCount = failedIds.length;
 
       // Headline maturity (post-remint, etc): contributes the non-failed VMUs.
+      // When headline is Claimed we skip this — the headline proxy is done —
+      // but RecoveredMaturities / FailedIds_NotYetMatured still contribute below.
       if (Number.isFinite(t) && t > 0) {
         const key = rowToLocalKey(row);
         if (key) {
