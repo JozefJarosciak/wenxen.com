@@ -2157,26 +2157,68 @@ function getMaturedRecoveredIdsForRow(rowData){
   return out;
 }
 
-// Returns the ids that still need claim/remint for this row.
-//   1) FailedIds (sub-calls that reverted in a prior batch — case B confirmed
-//      to have on-chain pending MintInfo). Re-tried first.
-//   2) Matured RecoveredMaturities ids (sub-proxies that were reminted with a
-//      shorter/different term and matured before the row's headline date —
-//      they're stranded until the user explicitly claims them).
-//   3) Otherwise: the full batch.
-// Used by per-row and bulk claim flows so retries never touch
-// already-successful VMUs.
+// Returns the ids that need claim/remint right now for this row, computed
+// against XEN's truth so a click never burns gas on ids that XEN will revert:
+//
+//   Always includes (claimable now):
+//     - FailedIds                — sub-calls that reverted in a prior batch
+//                                  AND whose proxy reports term>0 AND maturity
+//                                  reached. Confirmed re-claimable per XEN.
+//     - matured RecoveredMaturities — sub-proxies reminted with a shorter
+//                                  term that have since matured.
+//
+//   Plus, when the headline proxy itself has matured, all batch ids that
+//   are still on the headline term — i.e. NOT tracked in RecoveredMaturities
+//   (they were reminted to a different term), FailedIds_NotYetMatured (still
+//   pending future maturity), or FailedIds_Lost (proxy never deployed).
+//
+//   When nothing's actionable: returns []. Callers must check non-empty
+//   before submitting a tx.
 function getActionableIdsForRow(rowData){
   const failed = Array.isArray(rowData.FailedIds)
     ? rowData.FailedIds.filter(n => Number.isFinite(Number(n))).map(Number)
     : [];
   const recoveredMatured = getMaturedRecoveredIdsForRow(rowData);
-  // Union, dedup, sorted. Order doesn't matter for cointool.f.
-  if (failed.length > 0 || recoveredMatured.length > 0) {
-    const set = new Set([...failed, ...recoveredMatured]);
-    return Array.from(set).sort((a, b) => a - b);
+  const result = new Set([...failed, ...recoveredMatured]);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const headlineTs = Number(rowData.Maturity_Timestamp || 0);
+  const headlineMatured = headlineTs > 0 && headlineTs <= nowSec;
+
+  if (headlineMatured) {
+    // Build the exclusion set: ids whose state is tracked elsewhere and
+    // therefore are NOT on the headline term.
+    const excluded = new Set();
+    const recovered = Array.isArray(rowData.RecoveredMaturities) ? rowData.RecoveredMaturities : [];
+    for (const grp of recovered) {
+      if (grp && Array.isArray(grp.ids)) {
+        for (const id of grp.ids) {
+          const n = Number(id);
+          if (Number.isFinite(n)) excluded.add(n);
+        }
+      }
+    }
+    const notYet = Array.isArray(rowData.FailedIds_NotYetMatured) ? rowData.FailedIds_NotYetMatured : [];
+    for (const e of notYet) {
+      const n = Number(e && e.id);
+      if (Number.isFinite(n)) excluded.add(n);
+    }
+    const lost = Array.isArray(rowData.FailedIds_Lost) ? rowData.FailedIds_Lost : [];
+    for (const id of lost) {
+      const n = Number(id);
+      if (Number.isFinite(n)) excluded.add(n);
+    }
+
+    // For each id in the batch's range that isn't excluded, treat as on the
+    // headline term and (since headline matured) claimable now.
+    for (const id of getIdsForRow(rowData)) {
+      if (!excluded.has(id)) result.add(id);
+    }
   }
-  return getIdsForRow(rowData);
+  // If headline isn't matured, only the (failed + matured recovered) set is
+  // actionable — already collected.
+
+  return Array.from(result).sort((a, b) => a - b);
 }
 
 function buildClaimData(minter, xen = XEN_ETH) {
@@ -4055,51 +4097,58 @@ function populateTable(mints) {
         formatter: function(cell){
           const rowData = cell.getRow().getData();
           const live = computeLiveStatus(rowData);
+          const ownsRow = !!(connectedAccount && connectedAccount.toLowerCase() === (rowData.Owner || '').toLowerCase());
+          const total = Number(rowData.VMUs) || 0;
+
+          // Single source of truth for what a click would actually act on.
+          // Already excludes pre-maturity, lost, and reminted-to-future ids.
+          const actionable = (typeof getActionableIdsForRow === 'function')
+            ? getActionableIdsForRow(rowData) : [];
+          const actionableCount = actionable.length;
+
+          // Counts for display labels.
           const failedCount = Array.isArray(rowData.FailedIds) ? rowData.FailedIds.length : 0;
           const maturedRecovered = (typeof getMaturedRecoveredIdsForRow === 'function')
             ? getMaturedRecoveredIdsForRow(rowData) : [];
           const recoveredCount = maturedRecovered.length;
-          const actionableCount = failedCount + recoveredCount;
-          const isActionable = actionableCount > 0;
-          const ownsRow = !!(connectedAccount && connectedAccount.toLowerCase() === (rowData.Owner || '').toLowerCase());
-          const total = Number(rowData.VMUs) || 0;
+          const isStranded = failedCount > 0 || recoveredCount > 0;
 
-          // Stranded-VMU rows: show a click target regardless of the row's
-          // main maturity. Two sources of stranded VMUs:
-          //   - FailedIds: sub-calls that reverted in a prior batch.
-          //   - matured RecoveredMaturities: sub-proxies that were reminted
-          //     with a shorter term and have matured before the row's
-          //     headline date. The user has to claim them explicitly.
-          if (isActionable) {
-            if (ownsRow) {
-              const succeeded = Math.max(0, total - failedCount);
-              const parts = [];
-              if (failedCount > 0) parts.push(`${failedCount} reverted prior`);
-              if (recoveredCount > 0) parts.push(`${recoveredCount} matured early`);
-              const tip = `Stranded VMUs: ${parts.join(', ')}. Click to claim/remint the ${actionableCount} actionable VMU${actionableCount === 1 ? '' : 's'}. Row main status: ${live}.`;
-              const label = failedCount > 0 && recoveredCount === 0
-                ? `Re-claim Failed (${failedCount})`
-                : recoveredCount > 0 && failedCount === 0
-                ? `Claim Stranded (${recoveredCount})`
-                : `Claim Stranded (${actionableCount})`;
-              return `<span class="claim-button" title="${tip}">${label}</span>`;
+          // No click targets — show plain status text only.
+          if (actionableCount === 0) return live;
+
+          if (!ownsRow) {
+            // Visitor view: show the count inline so it's visible without owning the row.
+            if (isStranded) {
+              return failedCount > 0 && recoveredCount === 0
+                ? `Partially Claimed (${total - failedCount}/${total})`
+                : `Stranded ${actionableCount}`;
             }
-            // Visitor view: show counts inline when not connected as owner.
-            if (failedCount > 0 && recoveredCount > 0) {
-              return `Stranded ${actionableCount} (${succeeded(total, failedCount)}/${total} ok)`;
-            }
-            if (failedCount > 0) {
-              return `Partially Claimed (${total - failedCount}/${total})`;
-            }
-            return `Stranded ${recoveredCount}`;
+            return `Claimable (${actionableCount}${actionableCount !== total ? `/${total}` : ''})`;
           }
 
-          if (live === 'Claimable' && ownsRow) {
-            return `<span class="claim-button">Claimable</span>`;
-          }
-          return live;
+          // Owner view: render the click button with a count and a tip.
+          const parts = [];
+          if (failedCount > 0) parts.push(`${failedCount} reverted prior`);
+          if (recoveredCount > 0) parts.push(`${recoveredCount} matured early`);
+          const onHeadline = actionableCount - failedCount - recoveredCount;
+          if (onHeadline > 0) parts.push(`${onHeadline} on headline term`);
 
-          function succeeded(t, f){ return Math.max(0, t - f); }
+          const tip = `Click to claim/remint the ${actionableCount} actionable VMU${actionableCount === 1 ? '' : 's'} ` +
+            `(${parts.join(', ')}). Other VMUs in this batch are not yet matured or already actioned and excluded. ` +
+            `Row main status: ${live}.`;
+
+          let label;
+          if (failedCount > 0 && recoveredCount === 0 && actionableCount === failedCount) {
+            label = `Re-claim Failed (${failedCount})`;
+          } else if (isStranded) {
+            label = `Claim Stranded (${actionableCount})`;
+          } else if (actionableCount === total) {
+            label = `Claimable`;
+          } else {
+            label = `Claim (${actionableCount}/${total})`;
+          }
+
+          return `<span class="claim-button" title="${tip}">${label}</span>`;
         },
         cellClick: function(e, cell){
           const rowData = cell.getRow().getData();
@@ -4680,22 +4729,17 @@ function computeLiveStatus(row) {
   const acts = Array.isArray(data.Actions) ? data.Actions : [];
   const hasActs = acts.length > 0;
   const failedIds = Array.isArray(data.FailedIds) ? data.FailedIds : [];
+  const actionableNow = (typeof getActionableIdsForRow === 'function')
+    ? getActionableIdsForRow(data) : [];
 
-  // Partial-failure batch: Etherscan tx Success but some sub-claims reverted.
-  // Re-expose as Claimable past maturity so the user can re-claim the failed VMUs.
-  if (matured && failedIds.length > 0) return 'Claimable';
+  // Authoritative check: only return Claimable if there's actually something
+  // a click would successfully act on. This prevents the UI from showing a
+  // Claimable button for rows whose headline matured but whose sub-proxies
+  // were all reminted to a future term (a click would burn gas on reverts).
+  if (actionableNow.length > 0) return 'Claimable';
 
-  // Sub-proxies in RecoveredMaturities that have matured before the row's
-  // headline are stranded until claimed. Surface as Claimable so the row
-  // gets a click target even when the headline maturity is in the future.
-  if (typeof getMaturedRecoveredIdsForRow === 'function' &&
-      getMaturedRecoveredIdsForRow(data).length > 0) {
-    return 'Claimable';
-  }
-
-  if (matured && !hasActs) return 'Claimable';
-  if (!matured) return 'Maturing';
-  return 'Claimed';
+  if (matured) return hasActs ? 'Claimed' : 'Maturing';
+  return 'Maturing';
 }
 
 let statusTickerId = null;
@@ -7321,41 +7365,57 @@ async function connectWallet() {
     return;
   }
 
-  // Stranded-VMU detection: if a prior batch had reverted sub-calls
-  // (FailedIds) OR sub-proxies were reminted with a shorter term and matured
-  // before the row's headline (RecoveredMaturities, matured), narrow the
-  // action to those ids. Confirm with the user so a habitual claim/remint
-  // click doesn't silently narrow the scope.
-  let ids;
+  // Authoritative actionable id set per XEN's truth — already excludes:
+  //   - sub-proxies still maturing (FailedIds_NotYetMatured, RecoveredMaturities future)
+  //   - never-deployed proxies (FailedIds_Lost)
+  // Includes FailedIds (claimable now) + matured recovered + headline-term ids
+  // when the headline has matured.
+  const actionable = (typeof getActionableIdsForRow === 'function')
+    ? getActionableIdsForRow(row) : [];
+
+  if (actionable.length === 0) {
+    alert(`Nothing claimable on this row right now.\n\n` +
+      `Reasons VMUs may be excluded: not yet matured, proxy never deployed (mint-time revert), ` +
+      `or already claimed/reminted. Check the Maturity Date cell tooltip for details.`);
+    return;
+  }
+
   const failedIds = Array.isArray(row.FailedIds) ? row.FailedIds.filter(n => Number.isFinite(Number(n))).map(Number) : [];
   const maturedRecovered = (typeof getMaturedRecoveredIdsForRow === 'function')
     ? getMaturedRecoveredIdsForRow(row) : [];
-  const strandedSet = new Set([...failedIds, ...maturedRecovered]);
-  const strandedIds = Array.from(strandedSet).sort((a,b) => a - b);
+  const lostCount = Array.isArray(row.FailedIds_Lost) ? row.FailedIds_Lost.length : 0;
+  const pendCount = Array.isArray(row.FailedIds_NotYetMatured) ? row.FailedIds_NotYetMatured.length : 0;
+  const reminted = Array.isArray(row.RecoveredMaturities)
+    ? row.RecoveredMaturities.reduce((sum, g) => sum + ((g && Array.isArray(g.ids)) ? g.ids.length : 0), 0)
+    : 0;
+  const onHeadline = actionable.length - failedIds.length - maturedRecovered.length;
 
-  if (strandedIds.length > 0 && strandedIds.length < vmuCount) {
-    const succeeded = vmuCount - strandedIds.length;
-    const sources = [];
-    if (failedIds.length > 0) sources.push(`${failedIds.length} reverted in a prior batch`);
-    if (maturedRecovered.length > 0) sources.push(`${maturedRecovered.length} sub-proxies matured early (reminted with a shorter term)`);
-    const lostCount = Array.isArray(row.FailedIds_Lost) ? row.FailedIds_Lost.length : 0;
-    const lostNote = lostCount > 0
-      ? `\n\nNote: ${lostCount} more VMU(s) reverted at original mint time and are unrecoverable (proxy never deployed). They are excluded from this action.`
-      : '';
+  let ids;
+  // Confirm only when the action subset differs from the full batch — i.e.
+  // when something is being excluded — to avoid spamming a dialog on the
+  // simple "no partial-failure ever happened" claim.
+  if (actionable.length < vmuCount) {
+    const reasons = [];
+    if (failedIds.length > 0)         reasons.push(`${failedIds.length} reverted in a prior batch (claimable now)`);
+    if (maturedRecovered.length > 0)  reasons.push(`${maturedRecovered.length} sub-proxies reminted with a shorter term, now matured`);
+    if (onHeadline > 0)               reasons.push(`${onHeadline} on the row's headline term, matured`);
+    const excluded = [];
+    if (pendCount > 0)  excluded.push(`${pendCount} pending future maturity`);
+    if (reminted > 0 && (reminted - maturedRecovered.length) > 0) excluded.push(`${reminted - maturedRecovered.length} reminted to a future date`);
+    if (lostCount > 0)  excluded.push(`${lostCount} unrecoverable (proxy never deployed)`);
+    const exclNote = excluded.length > 0 ? `\n\nExcluded: ${excluded.join(', ')}.` : '';
     const proceed = confirm(
-      `Stranded VMUs detected on this batch.\n\n` +
-      `${succeeded}/${vmuCount} VMUs are on the row's headline term and not actionable yet.\n\n` +
-      `${strandedIds.length} stranded — ${sources.join('; ')}.${lostNote}\n\n` +
-      `OK → ${action} ONLY the ${strandedIds.length} stranded VMU${strandedIds.length === 1 ? '' : 's'} ` +
-      `(ids ${strandedIds[0]}..${strandedIds[strandedIds.length - 1]}).\n\n` +
-      `Cancel → ${action} all ${vmuCount} VMUs ` +
-      `(the ${succeeded} not-yet-matured ones will revert — wastes gas).`
+      `Of this batch's ${vmuCount} VMUs, ${actionable.length} ${actionable.length === 1 ? 'is' : 'are'} actionable now:\n\n` +
+      reasons.map(r => `  • ${r}`).join('\n') +
+      exclNote +
+      `\n\nOK → ${action} the ${actionable.length} actionable VMU${actionable.length === 1 ? '' : 's'} ` +
+      `(ids ${actionable[0]}..${actionable[actionable.length - 1]}).\n\n` +
+      `Cancel → abort.`
     );
-    ids = proceed
-      ? strandedIds
-      : Array.from({ length: vmuCount }, (_, i) => startId + i);
+    if (!proceed) return;
+    ids = actionable;
   } else {
-    ids = Array.from({ length: vmuCount }, (_, i) => startId + i);
+    ids = actionable;
   }
 
   const salt = ensureBytes(row.Salt);
