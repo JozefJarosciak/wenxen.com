@@ -6830,54 +6830,81 @@ async function scanMints() {
           ? luxon.DateTime.fromSeconds(originalMaturityTs)
           : null;
 
-        // Per-sub-proxy "recovered" maturities. When the user clicks Re-claim
-        // Failed and picks Remint, the failed sub-proxies get reminted into a
-        // fresh term that differs from the row's headline maturity (which
-        // tracks proxy `mintId` only). Walk the batch and group sub-proxies
-        // by their post-recovery maturity so the calendar can place each
-        // group on its own date.
+        // Per-sub-proxy maturities. Walks every sub-proxy in the batch and
+        // groups them by their actual current maturity date, from one of:
+        //   - latest non-failed action with term>0 (a successful remint)
+        //   - NO recorded action at all → still on the original mint term.
+        //     Common case: user reminted SOME sub-proxies but not others;
+        //     the untouched ones quietly hold the original-term mint and
+        //     become claimable on the original maturity date.
+        // Skipped:
+        //   - latest action is a claim (term=0) → already claimed.
+        //   - latest action is failed:true → tracked by FailedIds buckets.
+        //   - sub-proxy id is in FailedIds — already tracked.
+        //   - group date matches the row's headline date (already covered).
         const headlineKey = maturityDate ? maturityDate.toFormat('yyyy-MM-dd') : "";
+        const originalMatDt = (Number.isFinite(originalMaturityTs) && originalMaturityTs > 0)
+          ? luxon.DateTime.fromSeconds(originalMaturityTs) : null;
+        const originalMatKey = originalMatDt ? originalMatDt.toFormat('yyyy-MM-dd') : "";
+        const originalMatFmt = originalMatDt ? originalMatDt.toFormat('yyyy LLL dd, hh:mm a') : "";
         const recoveredByDay = new Map(); // dateOnly -> { ts, dateFmt, term, ids: [] }
+        const failedIdSet = new Set(failedIdsRaw);
         for (let off = 0; off < Number(totalMintsInTx); off++) {
           const subId = mintId + off;
           if (subId === mintId) continue; // headline proxy already tracked by Maturity_*
+          if (failedIdSet.has(subId)) continue; // tracked by FailedIds buckets
+
           const subActs = postMintActions[`${subId}-${saltKeyForFailed}`];
-          if (!Array.isArray(subActs) || subActs.length === 0) continue;
-          // Find the LATEST non-failed action — this represents the current
-          // on-chain state of this sub-proxy. If it's a claim (term=0) the
-          // proxy has been claimed, no pending maturity. If it's a remint
-          // (term>0) the proxy is currently maturing on that new term.
-          // Crucial: don't iterate past a claim action looking for an
-          // earlier remint — a claim wipes the prior maturity.
-          let latestAct = null;
-          for (let i = subActs.length - 1; i >= 0; i--) {
-            const a = subActs[i];
-            if (!a || a.failed === true) continue;
-            latestAct = a;
-            break;
+
+          let groupDateOnly, groupDateFmt, groupMatTs, groupTerm;
+
+          if (!Array.isArray(subActs) || subActs.length === 0) {
+            // No recorded post-mint action — assume still on original term.
+            // (The original mint deployed the proxy; nothing has touched it
+            // since.) Without this, sub-proxies on the original term were
+            // invisible whenever the row's headline proxy got claimed.
+            if (!originalMatDt) continue;
+            groupDateOnly = originalMatKey;
+            groupDateFmt = originalMatFmt;
+            groupMatTs = originalMaturityTs;
+            groupTerm = Number(term); // original term decoded from RankClaimed
+          } else {
+            // Find the LATEST non-failed action — current on-chain state.
+            let latestAct = null;
+            for (let i = subActs.length - 1; i >= 0; i--) {
+              const a = subActs[i];
+              if (!a || a.failed === true) continue;
+              latestAct = a;
+              break;
+            }
+            if (!latestAct) continue;
+            const subTerm = Number(latestAct.term);
+            // Claim action (term=0/missing) → proxy already claimed, skip.
+            if (!Number.isFinite(subTerm) || subTerm <= 0) continue;
+            const subTs = Number(latestAct.timeStamp);
+            if (!Number.isFinite(subTs) || subTs <= 0) continue;
+            groupMatTs = subTs + subTerm * 86400;
+            const subDt = luxon.DateTime.fromSeconds(groupMatTs);
+            groupDateOnly = subDt.toFormat('yyyy-MM-dd');
+            groupDateFmt = subDt.toFormat('yyyy LLL dd, hh:mm a');
+            groupTerm = subTerm;
           }
-          if (!latestAct) continue;
-          const subTerm = Number(latestAct.term);
-          // Claim action (term=0/missing) → proxy already claimed, skip.
-          if (!Number.isFinite(subTerm) || subTerm <= 0) continue;
-          const subTs = Number(latestAct.timeStamp);
-          if (!Number.isFinite(subTs) || subTs <= 0) continue;
-          const subMatTs = subTs + subTerm * 86400;
-          const subDt = luxon.DateTime.fromSeconds(subMatTs);
-          const subKey = subDt.toFormat('yyyy-MM-dd');
-          // Skip if this sub-proxy matures on the same day as the headline —
-          // already covered by Maturity_*.
-          if (subKey === headlineKey) continue;
-          if (!recoveredByDay.has(subKey)) {
-            recoveredByDay.set(subKey, {
-              maturityTs: subMatTs,
-              dateOnly: subKey,
-              dateFmt: subDt.toFormat('yyyy LLL dd, hh:mm a'),
-              term: subTerm,
+
+          // Skip if this group matches the row's headline date — already
+          // covered by Maturity_*. (Empty headlineKey can't match anything,
+          // so headline-claimed rows still surface their sub-proxy groups.)
+          if (groupDateOnly === headlineKey && headlineKey !== "") continue;
+
+          if (!recoveredByDay.has(groupDateOnly)) {
+            recoveredByDay.set(groupDateOnly, {
+              maturityTs: groupMatTs,
+              dateOnly: groupDateOnly,
+              dateFmt: groupDateFmt,
+              term: groupTerm,
               ids: [],
             });
           }
-          recoveredByDay.get(subKey).ids.push(subId);
+          recoveredByDay.get(groupDateOnly).ids.push(subId);
         }
         const RecoveredMaturities = Array.from(recoveredByDay.values())
           .sort((a, b) => a.maturityTs - b.maturityTs);
