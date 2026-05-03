@@ -323,29 +323,25 @@
 
         // Processing withdrawn events
 
-        // Process Withdrawn events in chronological order and update corresponding stakes
+        // XEN allows only one active stake per address at a time, so withdrawals
+        // pair with stakes in chronological order (oldest unmatched stake first).
+        // Sorting withdrawals by time avoids mis-paired timestamps when
+        // Etherscan returns logs out of strict block order.
         const sortedWithdrawn = sinkWithdrawn.slice().sort((a, b) => {
           const ta = Number(BigInt(a.timeStamp || "0x0"));
           const tb = Number(BigInt(b.timeStamp || "0x0"));
           return ta - tb;
         });
+        // Stakes array is already in chronological order from the Staked log scan,
+        // so .find() returns the oldest stake that has no withdraw action yet.
         for (const event of sortedWithdrawn) {
           const withdrawTs = Number(BigInt(event.timeStamp || "0x0"));
           const withdrawHash = event.transactionHash;
 
-          // XEN allows only one active stake per address at a time, so a
-          // Withdrawn event corresponds to the MOST RECENT stake the user
-          // created before that withdrawal. Picking "oldest unmatched" can
-          // mis-pair withdrawals with stakes when any event is missed or
-          // out of order — which causes early-ended stakes to be marked
-          // "Claimed" using a much later withdrawal's timestamp.
-          const activeStake = stakes
-            .filter(stake =>
-              (stake.status === 'Maturing' || stake.status === 'Claimable') &&
-              Number(stake.startTs || 0) <= withdrawTs &&
-              (!stake.actions || !stake.actions.some(a => a.type === 'withdraw'))
-            )
-            .sort((a, b) => Number(b.startTs || 0) - Number(a.startTs || 0))[0];
+          const activeStake = stakes.find(stake =>
+            (stake.status === 'Maturing' || stake.status === 'Claimable') &&
+            !(stake.actions && stake.actions.some(a => a.type === 'withdraw'))
+          );
           if (activeStake) {
             const matured = (Number(activeStake.maturityTs) || 0) <= withdrawTs;
             const newStatus = matured ? "Claimed" : "Ended Early";
