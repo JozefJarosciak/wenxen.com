@@ -324,7 +324,7 @@
           topic1: userAddressTopic
         }, sinkWithdrawn);
 
-        // Processing withdrawn events
+        console.log(`[XenStake] ${addr.slice(0,8)}… fetched ${stakes.length} Staked / ${sinkWithdrawn.length} Withdrawn events`);
 
         // XEN allows only one active stake per address at a time, so withdrawals
         // pair with stakes in chronological order (oldest unmatched stake first).
@@ -337,6 +337,7 @@
         });
         // Stakes array is already in chronological order from the Staked log scan,
         // so .find() returns the oldest stake that has no withdraw action yet.
+        let pairedCount = 0, unpairedCount = 0;
         for (const event of sortedWithdrawn) {
           const withdrawTs = Number(BigInt(event.timeStamp || "0x0"));
           const withdrawHash = event.transactionHash;
@@ -360,8 +361,13 @@
                 timeStamp: withdrawTs,
               });
             }
+            pairedCount++;
+          } else {
+            unpairedCount++;
+            console.warn(`[XenStake] Withdraw at ts=${withdrawTs} (tx=${withdrawHash?.slice(0,10)}…) had no matching unclosed stake`);
           }
         }
+        console.log(`[XenStake] ${addr.slice(0,8)}… matched ${pairedCount}/${sortedWithdrawn.length} withdrawals (${unpairedCount} unpaired)`);
 
       } catch (error) {
         console.error(`XEN Stakes Scanner - Error using fetchLogsSplit:`, error);
