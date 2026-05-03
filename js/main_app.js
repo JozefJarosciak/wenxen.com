@@ -2538,115 +2538,120 @@ async function handleBulkAction(mode){
         ? buildRemintData(minter, term)
         : buildCointoolMintData(term);
 
-    // New per-proxy model: each batch row already represents one executable
-    // chunk (same Salt + Status + Term, size <= cointoolMaxVmuPerTx). Send
-    // one tx per row using row.Indices as calldata.
+    // Combine indices across ALL selected rows that share a salt, then
+    // chunk by the contract gas cap (MAX_VMU_PER_TX = 128). The user-set
+    // cointoolMaxVmuPerTx controls DISPLAY chunking only — at action time
+    // we want one tx per chunk of up to 128 across the full selection,
+    // not one tx per displayed row.
     const c = new web3Wallet.eth.Contract(cointoolAbi, COINTOOL_MAIN);
-    const chunkSize = getCointoolMaxVmuPerTx();
 
-    let totalVMUs = 0;
+    // 1) Collect indices per salt, deduped.
+    const bySalt = new Map(); // saltHex -> { saltHex, owner, indices: Set }
     for (const r of ctRows) {
+      const saltHex = ensureBytes(r.Salt);
+      if (!saltHex) continue;
+      const key = String(saltHex).toLowerCase();
+      if (!bySalt.has(key)) {
+        bySalt.set(key, { saltHex, owner: (r.Owner || connectedAccount || '').toLowerCase(), indices: new Set() });
+      }
       const ids = Array.isArray(r.Indices) ? r.Indices : getActionableIdsForRow(r);
-      totalVMUs += ids.length;
-    }
-    if (totalVMUs > chunkSize) {
-      alert(`You selected ${totalVMUs} VMUs across CoinTool batches. They will be sent across ${ctRows.length} transaction(s) to stay under Ethereum's per-tx gas cap.`);
+      for (const id of ids) {
+        const n = Number(id);
+        if (Number.isFinite(n)) bySalt.get(key).indices.add(n);
+      }
     }
 
-    for (const r of ctRows) {
-      const salt = ensureBytes(r.Salt);
-      let indices = Array.isArray(r.Indices) ? r.Indices.slice() : getActionableIdsForRow(r);
-      if (!indices.length) continue;
+    let totalRequested = 0;
+    for (const { indices } of bySalt.values()) totalRequested += indices.size;
 
-      // JIT verification: probe XEN.userMints (and eth_getCode for the
-      // mint-from-claimed case) so we route each idx to the correct
-      // CoinTool function and skip anything XEN won't pay out on.
+    // 2) Per salt, JIT-classify the combined indices and execute.
+    for (const { saltHex, owner, indices } of bySalt.values()) {
+      let combined = Array.from(indices).sort((a, b) => a - b);
+      if (combined.length === 0) continue;
+
       let mintableF = [];
       let mintableT = [];
+
       if (window.cointool && typeof window.cointool.verifyProxiesAtClaimTime === 'function') {
         try {
-          const owner = (r.Owner || connectedAccount || '').toLowerCase();
           const verifyWeb3 = web3 || web3Wallet;
-          const result = await window.cointool.verifyProxiesAtClaimTime(verifyWeb3, owner, salt, indices);
-          const totalRequested = indices.length;
+          const result = await window.cointool.verifyProxiesAtClaimTime(verifyWeb3, owner, saltHex, combined);
           if (mode === 'mint') {
-            // Fresh mint on already-claimed proxies. Split by code existence:
-            //   has code  → f(idx, mintData, salt) reuses the live proxy.
-            //   no code   → t_(idx, mintData, salt) redeploys via CREATE2.
             mintableF = result.mintableF.slice();
             mintableT = result.mintableT.slice();
             if (result.recoverable.length > 0) {
-              console.warn(`[CoinTool] JIT mint: skip ${result.recoverable.length} proxies that still have a pending XEN mint:`, result.recoverable);
+              console.warn(`[CoinTool] JIT mint: skip ${result.recoverable.length} proxies with pending XEN mint:`, result.recoverable);
             }
             if (result.pendingMaturity.length > 0) {
               console.warn(`[CoinTool] JIT mint: skip ${result.pendingMaturity.length} unmatured pending mints:`, result.pendingMaturity);
             }
             if (result.unverified.length > 0) {
-              console.warn(`[CoinTool] JIT mint: ${result.unverified.length} unverified proxies, defaulting to t_():`, result.unverified);
+              console.warn(`[CoinTool] JIT mint: ${result.unverified.length} unverified, defaulting to t_():`, result.unverified);
               mintableT.push(...result.unverified);
             }
             const total = mintableF.length + mintableT.length;
             if (total === 0) {
-              alert(`All ${totalRequested} proxy(ies) in this batch already have an active mint or could not be classified. Nothing to mint.`);
+              alert(`None of the ${combined.length} selected VMUs (salt ${saltHex}) are mintable right now.`);
               continue;
             }
-            if (total < totalRequested) {
-              const proceed = confirm(`Of ${totalRequested} selected proxies, ${total} are mintable now (${mintableF.length} via f(), ${mintableT.length} via t_()). Submit?`);
+            if (total < combined.length) {
+              const proceed = confirm(`Of ${combined.length} selected proxies (salt ${saltHex}), ${total} are mintable now (${mintableF.length} via f(), ${mintableT.length} via t_()). Submit?`);
               if (!proceed) continue;
             }
           } else {
-            // claim / remint use f() and need a live pending mint.
-            indices = result.recoverable.slice();
+            combined = result.recoverable.slice();
             if (result.alreadyClaimed.length > 0) {
-              console.warn(`[CoinTool] JIT skip ${result.alreadyClaimed.length} already-claimed proxies for salt ${salt}:`, result.alreadyClaimed);
+              console.warn(`[CoinTool] JIT skip ${result.alreadyClaimed.length} already-claimed proxies (salt ${saltHex}):`, result.alreadyClaimed);
             }
             if (result.pendingMaturity.length > 0) {
-              console.warn(`[CoinTool] JIT skip ${result.pendingMaturity.length} unmatured pending mints:`, result.pendingMaturity);
+              console.warn(`[CoinTool] JIT skip ${result.pendingMaturity.length} unmatured pending mints (salt ${saltHex}):`, result.pendingMaturity);
             }
             if (result.unverified.length > 0) {
-              console.warn(`[CoinTool] JIT skip ${result.unverified.length} unverified proxies:`, result.unverified);
+              console.warn(`[CoinTool] JIT skip ${result.unverified.length} unverified proxies (salt ${saltHex}):`, result.unverified);
             }
-            if (indices.length === 0) {
-              alert(`All ${totalRequested} proxy(ies) in this batch have already been claimed (XEN reports 0 reward). Skipping.`);
+            if (combined.length === 0) {
+              alert(`All selected proxies (salt ${saltHex}) have already been claimed. Skipping.`);
               continue;
             }
-            if (indices.length < totalRequested) {
-              const proceed = confirm(`Of ${totalRequested} selected proxies, only ${indices.length} actually have pending XEN reward. Submit ${mode} for those ${indices.length}?`);
+            if (combined.length < indices.size) {
+              const proceed = confirm(`Of ${indices.size} selected proxies (salt ${saltHex}), only ${combined.length} have pending XEN reward. Submit ${mode}?`);
               if (!proceed) continue;
             }
           }
         } catch (e) {
           console.warn('[CoinTool] JIT verification failed; proceeding with original indices:', e);
-          if (mode === 'mint') mintableT = indices.slice();
+          if (mode === 'mint') mintableT = combined.slice();
         }
       } else if (mode === 'mint') {
-        // Scanner module not available — fall back to t_() (always safe).
-        mintableT = indices.slice();
+        mintableT = combined.slice();
       }
 
-      try {
-        if (mode === 'mint') {
-          if (mintableF.length > 0) {
+      // 3) Chunk by the contract gas cap (MAX_VMU_PER_TX = 128) and submit.
+      const sendChunks = async (ids, methodName, label) => {
+        const sorted = ids.slice().sort((a, b) => a - b);
+        for (let i = 0; i < sorted.length; i += MAX_VMU_PER_TX) {
+          const chunk = sorted.slice(i, i + MAX_VMU_PER_TX);
+          try {
+            const m = methodName === 't_'
+              ? c.methods.t_(chunk, dataHex, saltHex)
+              : c.methods.f(chunk, dataHex, saltHex);
             await executeWithAutoRescan(
-              c.methods.f(mintableF.sort((a,b)=>a-b), dataHex, salt).send({ from: connectedAccount }),
-              `CoinTool mint via f() (${mintableF.length} VMUs)`
+              m.send({ from: connectedAccount }),
+              `CoinTool ${label} (${chunk.length} VMUs)`
             );
+          } catch (err) {
+            console.error(err);
+            alert(err?.message || `CoinTool ${label} failed for salt ${saltHex}`);
+            break;
           }
-          if (mintableT.length > 0) {
-            await executeWithAutoRescan(
-              c.methods.t_(mintableT.sort((a,b)=>a-b), dataHex, salt).send({ from: connectedAccount }),
-              `CoinTool mint via t_() (${mintableT.length} VMUs)`
-            );
-          }
-        } else {
-          await executeWithAutoRescan(
-            c.methods.f(indices, dataHex, salt).send({ from: connectedAccount }),
-            `CoinTool ${mode} (${indices.length} VMUs)`
-          );
         }
-      } catch (err) {
-        console.error(err);
-        alert(err?.message || `Bulk ${mode} failed for salt ${salt}`);
+      };
+
+      if (mode === 'mint') {
+        if (mintableF.length > 0) await sendChunks(mintableF, 'f', 'mint via f()');
+        if (mintableT.length > 0) await sendChunks(mintableT, 't_', 'mint via t_()');
+      } else {
+        await sendChunks(combined, 'f', mode);
       }
     }
   }
@@ -4765,6 +4770,40 @@ function populateTable(mints) {
         hozAlign: "center",
         headerSort: false,
         width: 40,
+        // Master select-all checkbox in the header. Only toggles Cointool
+        // rows that pass the current filters; other row types ignore it.
+        titleFormatter: function(cell, formatterParams, onRendered) {
+          const wrap = document.createElement('span');
+          wrap.style.display = 'inline-flex';
+          wrap.style.alignItems = 'center';
+          wrap.style.justifyContent = 'center';
+          wrap.style.width = '100%';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.style.cursor = 'pointer';
+          cb.title = 'Select all visible Cointool rows';
+          cb.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (!window.cointoolTable) return;
+            // 'active' = filter-passing rows in current sort order.
+            const rows = window.cointoolTable.getRows('active') || [];
+            const checked = cb.checked;
+            window.cointoolTable.blockRedraw && window.cointoolTable.blockRedraw();
+            try {
+              for (const row of rows) {
+                const data = row.getData();
+                if (String((data || {}).SourceType || 'Cointool') !== 'Cointool') continue;
+                if (checked) row.select(); else row.deselect();
+              }
+            } finally {
+              window.cointoolTable.restoreRedraw && window.cointoolTable.restoreRedraw();
+            }
+          });
+          // Track the checkbox so we can sync its state on row select/deselect.
+          window._cointoolMasterCheckbox = cb;
+          wrap.appendChild(cb);
+          return wrap;
+        },
         cellClick: function(e, cell) {
           const data = cell.getRow().getData();
           const t = String((data || {}).SourceType || 'Cointool');
@@ -5314,14 +5353,49 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
   });
 
   window.cointoolTable = cointoolTable;
+
+  // Master select-all checkbox state sync. Reflects whether all visible
+  // (filter-passing) Cointool rows are selected:
+  //   none → unchecked, all → checked, some → indeterminate.
+  function syncMasterSelectCheckbox() {
+    const cb = window._cointoolMasterCheckbox;
+    if (!cb || !window.cointoolTable) return;
+    let visible = 0, selected = 0;
+    try {
+      const rows = window.cointoolTable.getRows('active') || [];
+      for (const row of rows) {
+        const data = row.getData();
+        if (String((data || {}).SourceType || 'Cointool') !== 'Cointool') continue;
+        visible += 1;
+        if (row.isSelected && row.isSelected()) selected += 1;
+      }
+    } catch (_) {}
+    if (visible === 0) {
+      cb.checked = false;
+      cb.indeterminate = false;
+    } else if (selected === 0) {
+      cb.checked = false;
+      cb.indeterminate = false;
+    } else if (selected === visible) {
+      cb.checked = true;
+      cb.indeterminate = false;
+    } else {
+      cb.checked = false;
+      cb.indeterminate = true;
+    }
+  }
+  window._cointoolSyncMasterCheckbox = syncMasterSelectCheckbox;
+
   // Also wire selection events so the bulk bar updates immediately
   cointoolTable.on("rowSelected", (row) => {
     try { selectedRows.add(row.getIndex()); } catch {}
     refreshBulkUI();
+    syncMasterSelectCheckbox();
   });
   cointoolTable.on("rowDeselected", (row) => {
     try { selectedRows.delete(row.getIndex()); } catch {}
     refreshBulkUI();
+    syncMasterSelectCheckbox();
   });
   cointoolTable.on("rowSelectionChanged", (_data, rows) => {
     try {
@@ -5329,7 +5403,9 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
       rows.forEach(r => selectedRows.add(r.getIndex()));
     } catch {}
     refreshBulkUI();
+    syncMasterSelectCheckbox();
   });
+  cointoolTable.on("dataFiltered", () => syncMasterSelectCheckbox());
   cointoolTable.on("renderComplete", refreshBulkUI);
   cointoolTable.on("dataProcessed", refreshBulkUI);
   // Existing handler
