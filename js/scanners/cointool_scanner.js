@@ -56,6 +56,15 @@
   const SEL_T       = '0xb1ae2ed1'; // t(uint256, bytes, bytes)
   const SEL_T_ARRAY = '0x9108e811'; // t_(uint256[], bytes, bytes)
   const SEL_F       = '0xd21ba82f'; // f(uint256[], bytes, bytes)
+  // Cointool also exposes an undocumented batch method whose selector is
+  // chain-config'd as REMINT_SELECTOR (0xc2580804 on Ethereum/Base/etc).
+  // It takes the same (uint256[], bytes, bytes) args as f()/t_() and
+  // operates on existing proxies — used by the official cointool.app for
+  // its Remint action. We treat it identically to f() for decoding.
+  function getRemintSelector() {
+    return (window.chainManager?.getCurrentConfig()?.events?.REMINT_SELECTOR
+         || '0xc2580804').toLowerCase();
+  }
   // Inner cointool selectors (decoded from `data` arg of t/t_/f)
   const INNER_SEL_C    = '59635f6f'; // c(address, bytes) — used by mint and claim
   const INNER_SEL_DKILL = '5d8d647f'; // dKill — selfdestruct flavour (not used by app)
@@ -330,11 +339,9 @@
         const total = Number(decoded[0]);
         const dataHex = decoded[1];
         const salt = normalizeSaltHex(decoded[2]);
-        const start = (countersBySalt.get(salt) || 0) + 1;
-        const indices = [];
-        for (let i = 0; i < total; i++) indices.push(start + i);
-        countersBySalt.set(salt, start + total - 1);
-        return { kind: 'create-new', indices, salt, dataHex, payloadKind: classifyInnerData(dataHex) };
+        // Defer index assignment — we need on-chain map at block-1 to know
+        // the real start index. Caller fills indices[] after probing.
+        return { kind: 'create-new', indices: [], total, salt, dataHex, payloadKind: classifyInnerData(dataHex) };
       }
       if (sel === SEL_T_ARRAY) {
         const decoded = web3.eth.abi.decodeParameters(['uint256[]', 'bytes', 'bytes'], body);
@@ -347,7 +354,7 @@
         }
         return { kind: 'create-at', indices, salt, dataHex, payloadKind: classifyInnerData(dataHex) };
       }
-      if (sel === SEL_F) {
+      if (sel === SEL_F || sel === getRemintSelector()) {
         const decoded = web3.eth.abi.decodeParameters(['uint256[]', 'bytes', 'bytes'], body);
         const indices = (decoded[0] || []).map(v => Number(v)).filter(Number.isFinite);
         const dataHex = decoded[1];
@@ -541,13 +548,21 @@
       return withEntry(attempts, (entry) => entry.web3.eth.getCode(addr));
     }
 
+    // Read a contract method's value at a specific historic block.
+    async function callContractAtBlock(abi, address, method, args, blockNum, attempts = 6) {
+      return withEntry(attempts, async (entry) => {
+        const c = new entry.web3.eth.Contract(abi, address);
+        return await c.methods[method](...args).call({}, blockNum);
+      });
+    }
+
     function size() { return pool.length; }
     function liveSize() { return pool.filter(p => !p.banned).length; }
     function summary() {
       return pool.map(p => ({ url: p.url, failures: p.failures, banned: p.banned, coolingFor: Math.max(0, p.cooldownUntil - Date.now()) }));
     }
 
-    return { callContract, getBlockNumber, getTransactionReceipt, getCode, size, liveSize, summary };
+    return { callContract, callContractAtBlock, getBlockNumber, getTransactionReceipt, getCode, size, liveSize, summary };
   }
 
   // Minimal XEN ABI for userMints probe — used to verify whether a proxy
@@ -617,10 +632,14 @@
       fromBlock = deploymentBlock;
       console.log(`[COINTOOL] ${address}: force rescan from deployment block ${deploymentBlock}`);
     } else {
-      // Honor rescanBlockDepth: only walk the recent window from the user's
-      // setting (default 1000 blocks ≈ 3.3 hours on Ethereum). Older history
-      // is already in the per-proxy DB.
-      fromBlock = Math.max(deploymentBlock, toBlock - rescanDepth);
+      // Honor rescanBlockDepth (default 1000 blocks ≈ 3.3h). But never miss
+      // anything since the last successful scan: also include a small
+      // overlap with lastTransactionBlock if that cursor sits earlier than
+      // the depth window. Walk from whichever is earlier.
+      const safetyOverlap = 50;
+      const fromDepth = toBlock - rescanDepth;
+      const fromCursor = lastTxBlock > 0 ? (lastTxBlock - safetyOverlap) : Number.MAX_SAFE_INTEGER;
+      fromBlock = Math.max(deploymentBlock, Math.min(fromDepth, fromCursor));
       console.log(`[COINTOOL] ${address}: incremental rescan from block ${fromBlock} (depth=${rescanDepth}, lastTxBlock=${lastTxBlock || 'none'}, toBlock=${toBlock})`);
     }
 
@@ -639,16 +658,63 @@
     }
     ui?.setStage?.(`Loaded ${txs.length} Cointool txs; reading existing proxies...`, 0, txs.length);
 
-    // Seed per-salt counters from existing DB state so incremental scans
-    // assign correct indices to NEW `t()` calls.
+    // Seed per-salt counters from existing DB state, then verify against
+    // on-chain map(user, salt). On-chain map is THE source of truth for
+    // the next index a t() call will use — DB max-index can be polluted
+    // by phantom records (mis-decoded txs in past runs creating Index >
+    // on-chain map).
     const existing = await getProxiesForOwner(db, ownerLc);
     const proxiesById = new Map();
     for (const p of existing) proxiesById.set(p.id, p);
+
+    const saltsSeen = new Set();
+    for (const p of existing) saltsSeen.add(normalizeSaltHex(p.Salt));
+
     const countersBySalt = new Map();
-    for (const p of existing) {
-      const s = normalizeSaltHex(p.Salt);
-      const cur = countersBySalt.get(s) || 0;
-      if (Number(p.Index) > cur) countersBySalt.set(s, Number(p.Index));
+    const phantomIds = [];
+    for (const salt of saltsSeen) {
+      let onchainMax = null;
+      try {
+        const v = await pool.callContract(getCointoolAbi(), cointoolAddr, 'map', [address, salt], 8);
+        onchainMax = Number(v);
+      } catch (e) {
+        console.warn(`[COINTOOL] ${address} map(${salt}) probe failed; falling back to DB max-index`, e?.message || e);
+      }
+
+      let dbMax = 0;
+      for (const p of existing) {
+        if (normalizeSaltHex(p.Salt) !== salt) continue;
+        if (Number(p.Index) > dbMax) dbMax = Number(p.Index);
+      }
+
+      if (Number.isFinite(onchainMax) && onchainMax >= 0) {
+        if (dbMax > onchainMax) {
+          // Phantoms — DB has indices the contract never produced.
+          for (const p of existing) {
+            if (normalizeSaltHex(p.Salt) !== salt) continue;
+            if (Number(p.Index) > onchainMax) phantomIds.push(p.id);
+          }
+          console.warn(`[COINTOOL] ${address} salt ${salt}: on-chain map=${onchainMax}, DB max=${dbMax} — ${phantomIds.length} phantom record(s) will be deleted`);
+        }
+        countersBySalt.set(salt, onchainMax);
+      } else {
+        countersBySalt.set(salt, dbMax);
+      }
+    }
+
+    // Delete phantom records before processing new txs.
+    if (phantomIds.length > 0) {
+      ui?.setStage?.(`Deleting ${phantomIds.length} phantom record(s)`, 0, phantomIds.length);
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('proxies', 'readwrite');
+        const store = tx.objectStore('proxies');
+        for (const id of phantomIds) store.delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      // Also remove from in-memory state.
+      for (const id of phantomIds) proxiesById.delete(id);
+      console.log(`[COINTOOL] ${address}: deleted ${phantomIds.length} phantom records`);
     }
 
     const updates = new Map(); // id -> record
@@ -672,7 +738,33 @@
       }
 
       const decoded = decodeCointoolTx(web3, tx, countersBySalt);
-      if (!decoded || decoded.indices.length === 0) continue;
+      if (!decoded) continue;
+
+      // For t() (create-new), determine the actual indices used by querying
+      // on-chain map at block-1 — that was the counter at tx execution
+      // time. indices = mapAtPrev+1 .. mapAtPrev+total.
+      if (decoded.kind === 'create-new' && Number.isFinite(decoded.total) && decoded.total > 0) {
+        try {
+          const prevBlock = Number(tx.blockNumber) - 1;
+          const mapAtPrev = await pool.callContractAtBlock(getCointoolAbi(), cointoolAddr, 'map', [address, decoded.salt], prevBlock, 8);
+          const start = Number(mapAtPrev) + 1;
+          const ids = [];
+          for (let i = 0; i < decoded.total; i++) ids.push(start + i);
+          decoded.indices = ids;
+          if (start + decoded.total - 1 > (countersBySalt.get(decoded.salt) || 0)) {
+            countersBySalt.set(decoded.salt, start + decoded.total - 1);
+          }
+        } catch (e) {
+          console.warn(`[COINTOOL] historic map() at block ${Number(tx.blockNumber) - 1} failed for ${tx.hash}; falling back to counter`, e?.message || e);
+          const start = (countersBySalt.get(decoded.salt) || 0) + 1;
+          const ids = [];
+          for (let i = 0; i < decoded.total; i++) ids.push(start + i);
+          decoded.indices = ids;
+          countersBySalt.set(decoded.salt, start + decoded.total - 1);
+        }
+      }
+
+      if (decoded.indices.length === 0) continue;
 
       const blockNum = Number(tx.blockNumber);
       const txTs = Number(tx.timeStamp) || 0;
@@ -695,6 +787,16 @@
         const proxyAddr = computeProxyAddress(web3, cointoolAddr, idx, decoded.salt, address);
         const id = makeProxyId(address, decoded.salt, idx);
         let rec = getRecord(id);
+        const isNewRecord = !rec;
+
+        // For 'act' txs we only create a NEW record if the receipt has a
+        // matching XEN event for this exact CREATE2 address. Otherwise
+        // we'd be writing phantom records for any tx whose calldata we
+        // mis-decoded (or whose indices the contract never deployed).
+        if (isNewRecord && decoded.kind === 'act') {
+          const hasMatch = mintLogsByProxy && mintLogsByProxy.has(lc(proxyAddr));
+          if (!hasMatch) continue; // skip — don't pollute DB
+        }
 
         if (!rec) {
           rec = {
@@ -993,13 +1095,16 @@
     }
 
     ui?.setStage?.(`Validating ${countersBySalt.size} salt(s) against on-chain map(...)`, 0, countersBySalt.size);
-    // Validate per-salt counts against on-chain map(user, salt).
+    // Final validation: re-fetch on-chain map(user, salt) and warn if our
+    // walk drifted from truth (Etherscan lag, missed txs, etc).
     for (const [salt, maxIndex] of countersBySalt.entries()) {
       try {
         const onchain = await pool.callContract(getCointoolAbi(), cointoolAddr, 'map', [address, salt]);
         const onchainNum = Number(onchain);
         if (Number.isFinite(onchainNum) && onchainNum > maxIndex) {
-          console.warn(`[COINTOOL] ${address} salt ${salt}: on-chain map=${onchainNum}, scanned highest=${maxIndex}. Etherscan may be lagging — try a forced rescan.`);
+          console.warn(`[COINTOOL] ${address} salt ${salt}: on-chain map=${onchainNum}, scanned highest=${maxIndex}. ${onchainNum - maxIndex} new mint(s) since last txlist refresh; rescan again in a moment.`);
+        } else if (Number.isFinite(onchainNum) && onchainNum < maxIndex) {
+          console.warn(`[COINTOOL] ${address} salt ${salt}: on-chain map=${onchainNum} but scanner counter=${maxIndex}. ${maxIndex - onchainNum} phantom record(s) may have been created — next scan will clean up.`);
         }
       } catch (e) {
         console.warn(`[COINTOOL] map(${address}, ${salt}) call failed:`, e?.message || e);

@@ -2837,6 +2837,24 @@ function getAllMints(db) {
             const day = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
             maturityByDay[day] = (maturityByDay[day] || 0) + 1;
           }
+          const txMap = new Map();
+          for (const p of chunk) {
+            const hist = Array.isArray(p.History) ? p.History : [];
+            for (const h of hist) {
+              const hash = h?.txHash;
+              if (!hash || txMap.has(hash)) continue;
+              txMap.set(hash, {
+                hash,
+                type: h.type,
+                timeStamp: Number(h.ts || 0),
+                block: Number(h.block || 0),
+                term: h.term != null ? String(h.term) : '',
+                rank: h.rank != null ? String(h.rank) : ''
+              });
+            }
+          }
+          const actions = Array.from(txMap.values()).sort((a, b) => Number(a.timeStamp) - Number(b.timeStamp));
+          const latestActionTs = actions.length ? Number(actions[actions.length - 1].timeStamp || 0) : 0;
           rows.push({
             ID: `ct-batch-${first.Owner}-${first.Salt}-${first.Status}-${first.Term}-${first.Index}`,
             RowKind: 'batch',
@@ -2855,7 +2873,7 @@ function getAllMints(db) {
             maturityDateOnly: matKey,
             MaturityByDay: maturityByDay,
             Rank_Range: 'N/A',
-            Actions: [],
+            Actions: actions,
             FailedIds: [],
             FailedIds_Lost: [],
             FailedIds_NotYetMatured: [],
@@ -2864,7 +2882,7 @@ function getAllMints(db) {
             MintableIds_Missing: [],
             RecoveredMaturities: [],
             ProxyStates: [],
-            Latest_Action_Timestamp: 0,
+            Latest_Action_Timestamp: latestActionTs,
             TX_Hash: '',
             Block_Number: 0,
             Est_XEN: 0

@@ -610,6 +610,27 @@ function setMaturityHeaderFilterFromDate(dt) {
           maturityByDay[day] = (maturityByDay[day] || 0) + 1;
         }
 
+        // Aggregate History across the chunk into the row's Actions list,
+        // dedup by txHash. Older callers display this as a links column.
+        const txMap = new Map();
+        for (const p of chunk) {
+          const hist = Array.isArray(p.History) ? p.History : [];
+          for (const h of hist) {
+            const hash = h?.txHash;
+            if (!hash || txMap.has(hash)) continue;
+            txMap.set(hash, {
+              hash,
+              type: h.type,
+              timeStamp: Number(h.ts || 0),
+              block: Number(h.block || 0),
+              term: h.term != null ? String(h.term) : '',
+              rank: h.rank != null ? String(h.rank) : ''
+            });
+          }
+        }
+        const actions = Array.from(txMap.values()).sort((a, b) => Number(a.timeStamp) - Number(b.timeStamp));
+        const latestActionTs = actions.length ? Number(actions[actions.length - 1].timeStamp || 0) : 0;
+
         rows.push({
           ID: `ct-batch-${first.Owner}-${first.Salt}-${first.Status}-${first.Term}-${first.Index}`,
           RowKind: 'batch',
@@ -631,7 +652,7 @@ function setMaturityHeaderFilterFromDate(dt) {
           MaturityByDay: maturityByDay,
           // Legacy-shaped fields kept null/empty for compatibility with code
           // that still reads them.
-          Actions: [],
+          Actions: actions,
           FailedIds: [],
           FailedIds_Lost: [],
           FailedIds_NotYetMatured: [],
@@ -640,10 +661,7 @@ function setMaturityHeaderFilterFromDate(dt) {
           MintableIds_Missing: [],
           RecoveredMaturities: [],
           ProxyStates: [],
-          Latest_Action_Timestamp: chunk.reduce((m,p) => {
-            const t = (p.History && p.History.length) ? Number(p.History[p.History.length-1].ts || 0) : 0;
-            return t > m ? t : m;
-          }, 0),
+          Latest_Action_Timestamp: latestActionTs,
           Address: first.Owner,
           TX_Hash: '',
           Block_Number: 0,
