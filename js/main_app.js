@@ -2324,6 +2324,23 @@ function getActionableIdsForRow(rowData){
     return Number.isFinite(tokenId) ? [tokenId] : [];
   }
 
+  // Stake (vanilla XEN or XENFT stake): a withdrawal action means the stake
+  // was already claimed/ended-early — nothing left to act on. Without this
+  // gate, getActionableIdsForRow falls through to the Cointool branch and
+  // reports any matured stake as actionable, masking the Claimed status.
+  if (rowData?.SourceType === 'Stake' || rowData?.SourceType === 'Stake XENFT') {
+    const acts = Array.isArray(rowData.Actions) ? rowData.Actions : [];
+    const hasWithdraw = acts.some(a => a && a.type === 'withdraw');
+    if (hasWithdraw || Number(rowData.redeemed) === 1) return [];
+    const nowSec = Math.floor(Date.now() / 1000);
+    const maturityTs = Number(rowData.Maturity_Timestamp || rowData.maturityTs || 0);
+    if (maturityTs > 0 && maturityTs <= nowSec) {
+      const id = rowData.Mint_id_Start || rowData.id || '';
+      return id ? [id] : [1];
+    }
+    return [];
+  }
+
   if (isNewCointoolBatchRow(rowData)) {
     // Batch rows are pre-grouped by status; only Claimable rows are actionable.
     if (String(rowData.Status || '') !== 'Claimable') return [];
