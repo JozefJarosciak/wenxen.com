@@ -179,12 +179,19 @@ function updateStakeSummaryLine(){
           const baseId = id.replace(/^(ETH_|BASE_)/, '');
           
           if (baseId === 'DB_Cointool') {
-            return (typeof openDB === 'function' ? openDB() : Promise.resolve(null)).then(async (db) => {
-              if (!db) return; await Promise.all([
-                clearStore(db, 'mints').catch(()=>{}),
-                clearStore(db, 'scanState').catch(()=>{}),
-                clearStore(db, 'actionsCache').catch(()=>{}),
-              ]);
+            const opener = (window.cointool && typeof window.cointool.openDB === 'function')
+              ? window.cointool.openDB()
+              : (typeof openDB === 'function' ? openDB() : Promise.resolve(null));
+            return opener.then(async (db) => {
+              if (!db) return;
+              try {
+                if (db.objectStoreNames.contains('proxies')) await clearStore(db, 'proxies').catch(()=>{});
+                if (db.objectStoreNames.contains('scanState')) await clearStore(db, 'scanState').catch(()=>{});
+              } finally {
+                // Close so the scanner can reopen at the same version without
+                // being blocked by this connection.
+                try { db.close(); } catch (_) {}
+              }
             });
           }
           if (baseId === 'DB_Xenft') {
@@ -525,14 +532,133 @@ function setMaturityHeaderFilterFromDate(dt) {
   }
 
   // Fetch helpers
-  async function fetchCointoolRows(){
+  // Reads the new per-proxy `proxies` store and groups records into virtual
+  // batch rows of size up to `cointoolMaxVmuPerTx`. One DB row per (owner,
+  // salt, index); one table row per executable batch.
+  function _getMaxVmuPerTx(){
+    const raw = parseInt(localStorage.getItem("cointoolMaxVmuPerTx") || "", 10);
+    if (!Number.isFinite(raw) || raw < 1) return 64;
+    return Math.min(128, raw);
+  }
+
+  async function _readAllProxies(){
     try {
-      if (window.dbInstance && typeof getAllMints === "function") {
-        var rows = await getAllMints(window.dbInstance);
-        return Array.isArray(rows) ? rows : [];
+      const db = window.cointoolDb || window.dbInstance;
+      if (!db || !db.objectStoreNames || !db.objectStoreNames.contains('proxies')) return [];
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('proxies', 'readonly');
+        const req = tx.objectStore('proxies').getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    } catch(e){ return []; }
+  }
+
+  function _groupAndChunkProxies(proxies, maxPerBatch){
+    // Group by (Owner|Salt|Status|Term|MaturityDay) so each batch row
+    // contains only proxies maturing on the same calendar day. Otherwise
+    // a chunk can mix proxies with different maturities (same Term but
+    // different mint timestamps), which makes the table's VMU count for a
+    // given date inaccurate.
+    const groups = new Map();
+    for (const p of proxies) {
+      let dayKey = '';
+      const ts = Number(p.Maturity_TS);
+      if (window.luxon && Number.isFinite(ts) && ts > 0) {
+        dayKey = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
       }
-    } catch(e){}
-    return [];
+      const key = `${(p.Owner||'').toLowerCase()}|${(p.Salt||'').toLowerCase()}|${p.Status||''}|${p.Term||0}|${dayKey}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(p);
+    }
+
+    const rows = [];
+    for (const [key, list] of groups) {
+      list.sort((a,b) => (Number(a.Maturity_TS||0) - Number(b.Maturity_TS||0)) || (Number(a.Index||0) - Number(b.Index||0)));
+      for (let i = 0; i < list.length; i += maxPerBatch) {
+        const chunk = list.slice(i, i + maxPerBatch);
+        const first = chunk[0];
+        const last  = chunk[chunk.length - 1];
+
+        const ranks = chunk
+          .map(p => {
+            try { return BigInt(p.Rank || '0'); } catch { return 0n; }
+          })
+          .filter(v => v > 0n)
+          .sort((a,b) => a < b ? -1 : a > b ? 1 : 0);
+        const rankRange = ranks.length
+          ? `${ranks[0].toString()}-${ranks[ranks.length-1].toString()}`
+          : 'N/A';
+
+        const matFmt = (window.luxon && Number(last.Maturity_TS) > 0)
+          ? luxon.DateTime.fromSeconds(Number(last.Maturity_TS)).toFormat('yyyy LLL dd, hh:mm a')
+          : '';
+        const matKey = (window.luxon && Number(last.Maturity_TS) > 0)
+          ? luxon.DateTime.fromSeconds(Number(last.Maturity_TS)).toFormat('yyyy-MM-dd')
+          : '';
+
+        // Per-day VMU breakdown for the calendar: chunked proxies share
+        // Term but may have been minted at different times, so they can
+        // mature on different days. Calendar reads MaturityByDay so the
+        // VMU counts are accurate even for grouped rows.
+        const maturityByDay = {};
+        for (const p of chunk) {
+          const ts = Number(p.Maturity_TS);
+          if (!Number.isFinite(ts) || ts <= 0) continue;
+          if (!window.luxon) continue;
+          const day = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
+          maturityByDay[day] = (maturityByDay[day] || 0) + 1;
+        }
+
+        rows.push({
+          ID: `ct-batch-${first.Owner}-${first.Salt}-${first.Status}-${first.Term}-${first.Index}`,
+          RowKind: 'batch',
+          SourceType: 'Cointool',
+          Owner: first.Owner,
+          Salt: first.Salt,
+          Status: first.Status,
+          Term: String(first.Term || 0),
+          VMUs: String(chunk.length),
+          Indices: chunk.map(p => Number(p.Index)),
+          ProxyIds: chunk.map(p => p.id),
+          ProxyAddresses: chunk.map(p => p.ProxyAddress),
+          Mint_id_Start: first.Index,
+          Rank_Range: rankRange,
+          Maturity_Timestamp: Number(last.Maturity_TS) || 0,
+          Maturity_Date_Fmt: matFmt,
+          maturityDateOnly: matKey,
+          Earliest_Maturity_Timestamp: Number(first.Maturity_TS) || 0,
+          MaturityByDay: maturityByDay,
+          // Legacy-shaped fields kept null/empty for compatibility with code
+          // that still reads them.
+          Actions: [],
+          FailedIds: [],
+          FailedIds_Lost: [],
+          FailedIds_NotYetMatured: [],
+          MintableIds: [],
+          MintableIds_Deployed: [],
+          MintableIds_Missing: [],
+          RecoveredMaturities: [],
+          ProxyStates: [],
+          Latest_Action_Timestamp: chunk.reduce((m,p) => {
+            const t = (p.History && p.History.length) ? Number(p.History[p.History.length-1].ts || 0) : 0;
+            return t > m ? t : m;
+          }, 0),
+          Address: first.Owner,
+          TX_Hash: '',
+          Block_Number: 0,
+          Est_XEN: 0
+        });
+      }
+    }
+    return rows;
+  }
+
+  async function fetchCointoolRows(){
+    const all = await _readAllProxies();
+    if (!all.length) return [];
+    const maxPerBatch = _getMaxVmuPerTx();
+    return _groupAndChunkProxies(all, maxPerBatch);
   }
 
 
@@ -724,11 +850,19 @@ function setMaturityHeaderFilterFromDate(dt) {
     var vm = Number(x.VMUs || 0) || 0;
     var range = (cr && vm) ? (cr + " - " + (cr + vm - 1)) : "";
 
-    var mTs = Number(x.maturityTs || 0) || 0;
+    var mTs = Number(x.Maturity_Timestamp || x.maturityTs || 0) || 0;
+    var acts = Array.isArray(x.actions) ? x.actions : (Array.isArray(x.Actions) ? x.Actions : []);
+    var hasClaimAction = acts.some(function(a){
+      var type = String((a && a.type) || "").toLowerCase();
+      return type === "bulkclaimmintreward" || type === "endtorrent";
+    });
+    var hasVerification = Number(x.lastCheckedAt || x.scanUpdatedAt || 0) > 0;
     var status;
-    if (Number(x.redeemed) === 1) status = "Claimed";
-    else if (mTs * 1000 <= Date.now()) status = "Claimable";
-    else status = "Maturing";
+    if (Number(x.redeemed) === 1 || hasClaimAction || String(x.Status || "").toLowerCase() === "claimed") status = "Claimed";
+    else if (!mTs) status = "Unknown";
+    else if (mTs * 1000 > Date.now()) status = "Maturing";
+    else if (hasVerification) status = "Claimable";
+    else status = "Unknown";
 
     // Prefer preformatted field from xenft_scanner.js; otherwise fall back
     var mFmt = x["Maturity_Date_Fmt"] || x["Maturity DateTime"] || "";
@@ -741,13 +875,15 @@ function setMaturityHeaderFilterFromDate(dt) {
       Term: x.Term || x.term || "",
       VMUs: vm,
       Status: status,
-      Actions: (Array.isArray(x.actions) ? x.actions : []),
+      Actions: acts,
       Maturity_Timestamp: mTs,
       Maturity_Date_Fmt: mFmt,
       Est_XEN: undefined,
       Owner: x.owner || "",
       Latest_Action_Timestamp: Number(x.latestActionTimestamp||0) || 0,
       redeemed: Number(x.redeemed||0) || 0,
+      lastCheckedAt: Number(x.lastCheckedAt || 0) || 0,
+      scanUpdatedAt: Number(x.scanUpdatedAt || 0) || 0,
 
       // XENFT-only extras
       SourceType: "XENFT",
@@ -808,77 +944,41 @@ function setMaturityHeaderFilterFromDate(dt) {
 
     function addFromRow(row){
       const st = String(row.Status || row.status || "");
-      const isHeadlineDone = (st === "Claimed" || st === "Ended Early" || Number(row.redeemed || 0) === 1);
+      if (st === "Unknown") return;
 
-      // For non-cointool rows (XENFTs, stakes), Status reflects the whole
-      // row's state — bail out early on Claimed.
-      if (isHeadlineDone && row.SourceType !== "Cointool") return;
-
-      // For Cointool, Status === 'Claimed' only means the HEADLINE proxy
-      // (Mint_id_Start) was claimed; the row's other 127 sub-proxies may
-      // still hold pending mints in RecoveredMaturities / FailedIds_NotYetMatured
-      // / FailedIds. Don't suppress the row entirely — just suppress the
-      // headline-date contribution further down by treating maturity ts as 0.
-
-      // Only count items that have a valid maturity timestamp
-      // Note: Cointool uses Maturity_TS, others use Maturity_Timestamp
-      const t = isHeadlineDone ? 0 : Number(row.Maturity_Timestamp || row.Maturity_TS || 0);
-      const totalVm = Number(row.VMUs || 0) || 0;
-      const failedIds = Array.isArray(row.FailedIds) ? row.FailedIds : [];
-      const failedCount = failedIds.length;
-
-      // Headline maturity (post-remint, etc): contributes the non-failed VMUs.
-      // When headline is Claimed we skip this — the headline proxy is done —
-      // but RecoveredMaturities / FailedIds_NotYetMatured still contribute below.
-      if (Number.isFinite(t) && t > 0) {
+      // Cointool batch rows: each row may contain proxies that mature on
+      // different days (same Term but different mint timestamps), so use
+      // the per-day breakdown attached at grouping time. Skip Claimed/
+      // Failed batches outright.
+      if (row.SourceType === "Cointool" && row.RowKind === 'batch') {
+        if (st === "Claimed" || st === "Failed") return;
+        const byDay = row.MaturityByDay;
+        if (byDay && typeof byDay === 'object') {
+          for (const k of Object.keys(byDay)) {
+            const n = Number(byDay[k]) || 0;
+            if (k && n > 0) dateMap[k] = (dateMap[k] || 0) + n;
+          }
+          return;
+        }
+        // Fallback (shouldn't happen): use headline + total VMUs.
+        const t = Number(row.Maturity_Timestamp || 0);
+        if (!Number.isFinite(t) || t <= 0) return;
         const key = rowToLocalKey(row);
-        if (key) {
-          // If row has FailedIds, only the SUCCESSFUL portion of the batch is
-          // actually maturing on the headline date. The failed subset is on
-          // the original term — added separately below.
-          const headlineVm = failedCount > 0 ? Math.max(0, totalVm - failedCount) : totalVm;
-          if (headlineVm > 0) dateMap[key] = (dateMap[key] || 0) + headlineVm;
-        }
+        const vm = Number(row.VMUs || 0) || 0;
+        if (key && vm > 0) dateMap[key] = (dateMap[key] || 0) + vm;
+        return;
       }
 
-      // Original-mint maturity for partial-failure rows: contributes the
-      // failed sub-VMUs which were never reminted and are still on the
-      // original term. Surfaces 6001/6265 etc on the Apr 25 calendar pill.
-      if (failedCount > 0) {
-        const origKey = row.originalMaturityDateOnly ||
-          (row.OriginalMaturity_Timestamp && typeof luxon !== 'undefined'
-            ? luxon.DateTime.fromSeconds(Number(row.OriginalMaturity_Timestamp))
-                .setZone(Intl.DateTimeFormat().resolvedOptions().timeZone)
-                .toFormat('yyyy-LL-dd')
-            : '');
-        if (origKey) dateMap[origKey] = (dateMap[origKey] || 0) + failedCount;
-      }
+      // Non-cointool rows (XENFTs, stakes): Status reflects the whole
+      // row's state — bail out early on Claimed/Redeemed.
+      const isHeadlineDone = (st === "Claimed" || st === "Ended Early" || Number(row.redeemed || 0) === 1);
+      if (isHeadlineDone) return;
 
-      // Recovered sub-proxies: when a Re-claim Failed remint succeeded, the
-      // recovered VMUs now mature on a fresh date independent of the row's
-      // headline. Surface each recovered group on its own date.
-      const recovered = Array.isArray(row.RecoveredMaturities) ? row.RecoveredMaturities : [];
-      for (const grp of recovered) {
-        const k = grp && grp.dateOnly;
-        const n = grp && Array.isArray(grp.ids) ? grp.ids.length : 0;
-        if (k && n > 0) dateMap[k] = (dateMap[k] || 0) + n;
-      }
-
-      // Failed-but-not-yet-matured sub-proxies: same partial-failure pattern
-      // as FailedIds, but XEN hasn't matured them yet. Surface on the calendar
-      // on their actual XEN maturity date so the user sees when to come back.
-      const notYet = Array.isArray(row.FailedIds_NotYetMatured) ? row.FailedIds_NotYetMatured : [];
-      if (notYet.length > 0 && typeof luxon !== 'undefined') {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const byDay = Object.create(null);
-        for (const e of notYet) {
-          if (!e) continue;
-          const ts = Number(e.maturityTs);
-          if (!Number.isFinite(ts) || ts <= 0) continue;
-          const k = luxon.DateTime.fromSeconds(ts).setZone(tz).toFormat('yyyy-LL-dd');
-          byDay[k] = (byDay[k] || 0) + 1;
-        }
-        for (const k of Object.keys(byDay)) dateMap[k] = (dateMap[k] || 0) + byDay[k];
+      const t = Number(row.Maturity_Timestamp || row.Maturity_TS || 0);
+      const totalVm = Number(row.VMUs || 0) || 0;
+      if (Number.isFinite(t) && t > 0 && totalVm > 0) {
+        const key = rowToLocalKey(row);
+        if (key) dateMap[key] = (dateMap[key] || 0) + totalVm;
       }
     }
 
@@ -1177,11 +1277,27 @@ function setMaturityHeaderFilterFromDate(dt) {
     }
   }
 
+  // Re-render when the user changes cointoolMaxVmuPerTx — batch sizes
+  // depend on it, so the table needs to regroup.
+  function wireMaxVmuListener(){
+    const input = document.getElementById('cointoolMaxVmuPerTx');
+    if (!input || input._unifyWired) return;
+    input._unifyWired = true;
+    let t = null;
+    const trigger = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { try { refreshUnified(); } catch(_){} }, 200);
+    };
+    input.addEventListener('change', trigger);
+    input.addEventListener('input', trigger);
+  }
+
   // Boot
   ensureXenftScanButton();
   whenTableReady(function(){
     attachGuards();
     window.refreshUnified = refreshUnified;
+    wireMaxVmuListener();
     refreshUnified();
   });
 })();

@@ -4,12 +4,24 @@
   // Database schemas for each scanner type
   const DATABASE_SCHEMAS = {
     'cointool': {
-      version: 3,
+      version: 4,
+      // v4: per-proxy storage. The cointool_scanner module owns the upgrade
+      // path; this initializer just makes sure the DB exists at the right
+      // version with the right stores when a fresh chain is opened.
       stores: {
-        'mints': { keyPath: 'ID' },
-        'scanState': { keyPath: 'address' },
-        'actionsCache': { keyPath: 'address' }
-      }
+        'proxies': {
+          keyPath: 'id',
+          indexes: {
+            byOwner: { keyPath: 'Owner', unique: false },
+            byOwnerStatus: { keyPath: ['Owner', 'Status'], unique: false },
+            byOwnerSaltStatusTerm: { keyPath: ['Owner', 'Salt', 'Status', 'Term'], unique: false },
+            byMaturity: { keyPath: 'Maturity_TS', unique: false }
+          }
+        },
+        'scanState': { keyPath: 'address' }
+      },
+      // Legacy stores to drop when upgrading from v3.
+      dropStores: ['mints', 'mintProgress', 'actionsCache']
     },
     'xenft': {
       version: 3,
@@ -44,12 +56,21 @@
         
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-          
+
+          // Drop legacy stores that no longer fit the schema.
+          if (Array.isArray(schema.dropStores)) {
+            for (const oldName of schema.dropStores) {
+              if (db.objectStoreNames.contains(oldName)) {
+                try { db.deleteObjectStore(oldName); } catch (_) {}
+              }
+            }
+          }
+
           // Create stores if they don't exist
           for (const [storeName, storeConfig] of Object.entries(schema.stores)) {
             if (!db.objectStoreNames.contains(storeName)) {
               const store = db.createObjectStore(storeName, { keyPath: storeConfig.keyPath });
-              
+
               // Add indexes if specified
               if (storeConfig.indexes) {
                 for (const [indexName, indexConfig] of Object.entries(storeConfig.indexes)) {
