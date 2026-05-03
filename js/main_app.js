@@ -8690,7 +8690,7 @@ async function exportBackup() {
     { suffix: 'DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
     { suffix: 'DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
     { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] },
-    { suffix: 'DB_XenStake', version: 1, stores: ['stakes', 'scanState'] }
+    { suffix: 'DB_XenStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
   ];
 
   // Export data from all chains
@@ -9235,8 +9235,10 @@ async function importBackupFromFile(file) {
           const db = await openDatabaseByName(name);
           await clearStore(db, "stakes").catch(() => {});
           await clearStore(db, "scanState").catch(() => {});
+          await clearStore(db, "processProgress").catch(() => {});
           await bulkPut(db, "stakes", stores.stakes || []);
           await bulkPut(db, "scanState", stores.scanState || []);
+          await bulkPut(db, "processProgress", stores.processProgress || []);
           console.log(`[Import] Imported ${(stores.stakes || []).length} XEN stakes to ${name}`);
         }
         } catch (dbError) {
@@ -9298,8 +9300,10 @@ async function importBackupFromFile(file) {
           const legacyDb = await openDatabaseByName("DB_XenStake");
           await clearStore(legacyDb, "stakes").catch(() => {});
           await clearStore(legacyDb, "scanState").catch(() => {});
+          await clearStore(legacyDb, "processProgress").catch(() => {});
           await bulkPut(legacyDb, "stakes", stores.stakes || []);
           await bulkPut(legacyDb, "scanState", stores.scanState || []);
+          await bulkPut(legacyDb, "processProgress", stores.processProgress || []);
         }
         } catch (dbError) {
           console.error(`[Import] Failed to import legacy ${name}:`, dbError.message);

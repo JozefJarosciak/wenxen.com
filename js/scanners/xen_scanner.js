@@ -40,7 +40,10 @@
   function openDB(){return new Promise((resolve,reject)=>{
     // Get chain-specific database name from chainManager
     const dbName = window.chainManager?.getDatabaseName('xen_stake') || 'ETH_DB_XenStake';
-    const req=indexedDB.open(dbName,1);
+    // Version 2: adds the processProgress store. The upgrade handler is
+    // idempotent (uses !contains checks) so older v1 DBs gain the missing
+    // store without losing existing stakes/scanState data.
+    const req=indexedDB.open(dbName,2);
     req.onupgradeneeded=e=>{const db=e.target.result;
       console.log(`[XenStake] Database upgrade needed for ${dbName}, creating stores...`);
       if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:"id"}); os.createIndex("byOwner","owner",{unique:false});}
