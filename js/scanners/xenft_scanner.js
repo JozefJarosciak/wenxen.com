@@ -67,7 +67,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   }
   function getLocalDateString(date) {
     const year = date.getFullYear();
-    const month = String(date.getMonth()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
@@ -982,6 +982,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               } catch (e) {
                 console.log(`Failed to get xenBurned for token ${tokenId}`);
               }
+              const checkedAt = Date.now();
               
               detail = {
                 owner: addr,
@@ -997,6 +998,8 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
                 VMUs: vmuCount.toString(), // Use the actual vmuCount we fetched
                 "XEN Burned": xenBurned.toString(),
                 redeemed: mintInfo.redeemed,
+                lastCheckedAt: checkedAt,
+                scanUpdatedAt: checkedAt,
                 maturityDateOnly: maturityKey,
                 Maturity_Timestamp: Number(mintInfo.maturityTs),
                 amp: mintInfo.amp,
@@ -1123,6 +1126,8 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               row.latestActionTimestamp = Math.max(
                 ...row.actions.map(x => Number(x.timeStamp || 0))
               );
+              row.lastCheckedAt = Date.now();
+              row.scanUpdatedAt = row.lastCheckedAt;
               // If there's a claim action, mark as redeemed
               if (acts.some(a => a.type === "bulkClaimMintReward")) {
                 row.redeemed = 1;
@@ -1218,4 +1223,3 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     }
   });
 })();
-

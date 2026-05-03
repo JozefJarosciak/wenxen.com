@@ -1,7 +1,7 @@
 # ============================================
 # DEPLOYMENT DIRECTORY (ENTIRE FOLDER - PRIVATE)
 # ============================================
-# AWS deployment files should NOT be in public repo
+# Server deployment files should NOT be in public repo
 deployment/
 
 # OLD_BACKUP folder
@@ -48,7 +48,7 @@ desktop.ini
 .env.*
 *.env
 
-# AWS credentials (should never be committed)
+# Credentials (should never be committed)
 .aws/
 *credentials*
 *aws_access_key*
@@ -67,7 +67,7 @@ tmp/
 .claude/
 CLAUDE.md
 
-# AWS documentation (deployment-specific)
+# Deployment documentation (private)
 README-AWS.md
 
 # ============================================

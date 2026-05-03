@@ -153,7 +153,7 @@ export const web3Utils = {
       throw this.createRecoveryError('No available RPC endpoints', 'Operation retry');
     }
 
-    const maxAttempts = maxRetries || Math.max(6, availableRPCs.length * 2);
+    const maxAttempts = maxRetries != null ? maxRetries : Math.max(6, availableRPCs.length * 2);
     let lastError;
     let currentRPC = availableRPCs[web3.__rpcIndex || 0];
 

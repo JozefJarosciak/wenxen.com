@@ -105,7 +105,7 @@ export const apiUtils = {
         throw new Error(`Etherscan API Error: ${data.message}`);
       }
       
-      return Array.isArray(data.result) ? data.result : [data.result];
+      return Array.isArray(data.result) ? data.result : (data.result ? [data.result] : []);
     },
 
     // Fetch transaction logs with automatic range splitting

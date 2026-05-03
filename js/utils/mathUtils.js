@@ -31,7 +31,11 @@ export const mathUtils = {
   },
 
   // Calculate APY at given timestamp (XEN staking formula)
-  calculateAPY(timestamp, genesisTs = 1665187200, secondsInDay = 86400) {
+  calculateAPY(timestamp, genesisTs, secondsInDay = 86400) {
+    if (!genesisTs) {
+      console.warn('calculateAPY: no genesisTs provided, defaulting to Ethereum mainnet');
+      genesisTs = 1665187200;
+    }
     const START = 20;
     const END = 2;
     const STEP = 90 * secondsInDay;
@@ -46,12 +50,9 @@ export const mathUtils = {
     try {
       const BN = window.Web3.utils.toBN;
       const principal = BN(String(principalWei));
-      const apyPercent = Number(apy) / 100;
-      const termRatio = Number(termDays) / 365;
-      const rewardRatio = apyPercent * termRatio;
-      
-      // Calculate reward: principal * (apy/100) * (termDays/365)
-      const rewardWei = principal.mul(BN(Math.floor(rewardRatio * 1e18))).div(BN('1000000000000000000'));
+      // Calculate reward: principal * apy * termDays / (100 * 365)
+      // Keep in BigNumber throughout to avoid floating-point precision loss
+      const rewardWei = principal.mul(BN(String(apy))).mul(BN(String(termDays))).div(BN('36500'));
       return rewardWei.toString();
     } catch (error) {
       console.warn('Failed to calculate stake reward:', error);

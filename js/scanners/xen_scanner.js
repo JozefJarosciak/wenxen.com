@@ -195,7 +195,7 @@
       // Get genesis timestamp for APY calculation
       const xen = new w3.eth.Contract(window.xenAbi, xenContractAddress);
       let genesisTs = 1665187200, SECONDS_IN_DAY = 86400;
-      try { genesisTs = Number(await xen.methods.genesisTs().call()) || genesisTs; } catch {}
+      try { genesisTs = Number(await xen.methods.genesisTs().call()) || genesisTs; } catch { console.warn(`XEN Stakes Scanner - Failed to fetch genesisTs from contract, using default ${genesisTs}`); }
       try { SECONDS_IN_DAY = Number(await xen.methods.SECONDS_IN_DAY().call()) || 86400; } catch {}
 
       // APY calculation function (same as working scanner)
@@ -323,13 +323,29 @@
 
         // Processing withdrawn events
 
-        // Process Withdrawn events and update corresponding stakes
-        for (const event of sinkWithdrawn) {
+        // Process Withdrawn events in chronological order and update corresponding stakes
+        const sortedWithdrawn = sinkWithdrawn.slice().sort((a, b) => {
+          const ta = Number(BigInt(a.timeStamp || "0x0"));
+          const tb = Number(BigInt(b.timeStamp || "0x0"));
+          return ta - tb;
+        });
+        for (const event of sortedWithdrawn) {
           const withdrawTs = Number(BigInt(event.timeStamp || "0x0"));
           const withdrawHash = event.transactionHash;
 
-          // Find the corresponding stake (simplified matching by oldest active stake)
-          const activeStake = stakes.find(stake => stake.status === 'Maturing' || stake.status === 'Claimable');
+          // XEN allows only one active stake per address at a time, so a
+          // Withdrawn event corresponds to the MOST RECENT stake the user
+          // created before that withdrawal. Picking "oldest unmatched" can
+          // mis-pair withdrawals with stakes when any event is missed or
+          // out of order — which causes early-ended stakes to be marked
+          // "Claimed" using a much later withdrawal's timestamp.
+          const activeStake = stakes
+            .filter(stake =>
+              (stake.status === 'Maturing' || stake.status === 'Claimable') &&
+              Number(stake.startTs || 0) <= withdrawTs &&
+              (!stake.actions || !stake.actions.some(a => a.type === 'withdraw'))
+            )
+            .sort((a, b) => Number(b.startTs || 0) - Number(a.startTs || 0))[0];
           if (activeStake) {
             const matured = (Number(activeStake.maturityTs) || 0) <= withdrawTs;
             const newStatus = matured ? "Claimed" : "Ended Early";

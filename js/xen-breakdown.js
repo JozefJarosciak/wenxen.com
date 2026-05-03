@@ -35,9 +35,8 @@ function initializeXenTotalBreakdown() {
         // ONLY count maturing mints, NOT wallet balances
         const xenAmount = BigInt(item.xen);
         totalXen += xenAmount;
-        const xenTokens = Number(xenAmount);
         const usdValue = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0)
-          ? xenTokens * xenUsdPrice
+          ? Number(xenAmount) * xenUsdPrice
           : 0;
         totalUsd += usdValue;
       });
