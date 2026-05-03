@@ -8874,17 +8874,47 @@ async function exportBackup() {
     }
   } catch {}
   
-  const payload = {
-    fileType: "wenxen-backup",
-    version: 6, // Version 6 supports all chains export
-    exportedAt: new Date().toISOString(),
-    exportedChain: "ALL", // Indicates this is a full backup
-    settings: collectSettingsSnapshot(),
-    databases: allDatabases
-  };
+  // Build the JSON in chunks via Blob parts. Building one giant string with
+  // JSON.stringify(payload) can throw RangeError: Invalid string length once
+  // the dataset crosses V8's max string length (~512MB). Stream item-by-item
+  // so the largest individual string is one IDB record.
+  const blobParts = [];
+  blobParts.push(`{"fileType":"wenxen-backup","version":6`);
+  blobParts.push(`,"exportedAt":${JSON.stringify(new Date().toISOString())}`);
+  blobParts.push(`,"exportedChain":"ALL"`);
+  blobParts.push(`,"settings":${JSON.stringify(collectSettingsSnapshot())}`);
+  blobParts.push(`,"databases":[`);
 
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
+  for (let dbIdx = 0; dbIdx < allDatabases.length; dbIdx++) {
+    if (dbIdx > 0) blobParts.push(",");
+    const dbDef = allDatabases[dbIdx];
+    blobParts.push(`{"name":${JSON.stringify(dbDef.name)}`);
+    blobParts.push(`,"chain":${JSON.stringify(dbDef.chain)}`);
+    blobParts.push(`,"version":${Number(dbDef.version) || 0}`);
+    blobParts.push(`,"stores":{`);
+
+    const storeNames = Object.keys(dbDef.stores || {});
+    for (let sIdx = 0; sIdx < storeNames.length; sIdx++) {
+      if (sIdx > 0) blobParts.push(",");
+      const storeName = storeNames[sIdx];
+      blobParts.push(`${JSON.stringify(storeName)}:`);
+      const items = dbDef.stores[storeName];
+      if (Array.isArray(items)) {
+        blobParts.push("[");
+        for (let i = 0; i < items.length; i++) {
+          if (i > 0) blobParts.push(",");
+          blobParts.push(JSON.stringify(items[i]));
+        }
+        blobParts.push("]");
+      } else {
+        blobParts.push(JSON.stringify(items ?? null));
+      }
+    }
+    blobParts.push("}}");
+  }
+  blobParts.push("]}");
+
+  const blob = new Blob(blobParts, { type: "application/json" });
   const fileName = formatBackupFileName(new Date());
 
   // save picker → web share → anchor fallback
@@ -9702,10 +9732,14 @@ function setStatusHeaderFilter(statusText) {
   const importBtn = document.getElementById("importBackupBtn"); // The import button
 
   if (exportBtn) {
-    exportBtn.addEventListener("click", () => {
+    exportBtn.addEventListener("click", async () => {
       const ok = confirm("Export backup of your data?");
-      if (ok) {
-        exportBackup();
+      if (!ok) return;
+      try {
+        await exportBackup();
+      } catch (err) {
+        console.error("[Export] Backup failed:", err);
+        alert(`Backup failed: ${err?.message || err}`);
       }
     });
   }
