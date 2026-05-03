@@ -8704,7 +8704,7 @@ async function exportBackup() {
   // Define all database names for all chains (ALL 7 CHAINS)
   const chains = ['ETHEREUM', 'BASE', 'AVALANCHE', 'BSC', 'MOONBEAM', 'POLYGON', 'OPTIMISM'];
   const dbTypes = [
-    { suffix: 'DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
+    { suffix: 'DB_Cointool', version: 4, stores: ['proxies', 'scanState'] },
     { suffix: 'DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
     { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] },
     { suffix: 'DB_XenStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
@@ -8871,21 +8871,30 @@ async function exportBackup() {
     }
   }
   
-  // Also check for legacy databases
+  // Also check for a truly legacy unprefixed "DB_Cointool" left over from
+  // before chain prefixes (pre-2025 schema). We open it without specifying
+  // a version so we don't trigger a schema upgrade on a DB we don't own.
   try {
-    const legacyDb = await openDB();
-    const [mints, scanState, actionsCache] = await Promise.all([
-      getAllFromStore(legacyDb, "mints"),
-      getAllFromStore(legacyDb, "scanState"),
-      getAllFromStore(legacyDb, "actionsCache").catch(() => [])
-    ]);
-    
-    if (mints.length > 0 || scanState.length > 0) {
+    const legacyDb = await new Promise((resolve, reject) => {
+      const req = indexedDB.open("DB_Cointool");
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror = e => reject(e.target.error);
+      req.onblocked = () => reject(new Error("blocked"));
+    });
+    const stores = ['proxies', 'mints', 'scanState', 'actionsCache'];
+    const exported = {};
+    for (const s of stores) {
+      if (legacyDb.objectStoreNames.contains(s)) {
+        try { exported[s] = await getAllFromStore(legacyDb, s); } catch { exported[s] = []; }
+      }
+    }
+    const hasAny = Object.values(exported).some(arr => Array.isArray(arr) && arr.length > 0);
+    if (hasAny) {
       allDatabases.push({
         name: "DB_Cointool",
         chain: "LEGACY",
-        version: 3,
-        stores: { mints, scanState, actionsCache }
+        version: legacyDb.version,
+        stores: exported
       });
       console.log(`Successfully exported legacy DB_Cointool`);
     }
@@ -9202,15 +9211,20 @@ async function importBackupFromFile(file) {
         // Import directly to the chain-specific database
         if (name.endsWith("DB_Cointool")) {
           const db = await openDatabaseByName(name);
-          await clearStore(db, "mints").catch(()=>{});
+          await clearStore(db, "proxies").catch(()=>{});
           await clearStore(db, "scanState").catch(()=>{});
-          await clearStore(db, "actionsCache").catch(()=>{});
-          await bulkPut(db, "mints", stores.mints || []);
-          await bulkPut(db, "scanState", stores.scanState || []);
-          if (Array.isArray(stores.actionsCache)) {
-            await bulkPut(db, "actionsCache", stores.actionsCache);
+          // The Cointool DB schema migrated from `mints` (v3) to `proxies` (v4).
+          // Restore whichever is present in the backup; legacy `mints` data is
+          // shape-incompatible with the new schema, so warn the user that a
+          // rescan is needed instead of writing junk into the proxies store.
+          const proxies = Array.isArray(stores.proxies) ? stores.proxies : [];
+          if (proxies.length > 0) {
+            await bulkPut(db, "proxies", proxies);
+          } else if (Array.isArray(stores.mints) && stores.mints.length > 0) {
+            console.warn(`[Import] ${name}: backup contains legacy 'mints' data (${stores.mints.length} rows). The Cointool schema changed - rescan is required to repopulate the proxies store.`);
           }
-          console.log(`[Import] Imported ${name} with ${(stores.mints || []).length} mints`);
+          await bulkPut(db, "scanState", stores.scanState || []);
+          console.log(`[Import] Imported ${name} with ${proxies.length} proxies`);
         }
 
         else if (name.endsWith("DB_Xenft")) {
@@ -9272,14 +9286,15 @@ async function importBackupFromFile(file) {
         // Import legacy format databases for migration
         if (name === "DB_Cointool" || chain === "LEGACY") {
           const legacyDb = await openDatabaseByName("DB_Cointool");
-          await clearStore(legacyDb, "mints").catch(()=>{});
+          await clearStore(legacyDb, "proxies").catch(()=>{});
           await clearStore(legacyDb, "scanState").catch(()=>{});
-          await clearStore(legacyDb, "actionsCache").catch(()=>{});
-          await bulkPut(legacyDb, "mints", stores.mints || []);
-          await bulkPut(legacyDb, "scanState", stores.scanState || []);
-          if (Array.isArray(stores.actionsCache)) {
-            await bulkPut(legacyDb, "actionsCache", stores.actionsCache);
+          const proxies = Array.isArray(stores.proxies) ? stores.proxies : [];
+          if (proxies.length > 0) {
+            await bulkPut(legacyDb, "proxies", proxies);
+          } else if (Array.isArray(stores.mints) && stores.mints.length > 0) {
+            console.warn(`[Import] Legacy DB_Cointool: backup contains legacy 'mints' data (${stores.mints.length} rows). Cointool schema changed to 'proxies' (v4) - rescan is required to repopulate.`);
           }
+          await bulkPut(legacyDb, "scanState", stores.scanState || []);
         }
         else if (name === "DB_Xenft") {
           const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
@@ -9437,11 +9452,15 @@ function deleteDatabaseByName(name) {
 // Helper function to open database by name with schema
 function openDatabaseByName(name) {
   return new Promise((resolve, reject) => {
-    // Determine version and schema based on database name
+    // Determine version and schema based on database name. Versions must
+    // match (or exceed) the per-scanner DB_VERSION; opening at a lower
+    // version than the existing DB triggers VersionError and the export
+    // would silently skip that database.
     let version = 1;
-    if (name.includes("Cointool")) version = 3;
+    if (name.includes("Cointool")) version = 4; // proxies store (scanner DB_VERSION=4)
     else if (name.includes("XenftStake")) version = 2;
     else if (name.includes("Xenft")) version = 3; // Updated for scanState and processProgress stores
+    else if (name.includes("XenStake")) version = 2; // Adds processProgress store
 
     const request = indexedDB.open(name, version);
 
@@ -9461,14 +9480,22 @@ function openDatabaseByName(name) {
       
       // Create stores based on database type
       if (name.includes("Cointool")) {
-        if (!db.objectStoreNames.contains("mints")) {
-          db.createObjectStore("mints", { keyPath: "ID" });
+        // Drop legacy stores (v3 schema) so the imported DB matches the
+        // scanner's v4 schema instead of carrying both old and new stores.
+        for (const oldName of ['mints', 'mintProgress', 'actionsCache']) {
+          if (db.objectStoreNames.contains(oldName)) {
+            try { db.deleteObjectStore(oldName); } catch (_) {}
+          }
+        }
+        if (!db.objectStoreNames.contains("proxies")) {
+          const s = db.createObjectStore("proxies", { keyPath: "id" });
+          s.createIndex('byOwner', 'Owner', { unique: false });
+          s.createIndex('byOwnerStatus', ['Owner', 'Status'], { unique: false });
+          s.createIndex('byOwnerSaltStatusTerm', ['Owner', 'Salt', 'Status', 'Term'], { unique: false });
+          s.createIndex('byMaturity', 'Maturity_TS', { unique: false });
         }
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
-        }
-        if (!db.objectStoreNames.contains("actionsCache")) {
-          db.createObjectStore("actionsCache", { keyPath: "address" });
         }
       } else if (name.includes("XenftStake")) {
         if (!db.objectStoreNames.contains("stakes")) {
