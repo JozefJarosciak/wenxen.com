@@ -554,12 +554,28 @@ function setMaturityHeaderFilterFromDate(dt) {
     } catch(e){ return []; }
   }
 
+  // Render-time status: the scanner only flips Maturing→Claimable during a
+  // scan, so a record can stay "Maturing" past its Maturity_TS until the
+  // next scan runs. Compute an effective status from the timestamp so the
+  // table reflects reality between scans. Only Maturing is upgraded — never
+  // touch Claimed/Failed/etc.
+  function _effectiveStatusFromProxy(p, nowSec){
+    const status = p && p.Status;
+    if (status !== 'Maturing') return status || '';
+    const ts = Number(p && p.Maturity_TS);
+    if (Number.isFinite(ts) && ts > 0 && ts <= nowSec) return 'Claimable';
+    return status;
+  }
+
   function _groupAndChunkProxies(proxies, maxPerBatch){
-    // Group by (Owner|Salt|Status|Term|MaturityDay) so each batch row
-    // contains only proxies maturing on the same calendar day. Otherwise
+    // Group by (Owner|Salt|EffectiveStatus|Term|MaturityDay) so each batch
+    // row contains only proxies maturing on the same calendar day. Otherwise
     // a chunk can mix proxies with different maturities (same Term but
     // different mint timestamps), which makes the table's VMU count for a
-    // given date inaccurate.
+    // given date inaccurate. EffectiveStatus is used so a freshly-matured
+    // proxy (still persisted as Maturing) groups with already-Claimable
+    // siblings instead of forming a separate stale-status row.
+    const nowSec = Math.floor(Date.now() / 1000);
     const groups = new Map();
     for (const p of proxies) {
       let dayKey = '';
@@ -567,7 +583,8 @@ function setMaturityHeaderFilterFromDate(dt) {
       if (window.luxon && Number.isFinite(ts) && ts > 0) {
         dayKey = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
       }
-      const key = `${(p.Owner||'').toLowerCase()}|${(p.Salt||'').toLowerCase()}|${p.Status||''}|${p.Term||0}|${dayKey}`;
+      const effStatus = _effectiveStatusFromProxy(p, nowSec);
+      const key = `${(p.Owner||'').toLowerCase()}|${(p.Salt||'').toLowerCase()}|${effStatus}|${p.Term||0}|${dayKey}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(p);
     }
@@ -631,13 +648,14 @@ function setMaturityHeaderFilterFromDate(dt) {
         const actions = Array.from(txMap.values()).sort((a, b) => Number(a.timeStamp) - Number(b.timeStamp));
         const latestActionTs = actions.length ? Number(actions[actions.length - 1].timeStamp || 0) : 0;
 
+        const rowStatus = _effectiveStatusFromProxy(first, nowSec);
         rows.push({
-          ID: `ct-batch-${first.Owner}-${first.Salt}-${first.Status}-${first.Term}-${first.Index}`,
+          ID: `ct-batch-${first.Owner}-${first.Salt}-${rowStatus}-${first.Term}-${first.Index}`,
           RowKind: 'batch',
           SourceType: 'Cointool',
           Owner: first.Owner,
           Salt: first.Salt,
-          Status: first.Status,
+          Status: rowStatus,
           Term: String(first.Term || 0),
           VMUs: String(chunk.length),
           Indices: chunk.map(p => Number(p.Index)),

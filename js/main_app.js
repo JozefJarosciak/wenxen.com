@@ -2826,6 +2826,16 @@ function getAllMints(db) {
         return Math.min(128, raw);
       })();
 
+      // Render-time effective status — promote stale "Maturing" proxies past
+      // their Maturity_TS to "Claimable" so the table is correct between
+      // scans. Don't touch other states.
+      const nowSec = Math.floor(Date.now() / 1000);
+      const effStatus = (p) => {
+        if ((p && p.Status) !== 'Maturing') return (p && p.Status) || '';
+        const ts = Number(p && p.Maturity_TS);
+        return (Number.isFinite(ts) && ts > 0 && ts <= nowSec) ? 'Claimable' : 'Maturing';
+      };
+
       const groups = new Map();
       for (const p of all) {
         let dayKey = '';
@@ -2833,7 +2843,7 @@ function getAllMints(db) {
         if (window.luxon && Number.isFinite(ts) && ts > 0) {
           dayKey = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
         }
-        const key = `${(p.Owner||'').toLowerCase()}|${(p.Salt||'').toLowerCase()}|${p.Status||''}|${p.Term||0}|${dayKey}`;
+        const key = `${(p.Owner||'').toLowerCase()}|${(p.Salt||'').toLowerCase()}|${effStatus(p)}|${p.Term||0}|${dayKey}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(p);
       }
@@ -2877,14 +2887,15 @@ function getAllMints(db) {
           }
           const actions = Array.from(txMap.values()).sort((a, b) => Number(a.timeStamp) - Number(b.timeStamp));
           const latestActionTs = actions.length ? Number(actions[actions.length - 1].timeStamp || 0) : 0;
+          const rowStatus = effStatus(first);
           rows.push({
-            ID: `ct-batch-${first.Owner}-${first.Salt}-${first.Status}-${first.Term}-${first.Index}`,
+            ID: `ct-batch-${first.Owner}-${first.Salt}-${rowStatus}-${first.Term}-${first.Index}`,
             RowKind: 'batch',
             SourceType: 'Cointool',
             Owner: first.Owner,
             Address: first.Owner,
             Salt: first.Salt,
-            Status: first.Status,
+            Status: rowStatus,
             Term: String(first.Term || 0),
             VMUs: String(chunk.length),
             Indices: chunk.map(p => Number(p.Index)),
@@ -5711,11 +5722,18 @@ async function performStatusTick() {
     if (r.SourceType !== "Cointool") {
       continue; // Skip XENFT, Stake XENFT, and Stake rows.
     }
-    // New per-proxy batch rows: Status is authoritative from the scanner /
-    // JIT verification. Don't recompute it here from Maturity_Timestamp,
-    // or we'll overwrite a Claimed batch back to Claimable just because
-    // the latest maturity in the chunk has passed.
+    // New per-proxy batch rows: scanner status is authoritative for terminal
+    // states (Claimed/Failed/etc.), but Maturing→Claimable can happen at any
+    // moment between scans. Promote it here so the UI doesn't go stale while
+    // the page is left open across maturity. Use Maturity_Timestamp (latest
+    // in the chunk) so a row only flips once *all* its proxies have matured.
     if (isNewCointoolBatchRow(r)) {
+      if (r.Status === 'Maturing') {
+        const matTs = Number(r.Maturity_Timestamp || 0);
+        if (Number.isFinite(matTs) && matTs > 0 && matTs <= nowSec) {
+          updates.push({ ID: r.ID, Status: 'Claimable' });
+        }
+      }
       continue;
     }
     if (hasProxyStateRows(r) || isLegacyCointoolRow(r)) {
