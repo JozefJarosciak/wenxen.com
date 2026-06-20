@@ -67,13 +67,26 @@ export class DatabaseMigrator {
     return allPossibleDbs.map(name => ({ name, version: 1 }));
   }
 
+  async databaseExists(name) {
+    if (typeof indexedDB.databases !== 'function') return null;
+
+    try {
+      const databases = await indexedDB.databases();
+      return databases.some(db => db.name === name);
+    } catch (error) {
+      console.warn(`Could not check IndexedDB existence for ${name}:`, error);
+      return null;
+    }
+  }
+
   // Migrate a single database
   async migrateDatabase(oldName, newName) {
     console.log(`Checking database: ${oldName} → ${newName}`);
     
     try {
       // First check if the new database already exists AND has data
-      const newDb = await this.openDatabase(newName);
+      const targetExists = await this.databaseExists(newName);
+      const newDb = targetExists === false ? null : await this.openDatabase(newName, { allowCreate: false });
       if (newDb) {
         const hasData = await this.hasDataInDatabase(newDb, newName);
         newDb.close();
@@ -81,7 +94,8 @@ export class DatabaseMigrator {
         if (hasData) {
           console.log(`Target database ${newName} already exists with data`);
           // Check if old database still exists and delete it
-          const oldDb = await this.openDatabase(oldName);
+          const oldExists = await this.databaseExists(oldName);
+          const oldDb = oldExists === false ? null : await this.openDatabase(oldName, { allowCreate: false });
           if (oldDb) {
             oldDb.close();
             await this.deleteDatabase(oldName);
@@ -96,7 +110,13 @@ export class DatabaseMigrator {
       }
       
       // Open the old database
-      const oldDb = await this.openDatabase(oldName);
+      const oldExists = await this.databaseExists(oldName);
+      if (oldExists === false) {
+        console.log(`Database ${oldName} does not exist, skipping`);
+        return false;
+      }
+
+      const oldDb = await this.openDatabase(oldName, { allowCreate: false });
       if (!oldDb) {
         console.log(`Database ${oldName} does not exist, skipping`);
         return false;
@@ -130,15 +150,26 @@ export class DatabaseMigrator {
   }
 
   // Open a database
-  openDatabase(name) {
+  openDatabase(name, options = {}) {
     return new Promise((resolve, reject) => {
       let resolved = false;
+      let createdDuringOpen = false;
+      const allowCreate = options.allowCreate !== false;
       const request = indexedDB.open(name);
       
       request.onsuccess = (event) => {
         if (!resolved) {
           resolved = true;
-          resolve(event.target.result);
+          const db = event.target.result;
+          if (createdDuringOpen && !allowCreate) {
+            try { db.close(); } catch (_) {}
+            const deleteRequest = indexedDB.deleteDatabase(name);
+            deleteRequest.onsuccess = () => resolve(null);
+            deleteRequest.onerror = () => resolve(null);
+            deleteRequest.onblocked = () => resolve(null);
+            return;
+          }
+          resolve(db);
         }
       };
       
@@ -151,18 +182,7 @@ export class DatabaseMigrator {
       };
       
       request.onupgradeneeded = (event) => {
-        // Database exists but needs upgrade - this means it exists
-        if (!resolved) {
-          resolved = true;
-          const db = event.target.result;
-          // Close and re-open without upgrade
-          db.close();
-          setTimeout(() => {
-            const request2 = indexedDB.open(name);
-            request2.onsuccess = (e) => resolve(e.target.result);
-            request2.onerror = () => resolve(null);
-          }, 10);
-        }
+        createdDuringOpen = true;
       };
     });
   }

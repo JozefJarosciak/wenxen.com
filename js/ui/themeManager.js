@@ -51,23 +51,6 @@ export const themeManager = {
       console.warn('Failed to update VMU chart theme:', error);
     }
     
-    // Update About tab iframes if they exist
-    try {
-      const iframes = document.querySelectorAll('.about-iframe');
-      iframes.forEach(iframe => {
-        if (iframe.contentWindow) {
-          const themeClass = 'theme-' + effectiveMode;
-          iframe.contentWindow.postMessage({ type: 'theme-change', theme: themeClass }, '*');
-          // Also try direct access
-          if (iframe.contentDocument && iframe.contentDocument.body) {
-            iframe.contentDocument.body.className = themeClass;
-          }
-        }
-      });
-    } catch (error) {
-      console.debug('Failed to update iframe themes:', error);
-    }
-    
     // Update header menu UI
     this.updateThemeMenuUI();
     

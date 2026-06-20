@@ -6,7 +6,7 @@ Welcome to **WenXen.com** — a lightweight, open-source tracker for **[XEN](htt
 
 Tired of logging every XEN mint by hand? 🥱 Just add your wallet address and a free API key, and WenXen automatically discovers all your mints (past & future) on supported chains. No more spreadsheets, no more forgotten entries.
 
-Everything runs **100% in your browser**, with no centralized servers, meaning your data always stays with you. You can run it directly from here, or download the code and use it locally for maximum transparency and security.
+Everything runs **100% in your browser**, with no hosted portfolio database, meaning your data always stays with you. On [wenxen.com](https://wenxen.com), Google Analytics and Statcounter are enabled by default for usage analytics and can be turned off in Settings. Local and self-hosted copies default to tracking off.
 
 ---
 
@@ -56,7 +56,7 @@ Everything runs **100% in your browser**, with no centralized servers, meaning y
 ## Architecture & Principles
 
 - **Client-Side Operation**  
-  All logic runs in the browser, storing data locally. No external servers = no downtime, no tracking, and maximum privacy.
+  All portfolio logic runs in the browser, storing data locally. Hosted usage analytics can be disabled in Settings, and local/self-hosted copies run with tracking off by default.
 
 - **Open Source & Self-Hostable**  
   Built with pure HTML/CSS/JS, hosted on [GitHub](https://github.com/JozefJarosciak/wenxen.com). You can easily self-host or run it from a local file. You can also contribute and enhance the open source code.

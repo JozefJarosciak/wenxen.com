@@ -41,12 +41,7 @@ export const router = {
       routeConfig.basePath = '';
     }
 
-    // For IDE server, we need to use query parameters instead of path routing
-    if (this.isIdeServer) {
-      this.routingMode = 'query';
-    } else {
-      this.routingMode = 'path';
-    }
+    this.routingMode = 'hash';
   },
 
   // Set up browser event listeners
@@ -54,6 +49,9 @@ export const router = {
     // Handle browser back/forward buttons
     window.addEventListener('popstate', (event) => {
       this.handleCurrentRoute(false); // Don't push to history
+    });
+    window.addEventListener('hashchange', () => {
+      this.handleCurrentRoute(false);
     });
 
     // Listen for tab changes from tabManager
@@ -65,31 +63,22 @@ export const router = {
       }
     });
 
-    // Listen for subtab changes (we'll need to implement this)
-    document.addEventListener('subtabChanged', (event) => {
-      const { tabId, subtabId } = event.detail;
-      this.updateUrlForSubtab(tabId, subtabId);
-    });
   },
 
   // Get current path from URL (supports both path and query modes)
   getCurrentPath() {
-    if (this.routingMode === 'query') {
-      // For IDE server, use query parameter
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('route') || '';
-    } else {
-      // Standard path routing
-      const pathname = window.location.pathname;
-      const basePath = routeConfig.basePath;
-
-      // Remove base path if present
-      if (basePath && pathname.startsWith(basePath)) {
-        return pathname.substring(basePath.length);
-      }
-
-      return pathname;
+    const hashPath = window.location.hash.replace(/^#\/?/, '');
+    if (hashPath) {
+      return hashPath;
     }
+
+    // Compatibility fallback if the static host serves index.html for old path routes.
+    const pathname = window.location.pathname;
+    const basePath = routeConfig.basePath;
+    const appPath = basePath && pathname.startsWith(basePath)
+      ? pathname.substring(basePath.length)
+      : pathname;
+    return appPath === '/' ? '' : appPath;
   },
 
   // Handle current route (from URL)
@@ -126,31 +115,17 @@ export const router = {
     const origin = window.location.origin;
     const basePath = routeConfig.basePath;
 
-    if (this.routingMode === 'query') {
-      // For IDE server, use query parameter
-      const baseUrl = `${origin}${window.location.pathname}`;
-      const urlParams = new URLSearchParams(window.location.search);
-
-      // Preserve existing parameters but update route
-      if (path && path !== '/') {
-        urlParams.set('route', path.replace(/^\/+/, ''));
-      } else {
-        urlParams.delete('route');
-      }
-
-      const queryString = urlParams.toString();
-      return queryString ? `${baseUrl}?${queryString}` : baseUrl;
-    } else {
-      // Standard path routing
-      const cleanPath = path.startsWith('/') ? path : `/${path}`;
-      return `${origin}${basePath}${cleanPath}`;
-    }
+    const root = window.location.protocol === 'file:'
+      ? window.location.href.replace(/[?#].*$/, '')
+      : `${origin}${basePath}/`;
+    const cleanPath = String(path || '').replace(/^\/+|#\/?/g, '');
+    return cleanPath ? `${root}#${cleanPath}` : root;
   },
 
   // Navigate to a specific route
   navigateTo(tabId, subtabId = null, pushToHistory = true) {
     const path = routeConfig.getPath(tabId, subtabId);
-    const fullPath = path ? `/${path}` : '/';
+    const fullPath = path || '';
     const route = routeConfig.parsePath(path);
 
     // Update current route
@@ -169,6 +144,9 @@ export const router = {
     } else {
       window.history.replaceState({ route }, route.title, newUrl);
     }
+    try {
+      window.trackPageView?.(route.title, newUrl);
+    } catch (_) {}
 
     // Switch to the tab (this will trigger tabChanged event)
     if (window.tabManager && typeof window.tabManager.switchToTab === 'function') {
@@ -203,46 +181,9 @@ export const router = {
     this.navigateTo(tabId, subtabId, true);
   },
 
-  // Activate a subtab (this needs to be implemented based on existing subtab logic)
+  // Activate a subtab (reserved for future tab-specific nested routes)
   activateSubtab(tabId, subtabId) {
-    // For now, handle the About tab subtabs specifically
-    if (tabId === 'tab-about') {
-      // Find about subtab buttons and activate the correct one
-      setTimeout(() => {
-        const subtabButtons = document.querySelectorAll('.about-subtab-btn');
-        const aboutPanels = document.querySelectorAll('.about-panel');
-
-        // Update button states
-        subtabButtons.forEach(btn => {
-          const isActive = btn.dataset.subtab === subtabId;
-          btn.classList.toggle('active', isActive);
-        });
-
-        // Update panel visibility
-        aboutPanels.forEach(panel => {
-          panel.classList.remove('active');
-        });
-
-        // Show the selected panel
-        const targetPanel = document.getElementById(`about-${subtabId}`);
-        if (targetPanel) {
-          targetPanel.classList.add('active');
-
-          // Sync theme for the iframe
-          const iframe = targetPanel.querySelector('iframe');
-          if (iframe && typeof window.syncIframeTheme === 'function') {
-            window.syncIframeTheme(iframe);
-          }
-
-          // Initialize Mermaid diagrams if showing design tab
-          if (subtabId === 'design' && iframe && iframe.contentWindow && iframe.contentWindow.mermaid) {
-            setTimeout(() => {
-              iframe.contentWindow.mermaid.init();
-            }, 500);
-          }
-        }
-      }, 0);
-    }
+    return { tabId, subtabId };
   },
 
   // Get current route
@@ -269,5 +210,6 @@ if (document.readyState === 'loading') {
 }
 
 // Global functions for backward compatibility
+window.router = router;
 window.navigateTo = (tabId, subtabId) => router.navigateTo(tabId, subtabId);
 window.getCurrentRoute = () => router.getCurrentRoute();

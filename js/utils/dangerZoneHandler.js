@@ -21,6 +21,13 @@ export class DangerZoneHandler {
     }
   }
 
+  async confirmAction(options) {
+    if (typeof window.wenxenConfirm === 'function') {
+      return window.wenxenConfirm(options);
+    }
+    return confirm(options.message || 'Continue?');
+  }
+
   async handleReset() {
     const sel = document.getElementById("resetDbSelect");
     const choice = (sel && sel.value) ? sel.value : "all";
@@ -51,14 +58,16 @@ export class DangerZoneHandler {
   }
 
   async deleteAllDataAndStorage(chainPrefix, chainName) {
-    const confirmed = confirm(
-      `⚠️ WARNING: This will delete ALL ${chainName} data AND settings!\n\n` +
+    const confirmed = await this.confirmAction({
+      title: 'Delete all data and settings',
+      confirmText: 'Delete data',
+      message: `WARNING: This will delete ALL ${chainName} data AND settings!\n\n` +
       `This includes:\n` +
-      `• All ${chainName} databases\n` +
-      `• All ${chainName} settings (addresses, API keys, etc.)\n` +
-      `• All ${chainName} preferences\n\n` +
+      `- All ${chainName} databases\n` +
+      `- All ${chainName} settings (addresses, API keys, etc.)\n` +
+      `- All ${chainName} preferences\n\n` +
       `This action cannot be undone. Continue?`
-    );
+    });
     
     if (!confirmed) return;
     
@@ -90,19 +99,22 @@ export class DangerZoneHandler {
     this.clearChainLocalStorage(chainPrefix);
     
     alert(`✅ All ${chainName} data and settings have been deleted.`);
-    window.location.reload();
+    if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+    else window.location.reload();
   }
 
   async deleteAllChainDatabases(chainPrefix, chainName) {
-    const confirmed = confirm(
-      `Are you sure you want to delete all ${chainName} databases?\n\n` +
+    const confirmed = await this.confirmAction({
+      title: 'Delete chain databases',
+      confirmText: 'Delete databases',
+      message: `Are you sure you want to delete all ${chainName} databases?\n\n` +
       `This will delete:\n` +
-      `• ${chainPrefix}DB_Cointool (mints)\n` +
-      `• ${chainPrefix}DB_Xenft (NFTs)\n` +
-      `• ${chainPrefix}DB_XenStake (XEN stakes)\n` +
-      `• ${chainPrefix}DB_XenftStake (XENFT stakes)\n\n` +
+      `- ${chainPrefix}DB_Cointool (mints)\n` +
+      `- ${chainPrefix}DB_Xenft (NFTs)\n` +
+      `- ${chainPrefix}DB_XenStake (XEN stakes)\n` +
+      `- ${chainPrefix}DB_XenftStake (XENFT stakes)\n\n` +
       `Your settings will be preserved. This action cannot be undone.`
-    );
+    });
     
     if (!confirmed) return;
     
@@ -130,19 +142,22 @@ export class DangerZoneHandler {
     }
     
     alert(`✅ All ${chainName} databases have been deleted. Settings preserved.`);
-    window.location.reload();
+    if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+    else window.location.reload();
   }
 
   async deleteStorageOnly(chainPrefix, chainName) {
-    const confirmed = confirm(
-      `Are you sure you want to delete ${chainName} settings only?\n\n` +
+    const confirmed = await this.confirmAction({
+      title: 'Delete settings',
+      confirmText: 'Delete settings',
+      message: `Are you sure you want to delete ${chainName} settings only?\n\n` +
       `This will clear:\n` +
-      `• Addresses\n` +
-      `• RPC settings\n` +
-      `• Scan preferences\n` +
-      `• Other ${chainName}-specific settings\n\n` +
+      `- Addresses\n` +
+      `- RPC settings\n` +
+      `- Scan preferences\n` +
+      `- Other ${chainName}-specific settings\n\n` +
       `Your database data will be preserved. Continue?`
-    );
+    });
     
     if (!confirmed) return;
     
@@ -150,7 +165,8 @@ export class DangerZoneHandler {
     this.clearChainLocalStorage(chainPrefix);
     
     alert(`✅ ${chainName} settings have been cleared. Database data preserved.`);
-    window.location.reload();
+    if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+    else window.location.reload();
   }
 
   async deleteSpecificDatabase(dbName) {
@@ -169,11 +185,13 @@ export class DangerZoneHandler {
       description = this.getDbDescription(dbName);
     }
     
-    const confirmed = confirm(
-      `Are you sure you want to delete ${displayName}?\n\n` +
+    const confirmed = await this.confirmAction({
+      title: 'Delete database',
+      confirmText: 'Delete database',
+      message: `Are you sure you want to delete ${displayName}?\n\n` +
       `${description}\n\n` +
       `This action cannot be undone.`
-    );
+    });
     
     if (!confirmed) return;
     
@@ -188,7 +206,8 @@ export class DangerZoneHandler {
     }
     
     alert(`✅ ${displayName} has been deleted.`);
-    window.location.reload();
+    if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+    else window.location.reload();
   }
 
   getFriendlyName(dbName) {

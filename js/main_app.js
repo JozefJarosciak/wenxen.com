@@ -189,31 +189,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateChainSpecificLabels();
     });
   }
-  
-  
-  // Check for dashboard hash and activate Dashboard tab
-  if (window.location.hash === '#dashboard') {
-    // Clear the hash from URL
-    history.replaceState(null, null, window.location.pathname + window.location.search);
-    
-    // Activate dashboard tab after a short delay to ensure everything is loaded
-    setTimeout(() => {
-      if (typeof window.setActiveTab === 'function') {
-        window.setActiveTab('tab-dashboard');
-      } else {
-        // Fallback if setActiveTab isn't available yet
-        const dashboardTab = document.getElementById('tab-dashboard');
-        const dashboardBtn = document.querySelector('[data-target="tab-dashboard"]');
-        if (dashboardTab && dashboardBtn) {
-          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-          document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-          dashboardTab.classList.add('active');
-          dashboardBtn.classList.add('active');
-        }
-      }
-    }, 500);
-  }
-  
   // Footer year
   try { const y = document.getElementById('copyrightYear'); if (y) y.textContent = String(new Date().getFullYear()); } catch {}
   // Footer privacy link
@@ -289,82 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function ensureAboutLoaded(){
   if (_aboutLoaded) return;
   _aboutLoaded = true;
-  
-  // Setup About subtabs
-  setupAboutSubtabs();
 }
-
-// --- About subtab handler ---
-function setupAboutSubtabs() {
-  const subtabButtons = document.querySelectorAll('.about-subtab-btn');
-  const aboutPanels = document.querySelectorAll('.about-panel');
-
-  // Sync iframe themes on load
-  syncIframeThemes();
-
-  subtabButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      const targetSubtab = e.target.dataset.subtab;
-
-      // Update button states
-      subtabButtons.forEach(btn => btn.classList.remove('active'));
-      e.target.classList.add('active');
-
-      // Update panel visibility
-      aboutPanels.forEach(panel => panel.classList.remove('active'));
-
-      // Show the selected panel
-      const targetPanel = document.getElementById(`about-${targetSubtab}`);
-      if (targetPanel) {
-        targetPanel.classList.add('active');
-
-        // Sync theme for the iframe
-        const iframe = targetPanel.querySelector('iframe');
-        if (iframe) {
-          syncIframeTheme(iframe);
-        }
-
-        // Initialize Mermaid diagrams if showing design tab
-        if (targetSubtab === 'design' && iframe && iframe.contentWindow && iframe.contentWindow.mermaid) {
-          setTimeout(() => {
-            iframe.contentWindow.mermaid.init();
-          }, 500);
-        }
-      }
-
-      // Dispatch subtab changed event for router integration
-      document.dispatchEvent(new CustomEvent('subtabChanged', {
-        detail: { tabId: 'tab-about', subtabId: targetSubtab }
-      }));
-    });
-  });
-}
-
-// Sync iframe themes with parent document
-function syncIframeThemes() {
-  const iframes = document.querySelectorAll('.about-iframe');
-  iframes.forEach(iframe => {
-    iframe.addEventListener('load', () => {
-      syncIframeTheme(iframe);
-    });
-  });
-}
-
-function syncIframeTheme(iframe) {
-  try {
-    const currentTheme = document.body.classList.contains('theme-dark') ? 'theme-dark' : 'theme-light';
-    if (iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'theme-change', theme: currentTheme }, '*');
-      // Also try direct access
-      if (iframe.contentDocument && iframe.contentDocument.body) {
-        iframe.contentDocument.body.className = currentTheme;
-      }
-    }
-  } catch (e) {
-    console.debug('Could not sync iframe theme:', e);
-  }
-}
-
 
 // ===== RPC Importer (Ethereum mainnet) =====
 
@@ -5094,7 +4994,8 @@ async function deleteAllDataWithStorage(currentChain, chainName) {
   });
 
   alert(`✅ All ${chainName} data and settings have been deleted successfully.`);
-  window.location.reload();
+  if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+  else window.location.reload();
 }
 
 async function deleteAllScanData(currentChain, chainName) {
@@ -5143,7 +5044,8 @@ async function deleteAllScanData(currentChain, chainName) {
   }
 
   alert(`✅ All ${chainName} scan data has been deleted. Settings were preserved.`);
-  window.location.reload();
+  if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+  else window.location.reload();
 }
 
 async function deleteStorageOnly(currentChain, chainName) {
@@ -5161,7 +5063,8 @@ async function deleteStorageOnly(currentChain, chainName) {
   });
 
   alert(`✅ ${chainName} settings have been cleared. Scan data was preserved.`);
-  window.location.reload();
+  if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+  else window.location.reload();
 }
 
 async function deleteSpecificDatabase(dbName, chainName) {
@@ -5180,7 +5083,8 @@ async function deleteSpecificDatabase(dbName, chainName) {
                       dbName.includes('XenStake') ? 'XEN stakes' : 'selected data';
 
   alert(`✅ ${friendlyName} for ${chainName} have been deleted successfully.`);
-  window.location.reload();
+  if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+  else window.location.reload();
 }
 
 async function closeOpenConnections() {
@@ -5361,7 +5265,19 @@ function getActiveCalendar() {
 
 // --- TABULATOR TABLE ---
 let cointoolTable;
+function updateDashboardEmptyState(rowCount) {
+  const emptyState = document.getElementById('dashboardEmptyState');
+  if (!emptyState) return;
+
+  const count = Number.isFinite(rowCount)
+    ? rowCount
+    : (typeof cointoolTable?.getData === 'function' ? cointoolTable.getData('all').length : 0);
+  emptyState.hidden = count > 0;
+}
+
 function populateTable(mints) {
+  const rowCount = Array.isArray(mints) ? mints.length : 0;
+  updateDashboardEmptyState(rowCount);
   const tableExists = !!document.getElementById("cointool-table").tabulator;
   if (tableExists) {
     window.cointoolTable = document.getElementById("cointool-table").tabulator; // ← add this
@@ -5372,6 +5288,7 @@ function populateTable(mints) {
     // Ensure bulk bar and selection hooks remain wired
     ensureBulkBar();
     refreshBulkUI();
+    updateDashboardEmptyState(rowCount);
     if (!cointoolTable._bulkEvents) {
       cointoolTable.on("rowSelected", (row) => { try { selectedRows.add(row.getIndex()); } catch {} refreshBulkUI(); });
       cointoolTable.on("rowDeselected", (row) => { try { selectedRows.delete(row.getIndex()); } catch {} refreshBulkUI(); });
@@ -6978,7 +6895,7 @@ function setConnectWalletMasked(masked){
 function initShowMaskToggles() {
   // Defaults: API key masked (not visible); addresses unmasked
   const __apiVisRaw = localStorage.getItem('etherscanApiKeyVisible');
-  const apiVisible = (__apiVisRaw == null) ? true : (__apiVisRaw === '1');
+  const apiVisible = (__apiVisRaw == null) ? false : (__apiVisRaw === '1');
   const addrMasked = (localStorage.getItem('ethAddressMasked') === '1');
   const walletMasked = (localStorage.getItem('connectWalletMasked') === '1');
   setApiKeyVisibility(!!apiVisible);
@@ -6993,14 +6910,31 @@ function initShowMaskToggles() {
   try { window.addEventListener('resize', __updateWalletEyeSize, { passive: true }); } catch {}
 }
 function validateInputs() {
-  const rpcText = document.getElementById("customRPC").value.trim();
-  const apiKey = document.getElementById("etherscanApiKey").value.trim();
+  const rpcText = document.getElementById("customRPC")?.value.trim() || "";
+  const apiKey = document.getElementById("etherscanApiKey")?.value.trim() || "";
+  const addressText = document.getElementById("ethAddress")?.value.trim() || "";
   const scanBtn = document.getElementById("scanBtn");
-  
+  const scanSetupHint = document.getElementById("scanSetupHint");
+
+  const addresses = splitMultiLineValue(addressText, 'address');
+  const hasAddress = addresses.length > 0;
+  const hasInvalidAddress = addresses.some(address => !/^0x[a-fA-F0-9]{40}$/.test(address));
+
   // RPC is optional - we have defaults for each chain
   // Only validate if user has entered something
   const hasValidRpc = !rpcText || splitMultiLineValue(rpcText, 'rpc').some(s => s.startsWith("http"));
-  scanBtn.disabled = !hasValidRpc || !apiKey;
+  const missing = [];
+  if (!hasAddress) missing.push('wallet address');
+  if (hasInvalidAddress) missing.push('valid wallet address');
+  if (!apiKey) missing.push('Etherscan API key');
+  if (!hasValidRpc) missing.push('valid RPC URL');
+
+  const ready = missing.length === 0;
+  if (scanBtn) scanBtn.disabled = !ready;
+  if (scanSetupHint) {
+    scanSetupHint.textContent = ready ? '' : `Scan setup needed: ${missing.join(', ')}.`;
+    scanSetupHint.classList.toggle('warning', !ready);
+  }
 }
 
 // --- SUMMARY STATS ---
@@ -8626,7 +8560,12 @@ async function connectWallet() {
       const btnTxt = document.getElementById('connectWalletText');
       if (btnTxt) btnTxt.textContent = 'Connect Wallet';
       await updateNetworkBadge();
-      try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
+      try {
+        window.updateWalletActionState?.();
+        window.updateMintConnectHint?.();
+        window.updateStakeConnectHint?.();
+        window.updateStakeXenftConnectHint?.();
+      } catch {}
       return;
     }
     
@@ -8645,10 +8584,20 @@ async function connectWallet() {
     const walletChainId = await web3Wallet.eth.getChainId();
     const appChainId = window.chainManager?.getCurrentConfig()?.id || 1;
     if (Number(walletChainId) === appChainId) {
-      try { window.prefillStakeAmountFromBalance?.(); window.updateStakeStartEnabled?.(); } catch {}
+      try {
+        window.prefillStakeAmountFromBalance?.();
+        window.prefillStakeXenftAmountFromBalance?.();
+        window.updateStakeStartEnabled?.();
+        window.updateStakeXenftStartEnabled?.();
+      } catch {}
     }
     
-    try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
+    try {
+      window.updateWalletActionState?.();
+      window.updateMintConnectHint?.();
+      window.updateStakeConnectHint?.();
+      window.updateStakeXenftConnectHint?.();
+    } catch {}
     __updateWalletEyeSize();
 
     // keep UI in sync
@@ -8685,12 +8634,19 @@ async function connectWallet() {
           const appChainId = window.chainManager?.getCurrentConfig()?.id || 1;
           if (Number(walletChainId) === appChainId) {
             window.prefillStakeAmountFromBalance?.();
+            window.prefillStakeXenftAmountFromBalance?.();
             window.updateStakeStartEnabled?.();
+            window.updateStakeXenftStartEnabled?.();
           }
         } catch {}
       }
       
-      try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
+      try {
+        window.updateWalletActionState?.();
+        window.updateMintConnectHint?.();
+        window.updateStakeConnectHint?.();
+        window.updateStakeXenftConnectHint?.();
+      } catch {}
     });
 
     selectedRows.clear();
@@ -10783,9 +10739,13 @@ async function importBackupFromFile(file) {
       // Navigate to dashboard after a brief delay to show completion
       setTimeout(() => {
         window.importProgress.hide();
-        // Use URL with hash to go directly to dashboard
-        window.location.href = window.location.origin + window.location.pathname + '#dashboard';
-        window.location.reload();
+        if (typeof window.wenxenReloadToRoute === 'function') {
+          window.wenxenReloadToRoute('dashboard');
+        } else {
+          window.location.hash = 'dashboard';
+          if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+          else window.location.reload();
+        }
       }, 1500); // Give user time to see completion
       return;
     }
@@ -10826,9 +10786,13 @@ async function importBackupFromFile(file) {
 
   setTimeout(() => {
     window.importProgress.hide();
-    // Use URL with hash to go directly to dashboard
-    window.location.href = window.location.origin + window.location.pathname + '#dashboard';
-    window.location.reload();
+    if (typeof window.wenxenReloadToRoute === 'function') {
+      window.wenxenReloadToRoute('dashboard');
+    } else {
+      window.location.hash = 'dashboard';
+      if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute('dashboard');
+      else window.location.reload();
+    }
   }, 100);
 
   } catch (error) {
@@ -11267,7 +11231,13 @@ function setStatusHeaderFilter(statusText) {
 
   if (exportBtn) {
     exportBtn.addEventListener("click", async () => {
-      const ok = confirm("Export backup of your data?");
+      const ok = typeof window.wenxenConfirm === 'function'
+        ? await window.wenxenConfirm({
+            title: 'Export backup',
+            message: 'Export a backup of your local WenXen data and settings?',
+            confirmText: 'Export backup'
+          })
+        : confirm("Export backup of your data?");
       if (!ok) return;
       const originalText = exportBtn.textContent;
       try {
@@ -11291,15 +11261,18 @@ function setStatusHeaderFilter(statusText) {
   }
 
   if (importBtn && importInput) {
-    // For iOS compatibility, we need to trigger file input on the first user interaction
-    // iOS Safari blocks file input clicks that come after async operations like confirm()
+    // Trigger file selection only after the user confirms replacing local data.
     
     // Handle clicks on the button.
-    importBtn.addEventListener("click", (e) => {
-      // Show confirmation dialog
-      const ok = confirm(
-        "This will permanently DELETE your current databases before importing.\n\nContinue?"
-      );
+    importBtn.addEventListener("click", async (e) => {
+      const importMessage = "This will permanently DELETE your current databases before importing.\n\nContinue?";
+      const ok = typeof window.wenxenConfirm === 'function'
+        ? await window.wenxenConfirm({
+            title: 'Import backup',
+            message: importMessage,
+            confirmText: 'Import backup'
+          })
+        : confirm(importMessage);
       if (!ok) return;
       
       // Trigger file input immediately to maintain user gesture context
@@ -11415,11 +11388,10 @@ function setStatusHeaderFilter(statusText) {
   // Show initial last cleanup time
   updateLastCleanupDisplay();
 
-  // Initialize auto-dedupe checkbox state (default: enabled)
+  // Initialize auto-dedupe checkbox state (default: disabled)
   if (autoDedupeCheckbox) {
     const savedState = localStorage.getItem("autoDedupeAfterScan");
-    // Default to true if not set
-    autoDedupeCheckbox.checked = savedState !== "false";
+    autoDedupeCheckbox.checked = savedState === "true";
 
     // Save state on change
     autoDedupeCheckbox.addEventListener("change", () => {
@@ -12238,8 +12210,18 @@ async function disconnectWallet(){
     const btnTxt = document.getElementById('connectWalletText');
     if (btnTxt) btnTxt.textContent = 'Connect Wallet';
     await updateNetworkBadge();
-    try { window.prefillStakeAmountFromBalance?.(); window.updateStakeStartEnabled?.(); } catch {}
-    try { window.updateMintConnectHint?.(); window.updateStakeConnectHint?.(); } catch {}
+    try {
+      window.prefillStakeAmountFromBalance?.();
+      window.prefillStakeXenftAmountFromBalance?.();
+      window.updateStakeStartEnabled?.();
+      window.updateStakeXenftStartEnabled?.();
+    } catch {}
+    try {
+      window.updateWalletActionState?.();
+      window.updateMintConnectHint?.();
+      window.updateStakeConnectHint?.();
+      window.updateStakeXenftConnectHint?.();
+    } catch {}
     // Don't remove chainChanged listeners - networkSelector needs them for app/wallet sync
     try { window.ethereum?.removeAllListeners?.('accountsChanged'); } catch {}
   } catch (e) { console.warn('disconnectWallet: ', e); }
@@ -12268,7 +12250,8 @@ window.forceDatabaseMigration = async function() {
     // Reload the page to use the new databases
     setTimeout(() => {
       console.log('Reloading page to apply changes...');
-      window.location.reload();
+      if (typeof window.wenxenReloadToRoute === 'function') window.wenxenReloadToRoute(window.location.hash || 'dashboard');
+      else window.location.reload();
     }, 2000);
   } catch (error) {
     console.error('Migration failed:', error);

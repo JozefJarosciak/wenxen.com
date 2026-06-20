@@ -101,9 +101,12 @@ export class ChainMismatchHandler {
                     window.chainManager.setChain(targetChain);
                     // Show switching overlay
                     this.showSwitchingOverlay(targetChain);
-                    // Reload page
                     setTimeout(() => {
-                        window.location.reload();
+                        if (typeof window.wenxenReloadToRoute === 'function') {
+                            window.wenxenReloadToRoute(window.location.hash || 'dashboard');
+                        } else {
+                            window.location.reload();
+                        }
                     }, 500);
                 }
             }

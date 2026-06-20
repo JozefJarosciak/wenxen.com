@@ -23,38 +23,27 @@ export const routeConfig = {
       tab: 'tab-mint',
       title: 'Mint/Stake - WenXen.com'
     },
+    'xen': {
+      tab: 'tab-xen',
+      title: 'XEN - WenXen.com'
+    },
     'settings': {
       tab: 'tab-settings',
       title: 'Settings - WenXen.com'
     },
     'about': {
       tab: 'tab-about',
-      title: 'About - WenXen.com',
-      subtabs: {
-        '': {
-          subtab: 'overview',
-          title: 'About - WenXen.com'
-        },
-        'overview': {
-          subtab: 'overview',
-          title: 'About - Overview - WenXen.com'
-        },
-        'design': {
-          subtab: 'design',
-          title: 'About - Design - WenXen.com'
-        }
-      }
+      title: 'About - WenXen.com'
     }
   },
 
   // Reverse mapping: tab/subtab combinations to URL paths
   reverseRoutes: {
-    'tab-dashboard': '',
+    'tab-dashboard': 'dashboard',
     'tab-mint': 'mint',
+    'tab-xen': 'xen',
     'tab-settings': 'settings',
-    'tab-about': 'about',
-    'tab-about/overview': 'about',
-    'tab-about/design': 'about/design'
+    'tab-about': 'about'
   },
 
   // Get URL path for a tab/subtab combination
@@ -66,7 +55,7 @@ export const routeConfig = {
   // Parse a URL path to get tab and subtab
   parsePath(path) {
     // Remove leading/trailing slashes and normalize
-    const cleanPath = path.replace(/^\/+|\/+$/g, '').toLowerCase();
+    const cleanPath = String(path || '').replace(/^#\/?|^\/+|\/+$/g, '').toLowerCase();
 
     // Handle empty path (root)
     if (!cleanPath) {
@@ -75,7 +64,6 @@ export const routeConfig = {
 
     const segments = cleanPath.split('/');
     const mainPath = segments[0];
-    const subPath = segments[1];
 
     // Check if main route exists
     const route = this.routes[mainPath];
@@ -83,22 +71,10 @@ export const routeConfig = {
       return this.defaultRoute;
     }
 
-    // Handle subtabs
-    if (subPath && route.subtabs) {
-      const subtabRoute = route.subtabs[subPath];
-      if (subtabRoute) {
-        return {
-          tab: route.tab,
-          subtab: subtabRoute.subtab,
-          title: subtabRoute.title
-        };
-      }
-    }
-
-    // Return main route (with default subtab if applicable)
+    // Return main route.
     return {
       tab: route.tab,
-      subtab: route.subtabs ? route.subtabs[''].subtab : null,
+      subtab: null,
       title: route.title
     };
   },
@@ -109,10 +85,7 @@ export const routeConfig = {
     const origin = window.location.origin;
     const basePath = this.basePath;
 
-    if (path) {
-      return `${origin}${basePath}/${path}`;
-    } else {
-      return `${origin}${basePath}/`;
-    }
+    const root = `${origin}${basePath}/`;
+    return path ? `${root}#${path}` : root;
   }
 };

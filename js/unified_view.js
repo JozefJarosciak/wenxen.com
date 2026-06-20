@@ -113,6 +113,20 @@ function updateStakeSummaryLine(){
     if (!liveScanBtn) return;
 
     const mode = getMode();
+    window.__wenxenScanCancelRequested = false;
+    let stoppedByUser = false;
+    const shouldStop = () => stoppedByUser || window.__wenxenScanCancelRequested === true;
+    const markStopped = () => {
+      stoppedByUser = true;
+      window.__wenxenScanCancelRequested = true;
+      const lbl = document.getElementById("scanBtnLabel");
+      if (lbl) lbl.textContent = "Stopping...";
+      if (stopBtn) {
+        stopBtn.disabled = true;
+        stopBtn.textContent = "Stopping...";
+      }
+      try { window.progressUI?.setType?.("Stopping scan"); } catch {}
+    };
 
     // Ensure progress container is visible immediately and type is labeled
     try {
@@ -142,8 +156,9 @@ function updateStakeSummaryLine(){
       liveScanBtn.setAttribute("aria-busy", "true");
       if (stopBtn) {
         stopBtn.style.display = "inline-block";
+        stopBtn.disabled = false;
         stopBtn.textContent = "Stop Scan";
-        stopBtn.onclick = () => { try { window.location.reload(); } catch { location.reload(); } };
+        stopBtn.onclick = markStopped;
       }
     } catch {}
 
@@ -182,8 +197,23 @@ function updateStakeSummaryLine(){
           ? `Force rescan will delete ALL saved data for: ${dbIds.map(friendly).join(', ')}.\n\nContinue?`
           : `Force rescan will delete ${friendly(dbIds[0])}. Continue?`;
 
-        const ok = confirm(title);
-        if (!ok) return; // user canceled
+        const ok = typeof window.wenxenConfirm === 'function'
+          ? await window.wenxenConfirm({
+              title: 'Force rescan',
+              message: title,
+              confirmText: 'Reset and scan'
+            })
+          : confirm(title);
+        if (!ok) {
+          if (modeToggleEl) modeToggleEl.disabled = false;
+          liveScanBtn.disabled = false;
+          liveScanBtn.removeAttribute("aria-busy");
+          const lbl = document.getElementById("scanBtnLabel");
+          if (lbl) lbl.textContent = liveScanBtn.dataset.prevText || "Scan";
+          if (stopBtn) { stopBtn.style.display = "none"; stopBtn.onclick = null; stopBtn.disabled = false; }
+          try { window.progressUI?.show?.(false); } catch (_) {}
+          return; // user canceled
+        }
 
         // Immediate UI feedback while clearing
         document.getElementById("scanBtnLabel").textContent = "Preparing rescan…";
@@ -238,6 +268,13 @@ function updateStakeSummaryLine(){
           await Promise.all(tasks);
         } catch (e) {
           alert('Failed to reset data before rescan. Please try again.');
+          if (modeToggleEl) modeToggleEl.disabled = false;
+          liveScanBtn.disabled = false;
+          liveScanBtn.removeAttribute("aria-busy");
+          const lbl = document.getElementById("scanBtnLabel");
+          if (lbl) lbl.textContent = liveScanBtn.dataset.prevText || "Scan";
+          if (stopBtn) { stopBtn.style.display = "none"; stopBtn.onclick = null; stopBtn.disabled = false; }
+          try { window.progressUI?.show?.(false); } catch (_) {}
           return;
         }
 
@@ -269,8 +306,11 @@ function updateStakeSummaryLine(){
       // Step 1: Run the actual data scans (sequential)
       if (mode === "all") {
         if (typeof window.scanMints === "function") { await window.scanMints(); }
+        if (shouldStop()) return;
         if (window.xenft && typeof window.xenft.scan === "function") { await window.xenft.scan(); }
+        if (shouldStop()) return;
         if (window.xenftStake && typeof window.xenftStake.scan === "function") { await window.xenftStake.scan(); }
+        if (shouldStop()) return;
         if (window.xenStake && typeof window.xenStake.scan === "function") { await window.xenStake.scan(); } // ✅ added regular Stakes
       } else if (mode === "cointool") {
         if (typeof window.scanMints === "function") { await window.scanMints(); }
@@ -282,10 +322,16 @@ function updateStakeSummaryLine(){
         if (window.xenStake && typeof window.xenStake.scan === "function") { await window.xenStake.scan(); }
       }
     } finally {
+      const cancelled = shouldStop();
+      window.__wenxenScanCancelRequested = false;
       window.__scanUnifiedActive = previousUnifiedScanState;
 
       // Step 2: Restore the buttons right away
-      liveScanBtn.disabled = false;
+      if (typeof window.validateInputs === "function") {
+        try { window.validateInputs(); } catch { liveScanBtn.disabled = false; }
+      } else {
+        liveScanBtn.disabled = false;
+      }
       if (modeToggleEl) modeToggleEl.disabled = false;
       const lbl = document.getElementById("scanBtnLabel");
       if (lbl) {
@@ -295,7 +341,10 @@ function updateStakeSummaryLine(){
         liveScanBtn.textContent = liveScanBtn.dataset.prevText || "Scan All";
       }
       liveScanBtn.removeAttribute("aria-busy");
-      if (stopBtn) { stopBtn.style.display = "none"; stopBtn.onclick = null; }
+      if (stopBtn) { stopBtn.style.display = "none"; stopBtn.onclick = null; stopBtn.disabled = false; }
+      if (cancelled) {
+        try { window.progressUI?.setType?.("Scan stopped"); } catch (_) {}
+      }
 
       // Step 3: If this was “Scan All”, hide progress a moment after everything finishes
       if (mode === "all") {
@@ -317,12 +366,14 @@ function updateStakeSummaryLine(){
       }
     }
 
+    if (stoppedByUser) return;
+
     // Finally, uncheck the Force Rescan option after a completed scan
     try { const cb = document.getElementById('forceRescan'); if (cb) cb.checked = false; } catch {}
 
     // Step 3: Auto-remove duplicates before the single final UI refresh.
     try {
-      const autoDedupeEnabled = localStorage.getItem('autoDedupeAfterScan') !== 'false'; // Default true
+      const autoDedupeEnabled = localStorage.getItem('autoDedupeAfterScan') === 'true';
       if (autoDedupeEnabled && typeof window.removeDuplicatesFromAllDatabases === 'function') {
         console.log('[Scan] Running auto-dedupe after scan...');
         const removed = await window.removeDuplicatesFromAllDatabases(true, { refresh: false, scope: 'current' }); // silent mode

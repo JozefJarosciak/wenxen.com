@@ -147,7 +147,7 @@ class NetworkSelectorUI {
               this.saveCurrentState();
               chainManager.setChain(targetChain);
               this.showSwitchingOverlay(targetChain);
-              setTimeout(() => window.location.reload(), 500);
+              setTimeout(() => this.reloadCurrentRoute(), 500);
             } else {
               // User cancelled or switch failed - stay on current chain
               debugLog('Wallet switch cancelled or failed, staying on current chain');
@@ -159,7 +159,7 @@ class NetworkSelectorUI {
             this.saveCurrentState();
             chainManager.setChain(targetChain);
             this.showSwitchingOverlay(targetChain);
-            setTimeout(() => window.location.reload(), 500);
+            setTimeout(() => this.reloadCurrentRoute(), 500);
           }
         } catch (error) {
           console.error('Error checking wallet chain:', error);
@@ -167,17 +167,26 @@ class NetworkSelectorUI {
           this.saveCurrentState();
           chainManager.setChain(targetChain);
           this.showSwitchingOverlay(targetChain);
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => this.reloadCurrentRoute(), 500);
         }
       } else {
         // No wallet connected, just switch the app
         this.saveCurrentState();
         chainManager.setChain(targetChain);
         this.showSwitchingOverlay(targetChain);
-        setTimeout(() => window.location.reload(), 500);
+        setTimeout(() => this.reloadCurrentRoute(), 500);
       }
     } else {
       this.closeDropdown();
+    }
+  }
+
+  reloadCurrentRoute() {
+    const route = window.location.hash || 'dashboard';
+    if (typeof window.wenxenReloadToRoute === 'function') {
+      window.wenxenReloadToRoute(route);
+    } else {
+      window.location.reload();
     }
   }
   

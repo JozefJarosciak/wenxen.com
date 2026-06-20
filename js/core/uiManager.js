@@ -86,81 +86,19 @@ let _aboutLoaded = false;
 async function ensureAboutLoaded() {
   if (_aboutLoaded) return;
   _aboutLoaded = true;
-
-  // Setup About subtabs
-  setupAboutSubtabs();
 }
 
-// Setup About subtab navigation
 function setupAboutSubtabs() {
-  const subtabButtons = document.querySelectorAll('.about-subtab-btn');
-  const aboutPanels = document.querySelectorAll('.about-panel');
-
-  // Sync iframe themes on load
-  syncIframeThemes();
-
-  subtabButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      const targetSubtab = e.target.dataset.subtab;
-
-      // Update button states
-      subtabButtons.forEach(btn => btn.classList.remove('active'));
-      e.target.classList.add('active');
-
-      // Update panel visibility
-      aboutPanels.forEach(panel => panel.classList.remove('active'));
-
-      // Show the selected panel
-      const targetPanel = document.getElementById(`about-${targetSubtab}`);
-      if (targetPanel) {
-        targetPanel.classList.add('active');
-
-        // Sync theme for the iframe
-        const iframe = targetPanel.querySelector('iframe');
-        if (iframe) {
-          syncIframeTheme(iframe);
-        }
-
-        // Initialize Mermaid diagrams if showing design tab
-        if (targetSubtab === 'design' && iframe && iframe.contentWindow && iframe.contentWindow.mermaid) {
-          setTimeout(() => {
-            iframe.contentWindow.mermaid.init();
-          }, 500);
-        }
-      }
-
-      // Dispatch subtab changed event for router integration
-      document.dispatchEvent(new CustomEvent('subtabChanged', {
-        detail: { tabId: 'tab-about', subtabId: targetSubtab }
-      }));
-    });
-  });
+  return false;
 }
 
-// Sync iframe themes with parent document
 function syncIframeThemes() {
-  const iframes = document.querySelectorAll('.about-iframe');
-  iframes.forEach(iframe => {
-    iframe.addEventListener('load', () => {
-      syncIframeTheme(iframe);
-    });
-  });
+  return false;
 }
 
-// Sync individual iframe theme
 function syncIframeTheme(iframe) {
-  try {
-    const currentTheme = document.body.classList.contains('theme-dark') ? 'theme-dark' : 'theme-light';
-    if (iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'theme-change', theme: currentTheme }, '*');
-      // Also try direct access
-      if (iframe.contentDocument && iframe.contentDocument.body) {
-        iframe.contentDocument.body.className = currentTheme;
-      }
-    }
-  } catch (e) {
-    console.debug('Could not sync iframe theme:', e);
-  }
+  void iframe;
+  return false;
 }
 
 // ===== Progress UI Management =====

@@ -51,6 +51,21 @@ function updateStakeXenftTermPreview() {
 // Stake XENFT helper functions
 window._stakeXenftBalanceWei = null;
 
+function isWalletReadyForAction() {
+  return !!(window.web3Wallet && window.connectedAccount);
+}
+
+function updateMintStartEnabled() {
+  const btn = document.getElementById('startMintBtn');
+  if (btn) btn.disabled = !isWalletReadyForAction();
+}
+
+function updateWalletActionState() {
+  updateMintStartEnabled();
+  updateStakeStartEnabled();
+  updateStakeXenftStartEnabled();
+}
+
 async function prefillStakeXenftAmountFromBalance(force = false) {
   if (!window.connectedAccount) {
     if (force) alert('Connect wallet first to get balance.');
@@ -95,7 +110,7 @@ function updateStakeXenftStartEnabled() {
   const amtNumber = Number(amtStr);
   
   // Check if amount is valid
-  let ok = amtStr !== '' && amtNumber > 0;
+  let ok = isWalletReadyForAction() && amtStr !== '' && amtNumber > 0;
   
   // If we have balance info, also check if user has enough XEN
   if (ok && window._stakeXenftBalanceWei) {
@@ -487,7 +502,7 @@ function updateStakeStartEnabled(){
   const amtNumber = Number(amtStr);
   
   // Check if amount is valid
-  let ok = amtStr !== '' && amtNumber > 0;
+  let ok = isWalletReadyForAction() && amtStr !== '' && amtNumber > 0;
   
   // If we have balance info, also check if user has enough XEN
   if (ok && window._stakeXenBalanceWei) {
@@ -682,8 +697,9 @@ async function startMintingFlow(){
   // Inline hint for wallet connection near Start Minting button
   window.updateMintConnectHint = function(){
     const hint = document.getElementById('mintConnectHint');
+    const connected = isWalletReadyForAction();
+    updateMintStartEnabled();
     if (!hint) return;
-    const connected = !!window.connectedAccount;
     hint.style.display = connected ? 'none' : 'block';
   };
   window.updateMintConnectHint();
@@ -691,11 +707,22 @@ async function startMintingFlow(){
   // Inline hint for wallet connection near Start Staking button
   window.updateStakeConnectHint = function(){
     const hint = document.getElementById('stakeConnectHint');
+    const connected = isWalletReadyForAction();
+    updateStakeStartEnabled();
     if (!hint) return;
-    const connected = !!window.connectedAccount;
     hint.style.display = connected ? 'none' : 'block';
   };
   window.updateStakeConnectHint();
+
+  // Inline hint for wallet connection near Stake XENFT button
+  window.updateStakeXenftConnectHint = function(){
+    const hint = document.getElementById('stakeXenftConnectHint');
+    const connected = isWalletReadyForAction();
+    updateStakeXenftStartEnabled();
+    if (!hint) return;
+    hint.style.display = connected ? 'none' : 'block';
+  };
+  window.updateStakeXenftConnectHint();
 
 // first render: load saved term or fetch current max on first load
   (function(){
@@ -765,5 +792,10 @@ async function startMintingFlow(){
 
   // Expose helpers so wallet connect flow can trigger prefill
   window.prefillStakeAmountFromBalance = prefillStakeAmountFromBalance;
+  window.prefillStakeXenftAmountFromBalance = prefillStakeXenftAmountFromBalance;
+  window.updateMintStartEnabled = updateMintStartEnabled;
   window.updateStakeStartEnabled = updateStakeStartEnabled;
+  window.updateStakeXenftStartEnabled = updateStakeXenftStartEnabled;
+  window.updateWalletActionState = updateWalletActionState;
+  updateWalletActionState();
 })();

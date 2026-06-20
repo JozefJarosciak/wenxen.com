@@ -95,6 +95,14 @@
     return `$0.0<sub>${zeros}</sub>${digits}`;
   }
 
+  function formatPlainPrice(price) {
+    if (price === null || price === undefined || !Number.isFinite(price)) return '-';
+    if (price >= 1) {
+      return '$' + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+    }
+    return '$' + price.toPrecision(8);
+  }
+
   /**
    * Format USD value
    */
@@ -323,6 +331,9 @@
 
     if (priceValueEl) {
       priceValueEl.innerHTML = formatPrice(priceData.price);
+      const plainPrice = formatPlainPrice(priceData.price);
+      priceValueEl.title = plainPrice;
+      priceValueEl.setAttribute('aria-label', `XEN price ${plainPrice}`);
     }
 
     if (priceChangeEl) {
@@ -351,43 +362,41 @@
   }
 
   /**
-   * Fetch recent trades from DexScreener
+   * Fetch estimated market activity from DexScreener pair stats.
    */
-  async function fetchRecentTrades() {
+  async function fetchEstimatedActivity() {
     const config = window.chainManager?.getCurrentConfig();
     if (!config?.dexscreener) return [];
 
     const { network, pairAddress } = config.dexscreener;
 
-    // DexScreener doesn't have a public trades API, so we'll simulate with txns data
-    // In a real implementation, you might use a different data source
+    // DexScreener exposes aggregate pair stats here, not a public trade feed.
     try {
       const url = `https://api.dexscreener.com/latest/dex/pairs/${network}/${pairAddress}`;
       const response = await fetch(url);
       const data = await response.json();
 
       if (data.pair) {
-        // Generate simulated recent trades based on available data
-        const trades = generateSimulatedTrades(data.pair);
+        const trades = generateEstimatedActivity(data.pair);
         xenPageCache.trades = trades;
         return trades;
       }
     } catch (err) {
-      console.error('[XEN Page] Failed to fetch trades:', err);
+      console.error('[XEN Page] Failed to fetch estimated activity:', err);
     }
 
     return [];
   }
 
   /**
-   * Generate simulated trades for display (since DexScreener doesn't expose individual trades)
+   * Generate estimated activity for display from aggregate pair data.
    */
-  function generateSimulatedTrades(pairData) {
+  function generateEstimatedActivity(pairData) {
     const trades = [];
     const price = parseFloat(pairData.priceUsd);
+    if (!Number.isFinite(price) || price <= 0) return trades;
     const now = Date.now();
 
-    // Create realistic looking trades based on 24h volume
     const avgTradeSize = pairData.volume?.h24 ? pairData.volume.h24 / 100 : 1000;
 
     for (let i = 0; i < 20; i++) {
@@ -401,7 +410,8 @@
         timestamp: now - (i * 180000 + Math.random() * 60000), // Spread over last hour
         xenAmount: xenAmount,
         usdValue: tradeValue,
-        price: price * (0.999 + Math.random() * 0.002) // Small price variance
+        price: price * (0.999 + Math.random() * 0.002),
+        estimated: true
       });
     }
 
@@ -420,7 +430,7 @@
       : trades.filter(t => t.type === currentTradeFilter);
 
     if (filteredTrades.length === 0) {
-      container.innerHTML = '<div class="xen-trades-empty">No trades to display</div>';
+      container.innerHTML = '<div class="xen-trades-empty">No estimated activity to display</div>';
       return;
     }
 
@@ -430,6 +440,7 @@
         <div class="xen-trade-amount">
           <span class="xen-trade-xen">${formatLargeNumber(trade.xenAmount, 0)} XEN</span>
           <span class="xen-trade-usd">${formatUsdValue(trade.usdValue)}</span>
+          <span class="xen-trade-estimated">Estimated</span>
         </div>
         <div class="xen-trade-time">${formatTimeAgo(trade.timestamp)}</div>
       </div>
@@ -605,7 +616,7 @@
       const [stats, priceData, trades] = await Promise.all([
         fetchGlobalXenStats(),
         fetchPriceData(),
-        fetchRecentTrades()
+        fetchEstimatedActivity()
       ]);
 
       // Update UI

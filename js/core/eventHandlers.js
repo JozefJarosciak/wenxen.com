@@ -27,29 +27,6 @@ async function initializeApplication() {
     });
   }
 
-  // Check for dashboard hash and activate Dashboard tab
-  if (window.location.hash === '#dashboard') {
-    // Clear the hash from URL
-    history.replaceState(null, null, window.location.pathname + window.location.search);
-
-    // Activate dashboard tab after a short delay to ensure everything is loaded
-    setTimeout(() => {
-      if (typeof window.setActiveTab === 'function') {
-        window.setActiveTab('tab-dashboard');
-      } else {
-        // Fallback if setActiveTab isn't available yet
-        const dashboardTab = document.getElementById('tab-dashboard');
-        const dashboardBtn = document.querySelector('[data-target="tab-dashboard"]');
-        if (dashboardTab && dashboardBtn) {
-          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-          document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-          dashboardTab.classList.add('active');
-          dashboardBtn.classList.add('active');
-        }
-      }
-    }, 500);
-  }
-
   // Footer year update
   try {
     const y = document.getElementById('copyrightYear');

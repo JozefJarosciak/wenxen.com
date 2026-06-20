@@ -17,9 +17,18 @@
       } else if (window.location.protocol === 'file:') {
         // File protocol - no base href needed
         return;
-      } else {
-        // Production or other servers - use root
+      } else if (window.location.hostname === 'wenxen.com' || window.location.hostname === 'www.wenxen.com') {
+        // Canonical production host uses root.
         base.href = '/';
+      } else {
+        // Self-hosted/subpath installs should resolve assets relative to the app directory.
+        var path = window.location.pathname || '/';
+        var looksLikeFile = /\/[^/]+\.[^/]+$/.test(path);
+        if (looksLikeFile) {
+          base.href = path.slice(0, path.lastIndexOf('/') + 1) || '/';
+        } else {
+          base.href = path.endsWith('/') ? path : path + '/';
+        }
       }
       document.head.appendChild(base);
     })();
@@ -166,7 +175,7 @@
         "name": "Is my data private on WenXen?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes, WenXen is 100% private. All data is stored locally in your browser and never sent to any servers. Even when using wenxen.com, your data never leaves your device."
+          "text": "Yes. Portfolio data, addresses, and keys are stored locally in your browser. On wenxen.com, Google Analytics and Statcounter usage analytics are enabled by default and can be disabled in Settings."
         }
       }
     ]
@@ -308,13 +317,13 @@
 </h1>
 <div class="tabs">
   <div class="tab-buttons" role="tablist" aria-label="Main navigation">
-    <button class="tab-button active" data-target="tab-dashboard" role="tab" aria-selected="true">Dashboard</button>
-    <button class="tab-button" data-target="tab-mint" role="tab" aria-selected="false">Mint/Stake</button>
-    <button class="tab-button" data-target="tab-xen" role="tab" aria-selected="false">XEN</button>
-    <button class="tab-button" data-target="tab-settings" role="tab" aria-selected="false">Settings</button>
-    <button class="tab-button" data-target="tab-about" role="tab" aria-selected="false">About</button>
+    <button id="tab-button-dashboard" class="tab-button active" data-target="tab-dashboard" role="tab" aria-selected="true" aria-controls="tab-dashboard" tabindex="0">Dashboard</button>
+    <button id="tab-button-mint" class="tab-button" data-target="tab-mint" role="tab" aria-selected="false" aria-controls="tab-mint" tabindex="-1">Mint/Stake</button>
+    <button id="tab-button-xen" class="tab-button" data-target="tab-xen" role="tab" aria-selected="false" aria-controls="tab-xen" tabindex="-1">XEN</button>
+    <button id="tab-button-settings" class="tab-button" data-target="tab-settings" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1">Settings</button>
+    <button id="tab-button-about" class="tab-button" data-target="tab-about" role="tab" aria-selected="false" aria-controls="tab-about" tabindex="-1">About</button>
   </div>
-  <section id="tab-dashboard" class="tab-panel active" role="tabpanel" aria-labelledby="Dashboard">
+  <section id="tab-dashboard" class="tab-panel active" role="tabpanel" aria-labelledby="tab-button-dashboard">
     <div class="dashboard-top">
 
 
@@ -361,6 +370,8 @@
   </span>
             <button id="summaryToggle" class="summary-toggle" title="Hide summary details" aria-label="Toggle summary">− Hide Details</button>
           </div>
+
+          <div id="scanSetupHint" class="scan-setup-hint" aria-live="polite"></div>
 
 
           <div id="progressContainer">
@@ -420,8 +431,16 @@
 
 
     <div id="cointool-table"></div>
+    <div id="dashboardEmptyState" class="dashboard-empty-state" hidden>
+      <strong>No scan data yet</strong>
+      <p>Add a wallet address and API key, then run a scan, or import an existing backup.</p>
+      <div class="dashboard-empty-actions">
+        <button class="btn" type="button" onclick="document.querySelector('[data-target=\'tab-settings\']')?.click()">Open Settings</button>
+        <button class="btn btn-secondary" type="button" onclick="document.querySelector('[data-target=\'tab-settings\']')?.click(); document.getElementById('importBackupBtn')?.click()">Import Backup</button>
+      </div>
+    </div>
   </section>
-  <section id="tab-mint" class="tab-panel" role="tabpanel" aria-labelledby="Mint/Stake">
+  <section id="tab-mint" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-mint">
     <div class="mint-header">
       <h2>Mint / Stake</h2>
 
@@ -625,7 +644,7 @@
   </section>
 
   <!-- XEN Stats Tab -->
-  <section id="tab-xen" class="tab-panel" role="tabpanel" aria-labelledby="XEN">
+  <section id="tab-xen" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-xen">
     <div class="xen-page">
       <!-- Header with refresh button -->
       <div class="xen-page-header">
@@ -760,18 +779,19 @@
             </div>
           </div>
 
-          <!-- Recent Trades Card -->
+          <!-- Estimated Activity Card -->
           <div class="xen-card xen-trades-card">
             <div class="xen-card-header">
-              <h3>Recent Trades</h3>
+              <h3>Estimated Activity</h3>
               <div class="xen-trades-filter">
                 <button class="xen-trade-filter-btn active" data-filter="all">All</button>
                 <button class="xen-trade-filter-btn" data-filter="buy">Buys</button>
                 <button class="xen-trade-filter-btn" data-filter="sell">Sells</button>
               </div>
             </div>
+            <div class="xen-card-note" id="xenActivityNote">Estimated from public pair volume. This is not a transaction-by-transaction trade feed.</div>
             <div class="xen-trades-container" id="xenTradesContainer">
-              <div class="xen-trades-loading">Loading recent trades...</div>
+              <div class="xen-trades-loading">Loading estimated activity...</div>
             </div>
           </div>
         </div>
@@ -779,7 +799,7 @@
     </div>
   </section>
 
-  <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="Settings">
+  <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-settings">
     <div class="settings-grid">
 
       <!-- Addresses -->
@@ -918,6 +938,15 @@
         <small class="error-message">Gas refresh must be between 5 and 60 seconds.</small>
       </div>
 
+      <div class="field" id="field-trackingEnabled">
+        <label class="toggle-label">
+          <input type="checkbox" id="trackingEnabled" class="settings-checkbox-large">
+          <span>Usage analytics on wenxen.com</span>
+        </label>
+        <small>Google Analytics and Statcounter are enabled by default on wenxen.com. This setting disables them for this browser.</small>
+        <div id="trackingStatus" class="settings-status settings-status-subtle"></div>
+      </div>
+
       <!-- Theme selector moved to header menu -->
 
         </div>
@@ -931,7 +960,7 @@
         <small class="settings-note">
           <strong>Chain-agnostic backup:</strong> Exports and restores data from <strong>all chains</strong>
           (Ethereum, Base, Avalanche, BSC, Moonbeam, Polygon, Optimism) regardless of which chain is currently selected.
-          Includes all mints, NFTs, stakes, and settings. New exports are compressed when supported; old JSON backups still import.
+          Includes all mints, NFTs, stakes, settings, saved API key, and tracking preference. New exports are compressed when supported; old JSON backups still import.
         </small><br>
         <div class="button-row settings-row-tight">
           <button id="exportBackupBtn" type="button">Export Backup (.json.gz)</button>
@@ -993,7 +1022,7 @@
         <div id="duplicatesResult" class="settings-status settings-status-result"></div>
         <div class="field settings-separated-field">
           <label class="toggle-label settings-inline-toggle">
-            <input type="checkbox" id="autoDedupeAfterScan" class="settings-checkbox-large" checked>
+            <input type="checkbox" id="autoDedupeAfterScan" class="settings-checkbox-large">
             <span>Auto-remove duplicates after each scan</span>
           </label>
           <small class="settings-note settings-note-block">When enabled, duplicates will be automatically removed after each scan completes.</small>
@@ -1047,13 +1076,13 @@
   </section>
 
   <!-- About tab -->
-  <section id="tab-about" class="tab-panel" role="tabpanel" aria-labelledby="About">
+  <section id="tab-about" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-about">
     <div class="about-inline-content">
       <h2>What is WenXen.com?</h2>
       <p>
         WenXen is a <strong>privacy-first, client-side web application</strong> that helps you manage your XEN Crypto ecosystem assets.
-        Available at <strong>wenxen.com</strong> or as a download, everything runs directly in your browser - no servers, no tracking,
-        no data collection. Whether you use our hosted version or run it locally, your data never leaves your device.
+        Available at <strong>wenxen.com</strong> or as a download, the tracker runs directly in your browser. Portfolio data and keys stay local;
+        on wenxen.com, usage analytics are enabled by default and can be disabled in Settings.
       </p>
 
         <p class="about-subtitle">
@@ -1068,7 +1097,7 @@
 
         <div class="about-feature-card">
           <h4>🔒 100% Private</h4>
-          <p>All data stays in your browser's storage. Even when using wenxen.com, we can't see your data - it never leaves your device.</p>
+          <p>Portfolio data, addresses, and keys stay in your browser's storage. Even when using wenxen.com, we can't see your tracked holdings.</p>
         </div>
 
         <div class="about-feature-card">
@@ -1113,8 +1142,8 @@
           self-custody, transparency, and decentralization - that's why WenXen runs entirely in your browser.
         </p>
         <p class="about-spaced-mid">
-          <strong>Use it at wenxen.com or download it.</strong> Either way, no middlemen. No servers. No nonsense.
-          Just you and your data. We're merely hosting static files - the app runs 100% on your machine.
+          <strong>Use it at wenxen.com or download it.</strong> Either way, no account, hosted portfolio database, or custody layer.
+          Just you and your data. We're hosting static files - the app runs on your machine.
         </p>
       </div>
 
@@ -1126,7 +1155,7 @@
       <p class="about-access-options">
         <strong>Access Options:</strong> <a href="https://wenxen.com" target="_blank" rel="noopener noreferrer">wenxen.com</a> or
         <a href="https://github.com/JozefJarosciak/wenxen.com" target="_blank" rel="noopener noreferrer">download from GitHub</a><br>
-        <small>Both options provide the exact same privacy guarantees - your data never leaves your browser.</small>
+        <small>Both options keep portfolio data in your browser. Local and self-hosted copies run with usage analytics off by default.</small>
       </p>
     </div>
   </section>
@@ -1150,7 +1179,10 @@
     <h3 id="privacyTitle" class="modal-title">Privacy &amp; Terms Notice</h3>
     <div class="modal-body modal-body-scroll">
       <p>
-        This tracker is provided by WenXen.com on an open-source basis. It runs entirely in your browser and uses only public blockchain RPC endpoints and your own free API keys. We do not collect or store your data or keys on our servers.
+        This tracker is provided by WenXen.com on an open-source basis. It runs in your browser and uses only public blockchain RPC endpoints and your own free API keys. We do not collect or store your portfolio data or keys on our servers.
+      </p>
+      <p>
+        On wenxen.com, Google Analytics and Statcounter are enabled by default for usage measurement. You can disable them in Settings under Live Data. Local and self-hosted copies default to tracking off.
       </p>
       <p>
         By using this site, you agree that you are solely responsible for all actions you take. WenXen.com cannot reverse anything you do. The software is provided “as is,” without warranties of any kind. To the fullest extent permitted by law, WenXen.com disclaims liability for any loss or damages arising from or related to the use of this site or its code.
@@ -1182,6 +1214,16 @@
     </div>
   </div>
 </div>
+<div id="confirmModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="confirmModalTitle">
+  <div class="modal-content">
+    <h3 id="confirmModalTitle" class="modal-title">Confirm action</h3>
+    <p id="confirmModalMessage" class="modal-preline"></p>
+    <div class="modal-actions">
+      <button id="confirmModalOkBtn" type="button">Continue</button>
+      <button id="confirmModalCancelBtn" type="button" class="secondary">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- Onboarding Modal -->
 <div id="onboardingModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="onboardingTitle">
@@ -1192,7 +1234,7 @@
       <p>Tired of logging every XEN mint by hand? 🥱</p>
 
       <p>💡Just add your address and a free Etherscan API key & we auto-discover all your mints (past & future). No more guesswork or forgotten entries.</p>
-      <p>🔒100% browser-based & open-source (download and use it locally or run it from wenxen.com). Your data always stays on your device, no 3rd-party storage, no nonsense!</p>
+      <p>🔒100% browser-based & open-source (download and use it locally or run it from wenxen.com). Your portfolio data always stays on your device, no 3rd-party storage, no nonsense!</p>
     
       <div class="onboarding-steps">
       <h4 class="onboarding-steps-title">Get Started in 2 Steps:</h4>
@@ -1226,6 +1268,51 @@
     </div>
   </div>
 </div>
+
+<script>
+  window.wenxenConfirm = function(options) {
+    var opts = typeof options === 'string' ? { message: options } : (options || {});
+    var modal = document.getElementById('confirmModal');
+    var title = document.getElementById('confirmModalTitle');
+    var message = document.getElementById('confirmModalMessage');
+    var okBtn = document.getElementById('confirmModalOkBtn');
+    var cancelBtn = document.getElementById('confirmModalCancelBtn');
+    if (!modal || !title || !message || !okBtn || !cancelBtn) {
+      return Promise.resolve(window.confirm(opts.message || 'Continue?'));
+    }
+
+    return new Promise(function(resolve) {
+      var previousFocus = document.activeElement;
+      var done = function(value) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        modal.onclick = null;
+        document.removeEventListener('keydown', onKeydown);
+        try { previousFocus && previousFocus.focus && previousFocus.focus(); } catch (_) {}
+        resolve(value);
+      };
+      var onKeydown = function(event) {
+        if (event.key === 'Escape') done(false);
+      };
+
+      title.textContent = opts.title || 'Confirm action';
+      message.textContent = opts.message || 'Continue?';
+      okBtn.textContent = opts.confirmText || 'Continue';
+      cancelBtn.textContent = opts.cancelText || 'Cancel';
+      okBtn.onclick = function() { done(true); };
+      cancelBtn.onclick = function() { done(false); };
+      modal.onclick = function(event) {
+        if (event.target === modal) done(false);
+      };
+      document.addEventListener('keydown', onKeydown);
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      okBtn.focus();
+    });
+  };
+</script>
 
 <script>
   (function() {
@@ -1301,6 +1388,34 @@
       setTimeout(normalizeSettingsTextareasEarly, 0);
       setTimeout(normalizeSettingsTextareasEarly, 100);
     }, true);
+  })();
+</script>
+
+<script>
+  // Static-host safe route helpers used by legacy non-module scripts.
+  (function() {
+    function getAppRootUrl() {
+      if (window.location.protocol === 'file:') {
+        return window.location.href.replace(/[?#].*$/, '');
+      }
+      var base = document.querySelector('base');
+      if (base && base.href) return base.href.replace(/[?#].*$/, '').replace(/\/?$/, '/');
+      return window.location.origin + '/';
+    }
+
+    window.wenxenRouteUrl = function(route) {
+      var clean = String(route || 'dashboard').replace(/^#\/?/, '').replace(/^\/+/, '');
+      return getAppRootUrl() + '#' + clean;
+    };
+
+    window.wenxenReloadToRoute = function(route) {
+      var target = window.wenxenRouteUrl(route || 'dashboard');
+      if (window.location.href === target) {
+        window.location.reload();
+      } else {
+        window.location.href = target;
+      }
+    };
   })();
 </script>
 
@@ -1397,7 +1512,7 @@
   })();
 </script>
 
-<!-- Google Analytics -->
+<!-- Hosted usage analytics -->
 <script src="./js/analytics.js?v=PLACEHOLDER"></script>
 
 <!-- Chain configuration and network selector -->
@@ -1551,23 +1666,6 @@
 
 <div id="mobile-tooltip"></div>
 
-<!-- Default Statcounter code for wenxen.com
-https://wenxen.com -->
-<script type="text/javascript">
-var sc_project=13304969;
-var sc_invisible=1;
-var sc_security="9b8b4d99";
-</script>
-<script type="text/javascript"
-src="https://www.statcounter.com/counter/counter.js"
-async></script>
-<noscript><div class="statcounter"><a title="Web Analytics
-Made Easy - Statcounter" href="https://statcounter.com/"
-target="_blank"><img class="statcounter"
-src="https://c.statcounter.com/13304969/0/9b8b4d99/1/"
-alt="Web Analytics Made Easy - Statcounter"
-referrerPolicy="no-referrer-when-downgrade"></a></div></noscript>
-<!-- End of Statcounter Code -->
 </body>
 </html>
 

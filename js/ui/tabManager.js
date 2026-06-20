@@ -83,6 +83,7 @@ export const tabManager = {
       buttons.forEach(button => {
         const isActive = button.dataset.target === activeId;
         button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        button.setAttribute('tabindex', isActive ? '0' : '-1');
         button.classList.toggle('active', isActive);
       });
     } catch (error) {
@@ -112,6 +113,25 @@ export const tabManager = {
   // Get stored active tab
   getStoredActiveTab() {
     return storageUtils.getItem('activeTabId', 'tab-dashboard');
+  },
+
+  getInitialTabFromLocation() {
+    const routeToTab = {
+      dashboard: 'tab-dashboard',
+      mint: 'tab-mint',
+      xen: 'tab-xen',
+      settings: 'tab-settings',
+      about: 'tab-about'
+    };
+
+    const hashRoute = window.location.hash.replace(/^#\/?/, '').split('/')[0].toLowerCase();
+    if (routeToTab[hashRoute]) return routeToTab[hashRoute];
+
+    const pathParts = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+    const lastPathPart = (pathParts[pathParts.length - 1] || '').toLowerCase();
+    if (routeToTab[lastPathPart]) return routeToTab[lastPathPart];
+
+    return 'tab-dashboard';
   },
 
   // Handle tab-specific initialization
@@ -290,9 +310,8 @@ export const tabManager = {
       });
     });
 
-    // Restore previously active tab
-    const storedTab = this.getStoredActiveTab();
-    this.switchToTab(storedTab);
+    // Use the URL as the source of truth on load.
+    this.switchToTab(this.getInitialTabFromLocation());
   },
 
   // Public API for programmatic tab switching
@@ -307,6 +326,7 @@ export const tabManager = {
 };
 
 // Legacy global function for backward compatibility
+window.tabManager = tabManager;
 window.setActiveTab = (tabId) => tabManager.setActiveTab(tabId);
 window.normalizeSettingsTextareas = () => tabManager.normalizeSettingsTextareas();
 
