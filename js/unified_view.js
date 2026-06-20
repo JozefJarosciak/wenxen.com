@@ -1814,6 +1814,11 @@ function setMaturityHeaderFilterFromDate(dt) {
         ? Number(s.maturityTs) - Number(s.term) * 86400
         : 0
     );
+    const actions = Array.isArray(s.actions) ? s.actions : [];
+    const latestActionTs = actions.reduce((max, action) => {
+      const ts = Number(action?.timeStamp || action?.timestamp || 0);
+      return Number.isFinite(ts) ? Math.max(max, ts) : max;
+    }, 0);
     return {
       ID: "stake-xenft_" + s.tokenId,
       SourceType: "Stake XENFT",
@@ -1823,7 +1828,7 @@ function setMaturityHeaderFilterFromDate(dt) {
       Maturity_Date_Fmt: s.Maturity_Date_Fmt,
       Term: s.term,
       VMUs: '1', // Each stake NFT represents a single position
-      Actions: s.actions || [],
+      Actions: actions,
       Est_XEN: 0, // This will be calculated by main_app.js's estimateXENForRow
       Rank_Range: 'N/A',
       Salt: 'N/A',
@@ -1832,7 +1837,7 @@ function setMaturityHeaderFilterFromDate(dt) {
       Start_Timestamp: startTs,
       Maturity_Timestamp: s.maturityTs,
       maturityDateOnly: s.maturityDateOnly,
-      Latest_Action_Timestamp: s.actions?.length > 0 ? s.maturityTs : 0
+      Latest_Action_Timestamp: latestActionTs
     };
   }
 

@@ -6233,7 +6233,7 @@ function computeLiveStatus(row) {
   // ✅ Stakes: Check redeemed status, then calculate based on maturity timestamp
   if (data.SourceType === 'Stake' || data.SourceType === 'Stake XENFT') {
     const actions = Array.isArray(data.Actions) ? data.Actions : [];
-    const hasWithdraw = actions.some(a => a.type === 'withdraw');
+    const hasWithdraw = actions.some(a => a.type === 'withdraw' || a.type === 'endStake');
     // Check if already claimed/redeemed
     if (hasWithdraw || Number(data.redeemed) === 1 || String(data.Status).toLowerCase() === 'claimed') {
       return 'Claimed';

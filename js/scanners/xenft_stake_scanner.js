@@ -271,6 +271,70 @@
     });
   }
 
+  function isOwnerOfMissingTokenError(error) {
+    const text = String(error?.message || error || '').toLowerCase();
+    return text.includes('invalid token id') ||
+      text.includes('nonexistent token') ||
+      text.includes('owner query for nonexistent token') ||
+      text.includes('erc721: invalid token id');
+  }
+
+  async function reconcileStoredRowsForAddress(db, w3, contract, address) {
+    const addr = cleanHexAddr(address);
+    const rows = await getAll(db);
+    const nowSec = Math.floor(Date.now() / 1000);
+    let changed = 0;
+
+    for (const row of rows) {
+      if (!row || cleanHexAddr(row.owner) !== addr) continue;
+      if (String(row.status || '').toLowerCase() === 'claimed') continue;
+
+      const tokenId = String(row.tokenId || '').trim();
+      if (!tokenId) continue;
+
+      try {
+        const onChainOwner = cleanHexAddr(await withRetry(
+          w3,
+          `ownerOf Stake XENFT #${tokenId}`,
+          () => contract.methods.ownerOf(tokenId).call()
+        ));
+
+        if (onChainOwner && onChainOwner !== addr) {
+          row.owner = onChainOwner;
+          await save(db, row);
+          changed++;
+        }
+      } catch (error) {
+        if (!isOwnerOfMissingTokenError(error)) {
+          debugLog(`[StakeXENFT] ownerOf reconciliation failed for #${tokenId}:`, error);
+          continue;
+        }
+
+        row.status = 'Claimed';
+        if (!Array.isArray(row.actions)) row.actions = [];
+        if (!row.actions.some(action => action?.type === 'endStake')) {
+          row.actions.push({
+            type: 'endStake',
+            hash: null,
+            timeStamp: nowSec,
+            reconciled: true
+          });
+        }
+        await save(db, row);
+        changed++;
+      }
+
+      if (changed % 10 === 0) {
+        await (window.yieldToUi?.() || new Promise(resolve => setTimeout(resolve, 0)));
+      }
+    }
+
+    if (changed) {
+      debugLog(`[StakeXENFT] Reconciled ${changed} stored row(s) for ${addr}`);
+    }
+    return changed;
+  }
+
   // --- DB Scan State Helpers ---
   async function getScanState(db, address) {
     return new Promise((resolve, reject) => {
@@ -481,6 +545,7 @@
 
         if (startBlock > latestBlock && !forceRescan) {
           if(tokenTxt) tokenTxt.textContent = `Stake XENFTs for ${addr.slice(0,6)}... are up to date.`;
+          await reconcileStoredRowsForAddress(db, w3, c, addr);
           await new Promise(r => setTimeout(r, 500));
           continue;
         }
@@ -488,6 +553,7 @@
         const newTxs = await fetchStakeTxsInRange(addr, etherscanApiKey, startBlock, latestBlock);
 
         if (!newTxs.length) {
+          await reconcileStoredRowsForAddress(db, w3, c, addr);
           await putScanState(db, addr, latestBlock);
           if(tokenTxt) tokenTxt.textContent = `No new Stake XENFT activity found for ${addr.slice(0,6)}...`;
           await new Promise(r => setTimeout(r, 500));
@@ -617,6 +683,7 @@
             await saveProcessProgress(db, addr, i, tx.hash, i + 1);
           }
         }
+        await reconcileStoredRowsForAddress(db, w3, c, addr);
         await putScanState(db, addr, latestBlock);
         // Clear progress on successful completion of address scanning
         await clearProcessProgress(db, addr);
@@ -636,11 +703,29 @@
     }, 1200);
   }
 
+  async function reconcile(addresses = getAddressesFromSettings()) {
+    const list = Array.isArray(addresses) ? addresses : [addresses];
+    const w3 = newWeb3();
+    const db = await openDB();
+    const contractAddr = getContractAddress();
+    const c = new w3.eth.Contract(window.xenftStakeAbi, contractAddr);
+    let changed = 0;
+    try {
+      for (const address of list.filter(Boolean)) {
+        changed += await reconcileStoredRowsForAddress(db, w3, c, address);
+      }
+      return changed;
+    } finally {
+      try { db.close(); } catch (_) {}
+    }
+  }
+
   // Export
   window.xenftStake = { 
     get CONTRACT_ADDRESS() { return getContractAddress(); }, 
     openDB, 
     getAll, 
-    scan 
+    scan,
+    reconcile
   };
 })();
