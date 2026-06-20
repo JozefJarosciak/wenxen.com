@@ -17,10 +17,10 @@ export class DatabaseMigrator {
 
     // Base database configurations
     this.baseDatabases = [
-      { name: 'BASE_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-      { name: 'BASE_DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
-      { name: 'BASE_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
-      { name: 'BASE_DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
+      { name: 'BASE_DB_Cointool', version: 5, stores: ['proxies', 'scanState', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+      { name: 'BASE_DB_Xenft', version: 5, stores: ['xenfts', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+      { name: 'BASE_DB_XenStake', version: 3, stores: ['stakes', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+      { name: 'BASE_DB_XenftStake', version: 3, stores: ['stakes', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] }
     ];
   }
 
@@ -184,10 +184,31 @@ export class DatabaseMigrator {
             if (storeName === 'xenfts') keyPath = 'Xenft_id';
             if (storeName === 'scanState') keyPath = 'address';
             if (storeName === 'actionsCache') keyPath = 'address';
-            if (storeName === 'stakes') keyPath = 'id';
-            if (storeName === 'processProgress') keyPath = 'id';
+            if (storeName === 'stakes') keyPath = name.includes('XenftStake') ? 'tokenId' : 'id';
+            if (storeName === 'processProgress') keyPath = 'address';
             
-            db.createObjectStore(storeName, { keyPath });
+            const store = db.createObjectStore(storeName, { keyPath });
+            if (storeName === 'xenfts') {
+              store.createIndex('byTokenId', 'tokenId', { unique: false });
+            }
+            if (storeName === 'stakes' && name.includes('XenStake')) {
+              store.createIndex('byOwner', 'owner', { unique: false });
+            }
+            if (storeName === 'summaryByType') {
+              store.createIndex('byType', 'type', { unique: false });
+            }
+            if (storeName === 'summaryByStatus') {
+              store.createIndex('byType', 'type', { unique: false });
+              store.createIndex('byStatus', 'status', { unique: false });
+            }
+            if (storeName === 'summaryByDay') {
+              store.createIndex('byDate', 'date', { unique: false });
+              store.createIndex('byType', 'type', { unique: false });
+            }
+            if (storeName === 'summaryByOwner') {
+              store.createIndex('byOwner', 'owner', { unique: false });
+              store.createIndex('byType', 'type', { unique: false });
+            }
           }
         }
       };
@@ -302,10 +323,10 @@ export class DatabaseMigrator {
     console.log('Verifying Ethereum databases...');
     
     const ethDatabases = [
-      { name: 'ETH_DB_Cointool', version: 3, stores: ['mints', 'scanState', 'actionsCache'] },
-      { name: 'ETH_DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
-      { name: 'ETH_DB_XenStake', version: 1, stores: ['stakes', 'scanState'] },
-      { name: 'ETH_DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
+      { name: 'ETH_DB_Cointool', version: 5, stores: ['proxies', 'scanState', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+      { name: 'ETH_DB_Xenft', version: 5, stores: ['xenfts', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+      { name: 'ETH_DB_XenStake', version: 3, stores: ['stakes', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+      { name: 'ETH_DB_XenftStake', version: 3, stores: ['stakes', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] }
     ];
     
     for (const dbConfig of ethDatabases) {
@@ -328,9 +349,15 @@ export class DatabaseMigrator {
       // Check if database already exists
       const existingDb = await this.openDatabase(dbConfig.name);
       if (existingDb) {
+        const hasAllStores = dbConfig.stores.every(storeName => existingDb.objectStoreNames.contains(storeName));
+        const hasLegacyCointoolStores = dbConfig.name.includes('Cointool') &&
+          (existingDb.objectStoreNames.contains('mints') || existingDb.objectStoreNames.contains('actionsCache'));
+        if (existingDb.version >= dbConfig.version && hasAllStores && !hasLegacyCointoolStores) {
+          existingDb.close();
+          console.log(`${dbConfig.name} already exists`);
+          return;
+        }
         existingDb.close();
-        console.log(`${dbConfig.name} already exists`);
-        return;
       }
       
       // Create the database
@@ -339,28 +366,53 @@ export class DatabaseMigrator {
         
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
+
+          if (dbConfig.name.includes('Cointool')) {
+            for (const oldName of ['mints', 'mintProgress', 'actionsCache']) {
+              if (db.objectStoreNames.contains(oldName)) {
+                try { db.deleteObjectStore(oldName); } catch (_) {}
+              }
+            }
+          }
           
           // Create object stores based on database type
           dbConfig.stores.forEach(storeName => {
             if (!db.objectStoreNames.contains(storeName)) {
               let keyPath = 'id';
-              if (storeName === 'mints') keyPath = 'ID';
               if (storeName === 'xenfts') keyPath = 'Xenft_id';
               if (storeName === 'scanState') keyPath = 'address';
-              if (storeName === 'actionsCache') keyPath = 'address';
-              if (storeName === 'stakes') keyPath = 'id';
-              if (storeName === 'processProgress') keyPath = 'id';
+              if (storeName === 'stakes') keyPath = dbConfig.name.includes('XenftStake') ? 'tokenId' : 'id';
+              if (storeName === 'processProgress') keyPath = 'address';
               
               const store = db.createObjectStore(storeName, { keyPath });
               
               // Add indexes if needed
-              if (storeName === 'mints') {
-                store.createIndex('by_address', 'Address', { unique: false });
-                store.createIndex('by_maturity', 'Maturity', { unique: false });
+              if (storeName === 'proxies') {
+                store.createIndex('byOwner', 'Owner', { unique: false });
+                store.createIndex('byOwnerStatus', ['Owner', 'Status'], { unique: false });
+                store.createIndex('byOwnerSaltStatusTerm', ['Owner', 'Salt', 'Status', 'Term'], { unique: false });
+                store.createIndex('byMaturity', 'Maturity_TS', { unique: false });
               }
-              if (storeName === 'stakes') {
-                store.createIndex('by_address', 'address', { unique: false });
-                store.createIndex('by_maturity', 'maturityDate', { unique: false });
+              if (storeName === 'xenfts') {
+                store.createIndex('byTokenId', 'tokenId', { unique: false });
+              }
+              if (storeName === 'stakes' && dbConfig.name.includes('XenStake')) {
+                store.createIndex('byOwner', 'owner', { unique: false });
+              }
+              if (storeName === 'summaryByType') {
+                store.createIndex('byType', 'type', { unique: false });
+              }
+              if (storeName === 'summaryByStatus') {
+                store.createIndex('byType', 'type', { unique: false });
+                store.createIndex('byStatus', 'status', { unique: false });
+              }
+              if (storeName === 'summaryByDay') {
+                store.createIndex('byDate', 'date', { unique: false });
+                store.createIndex('byType', 'type', { unique: false });
+              }
+              if (storeName === 'summaryByOwner') {
+                store.createIndex('byOwner', 'owner', { unique: false });
+                store.createIndex('byType', 'type', { unique: false });
               }
             }
           });

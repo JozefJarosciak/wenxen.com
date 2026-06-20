@@ -1,6 +1,23 @@
 /* ===== OPTION 2: Professional Table Layout Functions ===== */
 
 window.summaryOption2 = {
+  _refreshQueued: false,
+  _expandedTypes: new Set(),
+
+  isDataLoading() {
+    return !!window.__wenxenInitialDataLoading && !window.__wenxenUnifiedDataReady;
+  },
+
+  requestRefresh() {
+    if (this._refreshQueued) return;
+    this._refreshQueued = true;
+    const run = () => {
+      this._refreshQueued = false;
+      this.refresh();
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 0);
+  },
   
   // Initialize Option 2 layout
   init() {
@@ -127,6 +144,7 @@ window.summaryOption2 = {
 
   // Update table structure based on claimable visibility
   updateTableStructure() {
+    if (this.isDataLoading()) return;
     const hasClaimable = this.hasAnyClaimable();
     const table = document.querySelector('.summary-table');
     if (!table) return;
@@ -158,11 +176,24 @@ window.summaryOption2 = {
     // Clear existing rows
     tbody.innerHTML = '';
 
+    if (this.isDataLoading()) {
+      const row = document.createElement('tr');
+      row.className = 'summary-loading-row';
+      row.innerHTML = `
+        <td colspan="7" class="summary-loading-cell">
+          Loading local data...
+        </td>
+      `;
+      tbody.appendChild(row);
+      return;
+    }
+
     // Add rows for each type in desired order
     this.addXenftRow(tbody);
     this.addXenftStakeRow(tbody);
     this.addStakeRow(tbody);
     this.addCointoolRow(tbody);
+    this.restoreExpandedRows();
 
     // Update table structure based on claimable data
     this.updateTableStructure();
@@ -398,10 +429,10 @@ window.summaryOption2 = {
         </td>
         <td>
           <div class="progress-indicator">
-            <div class="progress-fill claimable" style="width: 0%"></div>
+            <div class="progress-fill maturing" style="width: 0%"></div>
           </div>
           <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
-            0% ready
+            0% avg maturity
           </div>
         </td>
       `;
@@ -415,10 +446,7 @@ window.summaryOption2 = {
     const row = document.createElement('tr');
     row.className = 'stake expandable';
     
-    // Calculate progress
-    const totalCount = this.parseNumber(metrics.totalCount);
-    const claimableCount = this.parseNumber(metrics.claimable);
-    const claimablePercent = totalCount > 0 ? Math.round((claimableCount / totalCount) * 100) : 0;
+    const maturityProgress = this.getStakeMaturityProgress('Stake');
 
     // Calculate XEN rewards
     const xenRewards = this.calculateXenRewards('Stake');
@@ -447,10 +475,10 @@ window.summaryOption2 = {
       </td>
       <td>
         <div class="progress-indicator">
-          <div class="progress-fill claimable" style="width: ${Math.min(claimablePercent, 100)}%"></div>
+          <div class="progress-fill ${maturityProgress.fillClass}" style="width: ${Math.min(maturityProgress.percent, 100)}%"></div>
         </div>
         <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
-          ${claimablePercent}% ready
+          ${maturityProgress.label}
         </div>
       </td>
     `;
@@ -492,10 +520,10 @@ window.summaryOption2 = {
         </td>
         <td>
           <div class="progress-indicator">
-            <div class="progress-fill claimable" style="width: 0%"></div>
+            <div class="progress-fill maturing" style="width: 0%"></div>
           </div>
           <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
-            0% ready
+            0% avg maturity
           </div>
         </td>
       `;
@@ -509,10 +537,7 @@ window.summaryOption2 = {
     const row = document.createElement('tr');
     row.className = 'xenft-stake expandable';
     
-    // Calculate progress
-    const totalCount = this.parseNumber(metrics.totalCount);
-    const claimableCount = this.parseNumber(metrics.claimable);
-    const claimablePercent = totalCount > 0 ? Math.round((claimableCount / totalCount) * 100) : 0;
+    const maturityProgress = this.getStakeMaturityProgress('Stake XENFT');
 
     // Calculate XEN rewards
     const xenRewards = this.calculateXenRewards('Stake XENFT');
@@ -541,10 +566,10 @@ window.summaryOption2 = {
       </td>
       <td>
         <div class="progress-indicator">
-          <div class="progress-fill claimable" style="width: ${Math.min(claimablePercent, 100)}%"></div>
+          <div class="progress-fill ${maturityProgress.fillClass}" style="width: ${Math.min(maturityProgress.percent, 100)}%"></div>
         </div>
         <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
-          ${claimablePercent}% ready
+          ${maturityProgress.label}
         </div>
       </td>
     `;
@@ -563,6 +588,15 @@ window.summaryOption2 = {
 
   // Calculate XEN rewards for a data type (only maturing items)
   calculateXenRewards(dataType) {
+    const cached = window._summaryStatsCache?.byType?.[dataType];
+    if (cached) {
+      const xen = Number(cached.xenRewards) || 0;
+      const usd = (typeof window.xenUsdPrice === 'number' && window.xenUsdPrice > 0)
+        ? xen * window.xenUsdPrice
+        : 0;
+      return { xen, usd };
+    }
+
     if (!window._allUnifiedRows) return { xen: 0, usd: 0 };
 
     // Filter by source type AND only include maturing items
@@ -609,6 +643,51 @@ window.summaryOption2 = {
     return '$' + (amount / 1000000).toFixed(1) + 'M';
   },
 
+  getStakeMaturityProgress(dataType, rows = null) {
+    const sourceRows = Array.isArray(rows)
+      ? rows
+      : (Array.isArray(window._allUnifiedRows)
+        ? window._allUnifiedRows.filter(row => row?.SourceType === dataType)
+        : []);
+    const nowSec = Math.floor(Date.now() / 1000);
+    let totalPercent = 0;
+    let counted = 0;
+
+    for (const row of sourceRows) {
+      const status = this.computeLiveStatus(row);
+      if (status === 'Claimed' || status === 'Ended Early' || status === 'Failed' || status === 'Unknown') {
+        continue;
+      }
+
+      const maturityTs = Number(row?.Maturity_Timestamp || row?.maturityTs || 0);
+      const termDays = Number(row?.Term || row?.term || 0);
+      let startTs = Number(row?.Start_Timestamp || row?.startTs || 0);
+      if ((!Number.isFinite(startTs) || startTs <= 0) && Number.isFinite(maturityTs) && maturityTs > 0 && termDays > 0) {
+        startTs = maturityTs - termDays * 86400;
+      }
+
+      const hasMaturityTs = Number.isFinite(maturityTs) && maturityTs > 0;
+      let durationSec = Number.isFinite(maturityTs) && maturityTs > startTs
+        ? maturityTs - startTs
+        : termDays * 86400;
+      if (!Number.isFinite(durationSec) || durationSec <= 0) continue;
+
+      const rawPercent = status === 'Claimable' || (hasMaturityTs && nowSec >= maturityTs)
+        ? 100
+        : ((nowSec - startTs) / durationSec) * 100;
+      totalPercent += Math.max(0, Math.min(100, rawPercent));
+      counted++;
+    }
+
+    const percent = counted > 0 ? Math.round(totalPercent / counted) : 0;
+    return {
+      percent,
+      count: counted,
+      fillClass: percent >= 100 ? 'claimable' : 'maturing',
+      label: counted > 0 ? `${percent}% avg maturity` : '0% avg maturity'
+    };
+  },
+
   // Handle row click for expansion
   handleRowClick(event, rowType) {
     const row = event.currentTarget;
@@ -616,11 +695,34 @@ window.summaryOption2 = {
     
     if (isExpanded) {
       // Collapse: remove expanded class and detail rows
+      this._expandedTypes.delete(rowType);
       row.classList.remove('expanded');
       this.removeDetailRows(row);
     } else {
       // Expand: add expanded class and detail rows
+      this._expandedTypes.add(rowType);
       row.classList.add('expanded');
+      this.addDetailRows(row, rowType);
+    }
+  },
+
+  restoreExpandedRows() {
+    if (!this._expandedTypes || this._expandedTypes.size === 0) return;
+    const tbody = document.getElementById('summaryTableBody');
+    if (!tbody) return;
+
+    const rowSelectors = {
+      'XENFT': 'tr.xenft.expandable',
+      'Stake XENFT': 'tr.xenft-stake.expandable',
+      'Stake': 'tr.stake.expandable',
+      'Cointool': 'tr.cointool.expandable'
+    };
+
+    for (const rowType of this._expandedTypes) {
+      const row = tbody.querySelector(rowSelectors[rowType]);
+      if (!row) continue;
+      row.classList.add('expanded');
+      this.removeDetailRows(row);
       this.addDetailRows(row, rowType);
     }
   },
@@ -641,10 +743,12 @@ window.summaryOption2 = {
           vmus: 0,
           maturing: 0,
           claimable: 0,
-          xenRewards: 0
+          xenRewards: 0,
+          rows: []
         };
       }
 
+      addressSummary[address].rows.push(row);
       addressSummary[address].count++;
       addressSummary[address].vmus += Number(row.VMUs) || 0;
 
@@ -704,6 +808,20 @@ window.summaryOption2 = {
     }
 
     const claimableColumnStyle = hasClaimable ? '' : 'style="display: none;"';
+    const isStakeType = dataType === 'Stake XENFT' || dataType === 'Stake';
+    const maturityProgress = isStakeType
+      ? this.getStakeMaturityProgress(dataType, summary.rows || [])
+      : null;
+    const progressHtml = maturityProgress
+      ? `
+        <div class="progress-indicator">
+          <div class="progress-fill ${maturityProgress.fillClass}" style="width: ${Math.min(maturityProgress.percent, 100)}%"></div>
+        </div>
+        <div style="text-align: center; font-size: 9px; color: #6c757d; margin-top: 2px;">
+          ${maturityProgress.label}
+        </div>
+      `
+      : '';
 
     return `
       <td>
@@ -728,9 +846,7 @@ window.summaryOption2 = {
         <div class="xen-usd">${usdValue}</div>
       </td>
       <td>
-        <div style="text-align: center; font-size: 11px; color: #6c757d;">
-          
-        </div>
+        ${progressHtml}
       </td>
     `;
   },
@@ -840,9 +956,6 @@ window.summaryOption2 = {
       this.addMobileLabels();
       // Update table structure based on claimable data
       this.updateTableStructure();
-      // Hide dynamically created per-address summaries with a slight delay
-      // since they're created after the main summary updates
-      setTimeout(() => this.hideOriginalSummaries(), 10);
     }
   },
 
@@ -857,58 +970,69 @@ window.summaryOption2 = {
 };
 
 // Auto-initialize Option 2 layout
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize Option 2 layout with a short delay to ensure all elements are present
-  setTimeout(() => {
-    window.summaryOption2.init();
-    
-    // Hook into existing summary update functions to refresh the table
-    const originalUpdateSummaryStats = window.updateSummaryStats;
-    const originalUpdateStakeSummaryLine = window.updateStakeSummaryLine;
-    const originalUpdateXenftSummaryLine = window.updateXenftSummaryLine;
-    const originalUpdateStakeXenftSummaryLine = window.updateStakeXenftSummaryLine;
-    
-    // Override summary update functions to also refresh our table
-    if (typeof originalUpdateSummaryStats === 'function') {
-      window.updateSummaryStats = function() {
-        originalUpdateSummaryStats.apply(this, arguments);
-        setTimeout(() => window.summaryOption2.refresh(), 50);
-      };
-    }
-    
-    if (typeof originalUpdateStakeSummaryLine === 'function') {
-      window.updateStakeSummaryLine = function() {
-        originalUpdateStakeSummaryLine.apply(this, arguments);
-        setTimeout(() => window.summaryOption2.refresh(), 50);
-      };
-    }
-    
-    if (typeof originalUpdateXenftSummaryLine === 'function') {
-      window.updateXenftSummaryLine = function() {
-        originalUpdateXenftSummaryLine.apply(this, arguments);
-        setTimeout(() => window.summaryOption2.refresh(), 50);
-      };
-    }
-    
-    if (typeof originalUpdateStakeXenftSummaryLine === 'function') {
-      window.updateStakeXenftSummaryLine = function() {
-        originalUpdateStakeXenftSummaryLine.apply(this, arguments);
-        setTimeout(() => window.summaryOption2.refresh(), 50);
-      };
-    }
-    
-  }, 500);
-});
+function initializeSummaryOption2() {
+  if (window.summaryOption2._initialized) return;
+  if (!document.getElementById('summaryContainer')) {
+    const retry = () => initializeSummaryOption2();
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(retry);
+    else setTimeout(retry, 0);
+    return;
+  }
+
+  window.summaryOption2._initialized = true;
+  window.summaryOption2.init();
+
+  // Hook into existing summary update functions to refresh the table
+  const originalUpdateSummaryStats = window.updateSummaryStats;
+  const originalUpdateStakeSummaryLine = window.updateStakeSummaryLine;
+  const originalUpdateXenftSummaryLine = window.updateXenftSummaryLine;
+  const originalUpdateStakeXenftSummaryLine = window.updateStakeXenftSummaryLine;
+
+  // Override summary update functions to also refresh our table
+  if (typeof originalUpdateSummaryStats === 'function') {
+    window.updateSummaryStats = function() {
+      originalUpdateSummaryStats.apply(this, arguments);
+      window.summaryOption2.requestRefresh();
+    };
+  }
+
+  if (typeof originalUpdateStakeSummaryLine === 'function') {
+    window.updateStakeSummaryLine = function() {
+      originalUpdateStakeSummaryLine.apply(this, arguments);
+      window.summaryOption2.requestRefresh();
+    };
+  }
+
+  if (typeof originalUpdateXenftSummaryLine === 'function') {
+    window.updateXenftSummaryLine = function() {
+      originalUpdateXenftSummaryLine.apply(this, arguments);
+      window.summaryOption2.requestRefresh();
+    };
+  }
+
+  if (typeof originalUpdateStakeXenftSummaryLine === 'function') {
+    window.updateStakeXenftSummaryLine = function() {
+      originalUpdateStakeXenftSummaryLine.apply(this, arguments);
+      window.summaryOption2.requestRefresh();
+    };
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeSummaryOption2, { once: true });
+} else {
+  initializeSummaryOption2();
+}
 
 // Also refresh when data changes
 if (typeof window.addEventListener !== 'undefined') {
   // Listen for custom events that might indicate data updates
   window.addEventListener('unifiedDataRefresh', () => {
-    setTimeout(() => window.summaryOption2.refresh(), 100);
+    setTimeout(() => window.summaryOption2.requestRefresh(), 100);
   });
   
   // Listen for tabulator table updates
   window.addEventListener('tabulatorDataRefresh', () => {
-    setTimeout(() => window.summaryOption2.refresh(), 100);
+    setTimeout(() => window.summaryOption2.requestRefresh(), 100);
   });
 }

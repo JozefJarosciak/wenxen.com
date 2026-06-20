@@ -6,44 +6,108 @@
  */
 const SCHEMA_DEFINITIONS = {
   cointool: {
-    version: 3,
+    version: 5,
     stores: {
-      mints: {
-        keyPath: 'mintId',
+      proxies: {
+        keyPath: 'id',
         indexes: [
-          { name: 'byOwner', keyPath: 'owner', unique: false },
-          { name: 'byStatus', keyPath: 'status', unique: false },
-          { name: 'byMaturityDate', keyPath: 'maturityDateOnly', unique: false }
+          { name: 'byOwner', keyPath: 'Owner', unique: false },
+          { name: 'byOwnerStatus', keyPath: ['Owner', 'Status'], unique: false },
+          { name: 'byOwnerSaltStatusTerm', keyPath: ['Owner', 'Salt', 'Status', 'Term'], unique: false },
+          { name: 'byMaturity', keyPath: 'Maturity_TS', unique: false }
         ]
       },
-      scan_state: {
+      scanState: {
         keyPath: 'address',
         indexes: []
       },
-      performance_stats: {
-        keyPath: 'timestamp',
+      summaryByType: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByStatus: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false },
+          { name: 'byStatus', keyPath: 'status', unique: false }
+        ]
+      },
+      summaryByDay: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byDate', keyPath: 'date', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByOwner: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byOwner', keyPath: 'owner', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryMetadata: {
+        keyPath: 'id',
         indexes: []
       }
     }
   },
   
   xenft: {
-    version: 2,
+    version: 5,
     stores: {
       xenfts: {
         keyPath: 'Xenft_id',
         indexes: [
-          { name: 'byOwner', keyPath: 'owner', unique: false },
-          { name: 'byStatus', keyPath: 'status', unique: false },
-          { name: 'byMaturityDate', keyPath: 'maturityDateOnly', unique: false },
           { name: 'byTokenId', keyPath: 'tokenId', unique: false }
         ]
+      },
+      scanState: {
+        keyPath: 'address',
+        indexes: []
+      },
+      processProgress: {
+        keyPath: 'address',
+        indexes: []
+      },
+      summaryByType: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByStatus: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false },
+          { name: 'byStatus', keyPath: 'status', unique: false }
+        ]
+      },
+      summaryByDay: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byDate', keyPath: 'date', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByOwner: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byOwner', keyPath: 'owner', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryMetadata: {
+        keyPath: 'id',
+        indexes: []
       }
     }
   },
   
   xenft_stake: {
-    version: 2,
+    version: 3,
     stores: {
       stakes: {
         keyPath: 'tokenId',
@@ -56,12 +120,47 @@ const SCHEMA_DEFINITIONS = {
       scanState: {
         keyPath: 'address',
         indexes: []
+      },
+      processProgress: {
+        keyPath: 'address',
+        indexes: []
+      },
+      summaryByType: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByStatus: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false },
+          { name: 'byStatus', keyPath: 'status', unique: false }
+        ]
+      },
+      summaryByDay: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byDate', keyPath: 'date', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByOwner: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byOwner', keyPath: 'owner', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryMetadata: {
+        keyPath: 'id',
+        indexes: []
       }
     }
   },
   
   xen_stake: {
-    version: 1,
+    version: 3,
     stores: {
       stakes: {
         keyPath: 'id',
@@ -73,6 +172,41 @@ const SCHEMA_DEFINITIONS = {
       },
       scanState: {
         keyPath: 'address',
+        indexes: []
+      },
+      processProgress: {
+        keyPath: 'address',
+        indexes: []
+      },
+      summaryByType: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByStatus: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byType', keyPath: 'type', unique: false },
+          { name: 'byStatus', keyPath: 'status', unique: false }
+        ]
+      },
+      summaryByDay: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byDate', keyPath: 'date', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryByOwner: {
+        keyPath: 'id',
+        indexes: [
+          { name: 'byOwner', keyPath: 'owner', unique: false },
+          { name: 'byType', keyPath: 'type', unique: false }
+        ]
+      },
+      summaryMetadata: {
+        keyPath: 'id',
         indexes: []
       }
     }
@@ -118,7 +252,7 @@ export class DatabaseSchemaManager {
         const newVersion = event.newVersion;
 
         console.log(`[DB Schema] Upgrading ${dbName} from v${oldVersion} to v${newVersion}`);
-        this.handleSchemaUpgrade(db, dbType, oldVersion, newVersion);
+        this.handleSchemaUpgrade(db, dbType, oldVersion, newVersion, event.target.transaction);
       };
 
       request.onsuccess = (event) => {
@@ -159,7 +293,7 @@ export class DatabaseSchemaManager {
    * @param {number} oldVersion - Old version number
    * @param {number} newVersion - New version number
    */
-  handleSchemaUpgrade(db, dbType, oldVersion, newVersion) {
+  handleSchemaUpgrade(db, dbType, oldVersion, newVersion, transaction = null) {
     const schema = SCHEMA_DEFINITIONS[dbType];
     const migrationLog = {
       dbType,
@@ -185,7 +319,6 @@ export class DatabaseSchemaManager {
           }
         } else {
           // Update existing store indexes if needed
-          const transaction = db.transaction ? null : event.target.transaction;
           if (transaction) {
             const store = transaction.objectStore(storeName);
             
@@ -239,17 +372,28 @@ export class DatabaseSchemaManager {
 
     // XENFT-specific migrations
     if (dbType === 'xenft') {
-      if (oldVersion < 2 && newVersion >= 2) {
+      if (oldVersion < 4 && newVersion >= 4) {
         // Migration: Add tokenId index for faster lookups
-        migrationLog.changes.push('Added tokenId index for improved Base chain support');
+        migrationLog.changes.push('Added tokenId index for faster scanner lookups');
+      }
+      if (oldVersion < 5 && newVersion >= 5) {
+        migrationLog.changes.push('Added summary indexes for dashboard/calendar aggregates');
       }
     }
 
     // XEN Stake-specific migrations
     if (dbType === 'xen_stake') {
-      if (oldVersion < 1 && newVersion >= 1) {
-        // Initial schema - no migrations needed
-        migrationLog.changes.push('Initial schema created');
+      if (oldVersion < 2 && newVersion >= 2) {
+        migrationLog.changes.push('Added process progress tracking');
+      }
+      if (oldVersion < 3 && newVersion >= 3) {
+        migrationLog.changes.push('Added summary indexes for dashboard/calendar aggregates');
+      }
+    }
+
+    if (dbType === 'xenft_stake') {
+      if (oldVersion < 3 && newVersion >= 3) {
+        migrationLog.changes.push('Added summary indexes for dashboard/calendar aggregates');
       }
     }
 
@@ -276,8 +420,8 @@ export class DatabaseSchemaManager {
 
     // Fallback logic
     const currentChain = chainId || (window.chainManager?.getCurrentChain?.() || 'ETHEREUM');
-    const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
-    
+    const chainPrefix = window.chainManager?.getDatabasePrefix?.(currentChain) || 'ETH';
+
     const typeMap = {
       'cointool': `${chainPrefix}_DB_Cointool`,
       'xenft': `${chainPrefix}_DB_Xenft`,

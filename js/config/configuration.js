@@ -150,8 +150,8 @@ export const staticConfig = {
 
     // Database versions
     DB_VERSION_COINTOOL: 3,
-    DB_VERSION_XENFT: 1,
-    DB_VERSION_STAKE: 1,
+    DB_VERSION_XENFT: 4,
+    DB_VERSION_STAKE: 2,
 
     // UI constants
     PROGRESS_UPDATE_INTERVAL: 500, // ms

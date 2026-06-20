@@ -187,15 +187,7 @@ async function fetchFromCoinGecko() {
 // Fetch XEN price with fallback
 async function fetchXenPrice() {
   try {
-    let tokenAddress;
-    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-    if (currentChain === 'BASE') {
-      // Use XEN token address on Base
-      tokenAddress = window.chainManager?.getContractAddress('XEN') || '0x96B02E3E8e118e76F4d98C6a626D8dA26e7CC298';
-    } else {
-      // Use XEN token address on Ethereum
-      tokenAddress = window.chainManager?.getContractAddress('XEN') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
-    }
+    const tokenAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
 
     const primary = await fetchFromDexscreener(tokenAddress);
     xenUsdPrice = primary.price;
@@ -257,7 +249,7 @@ function renderXenUsdEstimate(totalBigInt) {
 function buildClaimData(minter, xen = null) {
   // Get chain-specific XEN address if not provided
   if (!xen) {
-    xen = window.chainManager?.getContractAddress('XEN') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
+    xen = window.chainManager?.getContractAddress('XEN_CRYPTO') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
   }
 
   const xenNo = no0x(xen);

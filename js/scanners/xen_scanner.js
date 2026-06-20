@@ -2,15 +2,19 @@
 // Fix: decode log `data` with w3.eth.abi (window.Web3.eth.abi can be undefined in some builds)
 // Result: amount/term are now populated; maturity/status render correctly in table + calendar.
 (function () {
-  // Get chain-specific contract address
-  const CONTRACT_ADDRESS = (window.chainManager?.getContractAddress('XEN_CRYPTO') || 
-    window.appConfig?.contracts?.XEN_ETH || 
-    "0x06450dee7fd2fb8e39061434babcfc05599a6fb8").toLowerCase();
-  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default ||
+  const FALLBACK_CONTRACT_ADDRESS = "0x06450dee7fd2fb8e39061434babcfc05599a6fb8";
+  const getXenContractAddress = () => (window.chainManager?.getContractAddress('XEN_CRYPTO') ||
+    window.appConfig?.contracts?.XEN_ETH ||
+    FALLBACK_CONTRACT_ADDRESS).toLowerCase();
+  const getDefaultRpc = () => window.chainManager?.getCurrentConfig?.()?.rpcUrls?.default ||
     window.appConfig?.rpc?.DEFAULT_RPC ||
     "https://ethereum-rpc.publicnode.com";
-  const MIN_CONTRACT_BLOCK = window.chainManager?.getXenDeploymentBlock() || 15704871;
+  const getMinContractBlock = () => window.chainManager?.getDeploymentBlock?.('XEN_CRYPTO') || window.chainManager?.getXenDeploymentBlock?.() || 15704871;
   const SCAN_BACKTRACK_BLOCKS = 1000;
+  const XEN_STAKE_DEBUG = false;
+  const debugLog = (...args) => {
+    if (XEN_STAKE_DEBUG || window.DEBUG_XEN_STAKE) console.log(...args);
+  };
 
   // Throttle (more conservative - 3 req/sec to avoid rate limits)
   const RATE_PER_SEC = 3;
@@ -37,18 +41,45 @@
 
   // IDB
   const STORE="stakes", STORE_ST="scanState";
+  const DB_VERSION = 3;
+  function ensureSummaryStores(db, tx) {
+    const createIndexedStore = (storeName, indexes = []) => {
+      let store = null;
+      if (!db.objectStoreNames.contains(storeName)) {
+        store = db.createObjectStore(storeName, { keyPath: "id" });
+      } else if (tx) {
+        try { store = tx.objectStore(storeName); } catch (_) {}
+      }
+      if (store) {
+        for (const [indexName, keyPath] of indexes) {
+          if (!store.indexNames.contains(indexName)) {
+            store.createIndex(indexName, keyPath, { unique: false });
+          }
+        }
+      }
+    };
+    createIndexedStore('summaryByType', [['byType', 'type']]);
+    createIndexedStore('summaryByStatus', [['byType', 'type'], ['byStatus', 'status']]);
+    createIndexedStore('summaryByDay', [['byDate', 'date'], ['byType', 'type']]);
+    createIndexedStore('summaryByOwner', [['byOwner', 'owner'], ['byType', 'type']]);
+    if (!db.objectStoreNames.contains('summaryMetadata')) {
+      db.createObjectStore('summaryMetadata', { keyPath: "id" });
+    }
+  }
   function openDB(){return new Promise((resolve,reject)=>{
     // Get chain-specific database name from chainManager
     const dbName = window.chainManager?.getDatabaseName('xen_stake') || 'ETH_DB_XenStake';
-    // Version 2: adds the processProgress store. The upgrade handler is
+    // Version 3: adds summary stores. The upgrade handler is
     // idempotent (uses !contains checks) so older v1 DBs gain the missing
-    // store without losing existing stakes/scanState data.
-    const req=indexedDB.open(dbName,2);
+    // stores without losing existing stakes/scanState data.
+    const req=indexedDB.open(dbName,DB_VERSION);
     req.onupgradeneeded=e=>{const db=e.target.result;
-      console.log(`[XenStake] Database upgrade needed for ${dbName}, creating stores...`);
+      const tx=e.target.transaction;
+      debugLog(`[XenStake] Database upgrade needed for ${dbName}, creating stores...`);
       if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:"id"}); os.createIndex("byOwner","owner",{unique:false});}
       if(!db.objectStoreNames.contains(STORE_ST)){db.createObjectStore(STORE_ST,{keyPath:"address"});}
       if(!db.objectStoreNames.contains("processProgress")){db.createObjectStore("processProgress",{keyPath:"address"});}
+      ensureSummaryStores(db, tx);
     };
     req.onsuccess=()=>{
       const db = req.result;
@@ -121,12 +152,21 @@
   });}
 
   // Web3 + RPC
-  function getRpcList(){const ta=document.getElementById("customRPC"); if(ta&&ta.value.trim()){return ta.value.trim().split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);} if(window.chainManager){const rpcs=window.chainManager.getRPCEndpoints(); return rpcs.length>0?rpcs:[DEFAULT_RPC];} return [DEFAULT_RPC];}
+  function getRpcList(){const ta=document.getElementById("customRPC"); if(ta&&ta.value.trim()){ta.value=window.normalizeMultiLineValue?window.normalizeMultiLineValue(ta.value,"rpc"):ta.value.trim(); return window.splitMultiLineValue?window.splitMultiLineValue(ta.value,"rpc"):ta.value.trim().split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);} if(window.chainManager){const rpcs=window.chainManager.getRPCEndpoints(); return rpcs.length>0?rpcs:[getDefaultRpc()];} return [getDefaultRpc()];}
   function newWeb3(){const list=getRpcList(); const provider=new window.Web3.providers.HttpProvider(list[0]); const w3=new window.Web3(provider); w3.__rpcList=list; w3.__rpcIndex=0; return w3;}
   function rotateRpc(w3){ if(!w3.__rpcList||!w3.__rpcList.length) return; w3.__rpcIndex=(w3.__rpcIndex+1)%w3.__rpcList.length; const next=w3.__rpcList[w3.__rpcIndex]; try{w3.setProvider(new window.Web3.providers.HttpProvider(next));}catch{} const stat=document.getElementById("rpcStatus"); if(stat) stat.textContent=` via ${next}`; }
 
   // Logs API
   async function fetchLogsOnce(apiKey, params){
+    if (window.explorerApiClient?.fetchLogs) {
+      try {
+        const rows = await window.explorerApiClient.fetchLogs(params, apiKey, { attempts: 1 });
+        return { status: "1", result: rows };
+      } catch (error) {
+        return { status: "0", message: error.message || "logs error", result: "" };
+      }
+    }
+
     const qs=new URLSearchParams(params).toString();
     // Use Etherscan V2 multichain API for all chains
     const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
@@ -183,7 +223,7 @@
   }
 
   // --- Fast XEN Stakes scanning using unified method for all chains ---
-  async function scanStakesEventBased(addr, etherscanApiKey) {
+  async function scanStakesEventBased(db, addr, etherscanApiKey, forceRescan = false) {
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
     // Starting event-based scanning
 
@@ -192,8 +232,30 @@
       const w3 = newWeb3();
 
       // Get the correct contract address for current chain
-      const xenContractAddress = window.chainManager?.getContractAddress('XEN_CRYPTO') || CONTRACT_ADDRESS;
-      console.log(`🔍 Using XEN contract: ${xenContractAddress} on ${currentChain}`);
+      const xenContractAddress = getXenContractAddress();
+      debugLog(`Using XEN contract: ${xenContractAddress} on ${currentChain}`);
+
+      if (forceRescan) {
+        await clearScanState(db, addr);
+        await clearProcessProgress(db, addr);
+      }
+
+      const latestBlock = Number(await w3.eth.getBlockNumber());
+      const deploymentBlock = getMinContractBlock();
+      const scanState = await getScanState(db, addr);
+      const lastTransactionBlock = Number(scanState?.lastTransactionBlock || 0);
+      const lastScannedBlock = Number(scanState?.lastScannedBlock || 0);
+      const startBlock = forceRescan
+        ? deploymentBlock
+        : lastTransactionBlock > 0
+          ? Math.max(lastTransactionBlock - SCAN_BACKTRACK_BLOCKS, deploymentBlock)
+          : Math.max(deploymentBlock, lastScannedBlock + 1 - SCAN_BACKTRACK_BLOCKS);
+      const endBlock = latestBlock;
+
+      if (startBlock > endBlock) {
+        await putScanStateWithTransactions(db, addr, endBlock, 0);
+        return [];
+      }
 
       // Get genesis timestamp for APY calculation
       const xen = new w3.eth.Contract(window.xenAbi, xenContractAddress);
@@ -216,14 +278,16 @@
       // Use exact same address padding as working scanner
       const userAddressTopic = padTopicAddress(addr);
 
-      const stakes = [];
+      const stakes = forceRescan ? [] : await getByOwner(db, addr);
+      const stakesById = new Map(stakes.map(stake => [stake.id, stake]));
+      let lastBlockWithTransactions = 0;
 
       try {
         // Fetch Staked events using exact same method as working scanner
         const sinkStaked = [];
         await fetchLogsSplit(etherscanApiKey, {
-          fromBlock: "0",
-          toBlock: "latest",
+          fromBlock: String(startBlock),
+          toBlock: String(endBlock),
           address: xenContractAddress,
           topic0: topicStaked,
           topic1: userAddressTopic
@@ -244,6 +308,7 @@
           }
 
           const blockNumber = Number(BigInt(event.blockNumber));
+          lastBlockWithTransactions = Math.max(lastBlockWithTransactions, blockNumber);
           const timeStamp = Number(BigInt(event.timeStamp || "0x0"));
 
           const TOK = 10n ** 18n;
@@ -308,7 +373,10 @@
             actions: [{ type: "stake", hash: event.transactionHash, timeStamp: timeStamp }]
           };
 
-          stakes.push(stakeRow);
+          if (!stakesById.has(stakeRow.id)) {
+            stakes.push(stakeRow);
+            stakesById.set(stakeRow.id, stakeRow);
+          }
         }
 
         // Small delay to avoid rate limiting
@@ -317,14 +385,14 @@
         // Fetch Withdrawn events using exact same method
         const sinkWithdrawn = [];
         await fetchLogsSplit(etherscanApiKey, {
-          fromBlock: "0",
-          toBlock: "latest",
+          fromBlock: String(startBlock),
+          toBlock: String(endBlock),
           address: xenContractAddress,
           topic0: topicWithdrawn,
           topic1: userAddressTopic
         }, sinkWithdrawn);
 
-        console.log(`[XenStake] ${addr.slice(0,8)}… fetched ${stakes.length} Staked / ${sinkWithdrawn.length} Withdrawn events`);
+        debugLog(`[XenStake] ${addr.slice(0,8)} fetched ${stakes.length} Staked / ${sinkWithdrawn.length} Withdrawn events`);
 
         // XEN allows only one active stake per address at a time, so withdrawals
         // pair with stakes in chronological order (oldest unmatched stake first).
@@ -339,6 +407,8 @@
         // so .find() returns the oldest stake that has no withdraw action yet.
         let pairedCount = 0, unpairedCount = 0;
         for (const event of sortedWithdrawn) {
+          const withdrawBlock = Number(BigInt(event.blockNumber || "0x0"));
+          lastBlockWithTransactions = Math.max(lastBlockWithTransactions, withdrawBlock);
           const withdrawTs = Number(BigInt(event.timeStamp || "0x0"));
           const withdrawHash = event.transactionHash;
 
@@ -367,7 +437,7 @@
             console.warn(`[XenStake] Withdraw at ts=${withdrawTs} (tx=${withdrawHash?.slice(0,10)}…) had no matching unclosed stake`);
           }
         }
-        console.log(`[XenStake] ${addr.slice(0,8)}… matched ${pairedCount}/${sortedWithdrawn.length} withdrawals (${unpairedCount} unpaired)`);
+        debugLog(`[XenStake] ${addr.slice(0,8)} matched ${pairedCount}/${sortedWithdrawn.length} withdrawals (${unpairedCount} unpaired)`);
 
       } catch (error) {
         console.error(`XEN Stakes Scanner - Error using fetchLogsSplit:`, error);
@@ -375,6 +445,7 @@
       }
 
       // Event scan complete
+      await putScanStateWithTransactions(db, addr, endBlock, lastBlockWithTransactions);
       return stakes;
 
     } catch (error) {
@@ -385,11 +456,11 @@
 
   // Core scan
   async function scan(){
-    const addrs=(function(){const el=document.getElementById("ethAddress"); const raw=(el&&el.value)||localStorage.getItem("ethAddress")||""; const arr=raw.replace(/[;,]+/g,"\n").split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>s.toLowerCase()); const seen=new Set(); return arr.filter(a=>seen.has(a)?false:(seen.add(a),true));})();
+    const addrs=(function(){const el=document.getElementById("ethAddress"); const raw=(el&&el.value)||localStorage.getItem("ethAddress")||""; const text=window.normalizeMultiLineValue?window.normalizeMultiLineValue(raw,"address"):raw.replace(/[;,]+/g,"\n"); if(el)el.value=text; const arr=(window.splitMultiLineValue?window.splitMultiLineValue(text,"address"):text.split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean)).map(s=>s.toLowerCase()); const seen=new Set(); return arr.filter(a=>seen.has(a)?false:(seen.add(a),true));})();
     const apiKey=(document.getElementById("etherscanApiKey")?.value||"").trim();
     const forceRescan=!!document.getElementById("forceRescan")?.checked;
     if(!addrs.length){alert("Add at least one address in Settings to scan Stakes.");return;}
-    if(!apiKey){alert("An Etherscan API Key is required to scan Stakes.");return;}
+    if(!apiKey){alert("An Etherscan Multichain API key is required to scan Stakes.");return;}
 
     const w3=newWeb3();
     const db=await openDB();
@@ -400,7 +471,8 @@
     const progWrap=document.getElementById("progressContainer"); if (window.progressUI) { window.progressUI.show(true); window.progressUI.setType('Stakes'); } else if (progWrap) progWrap.style.display="block";
 
     // constants for APY calc (ABI moved to ./ABI/xen-ABI.js)
-    const xen = new w3.eth.Contract(window.xenAbi, CONTRACT_ADDRESS);
+    const xenContractAddress = getXenContractAddress();
+    const xen = new w3.eth.Contract(window.xenAbi, xenContractAddress);
     let genesisTs=1665187200, SECONDS_IN_DAY=86400;
     try{ genesisTs=Number(await xen.methods.genesisTs().call())||genesisTs; }catch{}
     try{ SECONDS_IN_DAY=Number(await xen.methods.SECONDS_IN_DAY().call())||86400; }catch{}
@@ -428,10 +500,10 @@
           }
 
           try {
-            console.log('🚀 XEN Stakes Scanner - Calling unified event-based scanner...');
+            debugLog('XEN Stakes Scanner - Calling unified event-based scanner...');
             updateStatus(`Using fast event-based scanning for ${addr.slice(0,6)}...`);
 
-            const eventStakes = await scanStakesEventBased(addr, apiKey);
+            const eventStakes = await scanStakesEventBased(db, addr, apiKey, forceRescan);
             if (eventStakes !== null) {
               updateStatus(`Processing ${eventStakes.length} event-based stakes...`);
 
@@ -464,8 +536,8 @@
           const lastScannedBlock = st?.lastScannedBlock || 0;
 
           const safeStartBlock = lastTransactionBlock > 0
-            ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, MIN_CONTRACT_BLOCK)
-            : Math.max(MIN_CONTRACT_BLOCK, lastScannedBlock + 1 - SCAN_BACKTRACK_BLOCKS);
+            ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, getMinContractBlock())
+            : Math.max(getMinContractBlock(), lastScannedBlock + 1 - SCAN_BACKTRACK_BLOCKS);
 
           const resumeFrom = safeStartBlock;
 
@@ -484,13 +556,13 @@
             const sinkStake=[], sinkWd=[];
 
             // Fetch stake events first
-            await fetchLogsSplit(apiKey, {fromBlock:String(startBlock), toBlock:String(endBlock), address:CONTRACT_ADDRESS, topic0:topicStake, topic1:topic1}, sinkStake);
+            await fetchLogsSplit(apiKey, {fromBlock:String(startBlock), toBlock:String(endBlock), address:xenContractAddress, topic0:topicStake, topic1:topic1}, sinkStake);
             
             // Small delay between different event types to avoid rate limits
             await new Promise(r => setTimeout(r, 100));
             
             // Then fetch withdraw events
-            await fetchLogsSplit(apiKey, {fromBlock:String(startBlock), toBlock:String(endBlock), address:CONTRACT_ADDRESS, topic0:topicWithdraw, topic1:topic1}, sinkWd);
+            await fetchLogsSplit(apiKey, {fromBlock:String(startBlock), toBlock:String(endBlock), address:xenContractAddress, topic0:topicWithdraw, topic1:topic1}, sinkWd);
 
             const items=[]; for(const ev of sinkStake) items.push({kind:"stake", ev}); for(const ev of sinkWd) items.push({kind:"withdraw", ev});
             items.sort((a,b)=>{ const ba=Number(BigInt(a.ev.blockNumber)), bb=Number(BigInt(b.ev.blockNumber)); if(ba!==bb) return ba-bb; const la=Number(BigInt(a.ev.logIndex||"0x0")), lb=Number(BigInt(b.ev.logIndex||"0x0")); return la-lb; });
@@ -513,7 +585,7 @@
                   if (resumeIndex !== -1) {
                     startFromIndex = resumeIndex + 1; // Start after the last processed transaction
                     totalProcessedSoFar = processProgress.totalProcessed || 0;
-                    console.log(`[XEN] Resuming from transaction ${startFromIndex}/${items.length} in chunk (hash: ${lastHash.slice(0,10)}...)`);
+                    debugLog(`[XEN] Resuming from transaction ${startFromIndex}/${items.length} in chunk (hash: ${lastHash.slice(0,10)}...)`);
                   }
                 }
               }
@@ -627,9 +699,9 @@
             await putScanStateWithTransactions(db, addr, endBlock, lastBlockWithTransactions);
 
             if (lastBlockWithTransactions > 0) {
-              console.log(`[XEN] Processed ${items.length} transactions, highest block: ${lastBlockWithTransactions}`);
+              debugLog(`[XEN] Processed ${items.length} transactions, highest block: ${lastBlockWithTransactions}`);
             } else {
-              console.log(`[XEN] No transactions found in blocks ${startBlock}-${endBlock}`);
+              debugLog(`[XEN] No transactions found in blocks ${startBlock}-${endBlock}`);
             }
             chunksDone++; window.__scanLastActivityTs=Date.now();
             if (tokenBar) { tokenBar.max=totalChunks; tokenBar.value=chunksDone; }
@@ -659,7 +731,7 @@
           if (tokenBar) { tokenBar.max=prevBarMax; tokenBar.value=prevBarVal; }
           // Clear process progress on successful completion of address scanning
           await clearProcessProgress(db, addr);
-          console.log(`[XEN] Chunk-based scan completed successfully for ${addr} - cleared process progress`);
+          debugLog(`[XEN] Chunk-based scan completed successfully for ${addr} - cleared process progress`);
         } catch(err){
           console.error("[XenStake] Scan failed for", addr, err);
           if (tokenTxt) tokenTxt.textContent=`Error scanning ${addr.slice(0,6)}…`;
@@ -674,31 +746,57 @@
   }
 
 // Helper to get ALL records from a store, not just by owner index
-  function getAllFromStore(db, storeName) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Check if the store exists before creating transaction
-        if (!db.objectStoreNames.contains(storeName)) {
-          console.error(`[XenStake] Store '${storeName}' not found in database. Available stores:`, Array.from(db.objectStoreNames));
-          resolve([]); // Return empty array instead of failing
-          return;
-        }
-
-        const tx = db.transaction(storeName, "readonly");
-        const store = tx.objectStore(storeName);
-        const req = store.getAll();
-        req.onsuccess = e => resolve(e.target.result || []);
-        req.onerror = e => reject(e.target.error);
-      } catch (e) {
-        console.error(`[XenStake] Error accessing store '${storeName}':`, e);
-        resolve([]); // Return empty array instead of failing
+  async function getAllFromStore(db, storeName) {
+    try {
+      if (!db.objectStoreNames.contains(storeName)) {
+        console.error(`[XenStake] Store '${storeName}' not found in database. Available stores:`, Array.from(db.objectStoreNames));
+        return [];
       }
-    });
+
+      const out = [];
+      let range = null;
+      const batchSize = 500;
+
+      while (true) {
+        const { rows, keys } = await new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, "readonly");
+          const store = tx.objectStore(storeName);
+          const rowsReq = store.getAll(range, batchSize);
+          const keysReq = store.getAllKeys(range, batchSize);
+          let rows = null;
+          let keys = null;
+          const finish = () => {
+            if (rows && keys) resolve({ rows, keys });
+          };
+          rowsReq.onsuccess = e => {
+            rows = e.target.result || [];
+            finish();
+          };
+          keysReq.onsuccess = e => {
+            keys = e.target.result || [];
+            finish();
+          };
+          rowsReq.onerror = e => reject(e.target.error);
+          keysReq.onerror = e => reject(e.target.error);
+        });
+
+        if (!rows.length) break;
+        out.push(...rows);
+        if (rows.length < batchSize || !keys.length) break;
+        range = IDBKeyRange.lowerBound(keys[keys.length - 1], true);
+        await (window.yieldToUi?.() || new Promise(resolve => setTimeout(resolve, 0)));
+      }
+
+      return out;
+    } catch (e) {
+      console.error(`[XenStake] Error accessing store '${storeName}':`, e);
+      return [];
+    }
   }
 
   // ✅ FIX: The getAll function now correctly fetches and returns all records.
   window.xenStake = {
-    CONTRACT_ADDRESS,
+    get CONTRACT_ADDRESS() { return getXenContractAddress(); },
     openDB,
     getAll: (db) => getAllFromStore(db, STORE), // Use the new helper to get everything
     scan

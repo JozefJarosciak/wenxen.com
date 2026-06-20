@@ -4,6 +4,69 @@ import { storageUtils } from '../utils/storageUtils.js';
 export const tabManager = {
   // Current state
   currentTab: 'tab-dashboard',
+
+  normalizeSettingsTextareas() {
+    const normalizeList = (value, type) => {
+      if (!value || typeof value !== 'string') return '';
+      if (typeof window.normalizeMultiLineValue === 'function') {
+        return window.normalizeMultiLineValue(value, type);
+      }
+
+      const raw = value.replace(/\r\n?/g, '\n').trim();
+      if (!raw) return '';
+
+      if (type === 'address') {
+        const addressPattern = /0x[a-fA-F0-9]{40}/g;
+        const matches = raw.match(addressPattern);
+        const leftovers = raw.replace(addressPattern, '').replace(/[\s,;\n]+/g, '');
+        if (matches?.length && !leftovers) return matches.join('\n');
+      }
+
+      if (type === 'rpc') {
+        const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|[\s,;]+|$)/g;
+        const matches = raw.match(urlPattern);
+        const leftovers = raw.replace(urlPattern, '').replace(/[\s,;\n]+/g, '');
+        if (matches?.length && !leftovers) return matches.join('\n');
+      }
+
+      return raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).join('\n');
+    };
+
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    const addressEl = document.getElementById('ethAddress');
+    const rpcEl = document.getElementById('customRPC');
+
+    if (addressEl) {
+      const fallbackAddress = localStorage.getItem(`${currentChain}_ethAddress`) || localStorage.getItem('ethAddress') || '';
+      const normalized = normalizeList(addressEl.value || fallbackAddress, 'address');
+      if (normalized && normalized !== addressEl.value) {
+        addressEl.value = normalized;
+        try {
+          localStorage.setItem(`${currentChain}_ethAddress`, normalized);
+          if (currentChain === 'ETHEREUM') localStorage.setItem('ethAddress', normalized);
+        } catch (_) {}
+      }
+    }
+
+    if (rpcEl) {
+      const customRpcKey = `${currentChain}_customRPC`;
+      const fallbackRpc = localStorage.getItem(customRpcKey) ||
+        localStorage.getItem(`${currentChain}_customRPC_lastKnown`) ||
+        (window.chainManager?.getRPCEndpoints?.() || []).join('\n');
+      const normalized = normalizeList(rpcEl.value || fallbackRpc, 'rpc');
+      if (normalized && normalized !== rpcEl.value) {
+        rpcEl.value = normalized;
+        try {
+          if (localStorage.getItem(customRpcKey) !== null) {
+            localStorage.setItem(customRpcKey, normalized);
+            localStorage.setItem(`${currentChain}_customRPC_source`, currentChain);
+          }
+          localStorage.setItem(`${currentChain}_customRPC_lastKnown`, normalized);
+          window.__setRpcLastValueForChain?.(currentChain, normalized);
+        } catch (_) {}
+      }
+    }
+  },
   
   // Get all tab buttons and panels
   getTabElements() {
@@ -64,6 +127,25 @@ export const tabManager = {
 
     // Check onboarding for Settings tab  
     if (tabId === 'tab-settings') {
+      const normalize = () => {
+        if (typeof window.normalizeSettingsTextareasEarly === 'function') {
+          window.normalizeSettingsTextareasEarly();
+        }
+        this.normalizeSettingsTextareas();
+        if (typeof window.normalizeSettingsTextareasNow === 'function') {
+          window.normalizeSettingsTextareasNow();
+          return;
+        }
+        if (typeof window.normalizeSettingsTextareas === 'function') {
+          window.normalizeSettingsTextareas();
+        }
+      };
+      normalize();
+      requestAnimationFrame(normalize);
+      setTimeout(normalize, 0);
+      setTimeout(normalize, 100);
+      setTimeout(normalize, 500);
+
       try {
         if (typeof window.shouldShowOnboarding === 'function' && 
             typeof window.showOnboardingModal === 'function' &&
@@ -226,6 +308,7 @@ export const tabManager = {
 
 // Legacy global function for backward compatibility
 window.setActiveTab = (tabId) => tabManager.setActiveTab(tabId);
+window.normalizeSettingsTextareas = () => tabManager.normalizeSettingsTextareas();
 
 // Auto-initialize when module loads
 if (document.readyState === 'loading') {

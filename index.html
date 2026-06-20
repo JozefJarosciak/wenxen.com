@@ -76,12 +76,10 @@
   <!-- Dark theme for Flatpickr (toggled via JS) -->
   <link id="flatpickrDarkCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" disabled>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="./css/base.css?v=PLACEHOLDER">
   <link rel="stylesheet" href="./css/theme-light.css?v=PLACEHOLDER">
   <link rel="stylesheet" href="./css/theme-dark.css?v=PLACEHOLDER">
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-  <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/npm/simple-icons@7/icons/ethereum.svg">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23063d85'/%3E%3Cpath fill='%23fff' d='M15 18h7l5 12 5-12h7l-8 17 8 11h-7l-5-8-5 8h-7l8-11z'/%3E%3C/svg%3E">
 
   <!-- JSON-LD Structured Data -->
   <script type="application/ld+json">
@@ -222,37 +220,37 @@
         <button class="network-option" data-chain="BASE">
           <span class="network-option-icon">🔵</span>
           <span class="network-option-name">Base</span>
-          <span class="network-option-check" data-chain="BASE" style="display: none;">✓</span>
+          <span class="network-option-check initial-hidden" data-chain="BASE">✓</span>
         </button>
         <button class="network-option" data-chain="AVALANCHE">
           <span class="network-option-icon">🔺</span>
           <span class="network-option-name">Avalanche</span>
-          <span class="network-option-check" data-chain="AVALANCHE" style="display: none;">✓</span>
+          <span class="network-option-check initial-hidden" data-chain="AVALANCHE">✓</span>
         </button>
         <button class="network-option" data-chain="BSC">
           <span class="network-option-icon">🟡</span>
           <span class="network-option-name">BNB Smart Chain</span>
-          <span class="network-option-check" data-chain="BSC" style="display: none;">✓</span>
+          <span class="network-option-check initial-hidden" data-chain="BSC">✓</span>
         </button>
         <button class="network-option" data-chain="MOONBEAM">
           <span class="network-option-icon">🌙</span>
           <span class="network-option-name">Moonbeam</span>
-          <span class="network-option-check" data-chain="MOONBEAM" style="display: none;">✓</span>
+          <span class="network-option-check initial-hidden" data-chain="MOONBEAM">✓</span>
         </button>
         <button class="network-option" data-chain="POLYGON">
           <span class="network-option-icon">🟣</span>
           <span class="network-option-name">Polygon</span>
-          <span class="network-option-check" data-chain="POLYGON" style="display: none;">✓</span>
+          <span class="network-option-check initial-hidden" data-chain="POLYGON">✓</span>
         </button>
         <button class="network-option" data-chain="OPTIMISM">
           <span class="network-option-icon">🔴</span>
           <span class="network-option-name">Optimism</span>
-          <span class="network-option-check" data-chain="OPTIMISM" style="display: none;">✓</span>
+          <span class="network-option-check initial-hidden" data-chain="OPTIMISM">✓</span>
         </button>
       </div>
     </div>
     <!-- Network badge shows wallet's actual network -->
-    <span id="networkName" style="display: none;"></span>
+    <span id="networkName"></span>
     <button id="connectWalletBtn"><span id="connectWalletText">Connect Wallet</span></button>
     <button id="toggleConnectMask" class="wallet-reveal-btn" aria-label="Mask wallet text" title="Mask">
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2.1 3.51L3.51 2.1l18.39 18.39-1.41 1.41-3.06-3.06A11.33 11.33 0 0112 20c-6 0-10-5.33-10-8 0-1.13 1.02-3.08 3.06-4.89L2.1 3.51zM7.5 8.91A7.6 7.6 0 004 12c0 1.2 3 6 8 6 1.63 0 3.09-.42 4.35-1.13l-1.8-1.8A4 4 0 018 12c0-.43.07-.85.2-1.24l-.7-.7zM12 6c6 0 10 5.33 10 8 0 .84-.48 2-1.42 3.22l-1.43-1.43c.51-.77.85-1.48.85-1.79 0-1.2-3-6-8-6-1.03 0-2 .2-2.89.56l-1.5-1.5C9.11 6.39 10.51 6 12 6zm0 4a2 2 0 011.73 3l-2.73-2.73c.29-.17.62-.27 1-.27z"/></svg>
@@ -285,7 +283,7 @@
   <span class="brand">WenXen.com</span>
   <sup class="brand-suffix">
     <span class="brand-suffix-text">XEN Crypto Tracker - Ethereum</span>
-    <span id="headerGasNow" class="gas-sup" title="Current gas (gwei)"></span>
+    <a id="headerGasNow" class="gas-sup" href="https://xen.pub/index-gas.php" target="_blank" rel="noopener noreferrer" title="Current gas (gwei)" aria-label="Open XEN gas tracker in a new tab"></a>
     <div id="gasTooltip" class="gas-tooltip" hidden>
       <div class="gas-tooltip-content">
         <div class="gas-tooltip-row">
@@ -323,20 +321,17 @@
 
       <div class="calendar-wrap">
         <button id="centerCalendarBtn" class="chip chip-ghost" aria-label="Center calendar on today"> Center Calendar</button>
-        <div class="calendar-wrap">
-          <div id="calendar"></div>
-          <div id="calendar-xen-total">
-            <div id="xenTotalCompact">
-              <!-- Collapsed total row will be inserted here -->
-            </div>
-            <div id="xenTotalExpanded" style="display: none;">
-              <!-- Full breakdown table will be inserted here -->
-            </div>
-            <!-- Hidden elements for data storage -->
-            <span id="estXenTotal" style="display: none;">0</span>
-            <span id="estXenUsd" style="display: none;"></span>
+        <div id="calendar"></div>
+        <div id="calendar-xen-total">
+          <div id="xenTotalCompact">
+            <!-- Collapsed total row will be inserted here -->
           </div>
-
+          <div id="xenTotalExpanded">
+            <!-- Full breakdown table will be inserted here -->
+          </div>
+          <!-- Hidden elements for data storage -->
+          <span id="estXenTotal">0</span>
+          <span id="estXenUsd"></span>
         </div>
       </div>
       <div class="details-wrap"><h2 class="details-title">Mint Details</h2>
@@ -361,8 +356,8 @@
             </div>
 
             <span class="checkbox-group">
-    <input type="checkbox" id="forceRescan" style="margin: 0;">
-    <label for="forceRescan" style="margin: 0;">Force Rescan</label>
+    <input type="checkbox" id="forceRescan">
+    <label for="forceRescan">Force Rescan</label>
   </span>
             <button id="summaryToggle" class="summary-toggle" title="Hide summary details" aria-label="Toggle summary">− Hide Details</button>
           </div>
@@ -372,16 +367,16 @@
             <div id="scanTypeLine"><strong id="scanTypeText"></strong></div>
             <div id="addressProgressContainer"><span id="addressProgressText"></span><span
               id="rpcStatus"></span></div>
-            <div id="tokenProgressContainer" style="margin-top: 10px;">
+            <div id="tokenProgressContainer">
               <progress id="tokenProgressBar" value="0" max="100"></progress>
               <span id="etrText" aria-live="polite"></span><span id="tokenProgressText"
                                                                  aria-live="polite"></span>
             </div>
-            <div id="scanActions" style="display:flex; justify-content:flex-start; margin-top:8px;">
-              <button id="cancelScanBtn" style="display:none;">Stop Scan</button>
+            <div id="scanActions" class="scan-actions">
+              <button id="cancelScanBtn">Stop Scan</button>
             </div>
           </div>
-          <div id="summaryContainer">
+          <div id="summaryContainer" class="option2">
             <div id="itemCount"></div>
             <div id="perAddressSummary"></div>
           </div>
@@ -402,23 +397,23 @@
 
       <span class="inline-sep"> | </span>
       <div class="table-actions">
-        <button id="downloadBtn" class="btn-secondary" type="button" style="display:none;">Download CSV</button>
-        <button id="downloadJsonBtn" class="btn-secondary" type="button" style="display:none;">JSON</button>
+        <button id="downloadBtn" class="btn-secondary" type="button">Download CSV</button>
+        <button id="downloadJsonBtn" class="btn-secondary" type="button">JSON</button>
       </div>
     </div>
 
     <!-- VMUs per Day Chart (collapsible) -->
-    <div id="vmu-chart-wrap" class="collapsible" style="margin:8px 0;">
+    <div id="vmu-chart-wrap" class="collapsible">
       <button id="vmuChartToggle" class="collapsible-toggle" aria-expanded="false" aria-controls="vmuChartBody" type="button">+ Show Chart</button>
       <div id="vmuChartBody" class="collapsible-body" hidden>
-        <div class="chart-controls" style="display:flex; align-items:center; gap:10px; margin: 4px 0 8px 0;">
+        <div class="chart-controls">
           <span class="muted">Metric:</span>
           <div class="toggle-group" role="tablist" aria-label="Chart Metric">
             <button id="vmuChartModeVMUs" class="toggle active" type="button" data-mode="vmus" aria-selected="true">VMUs</button>
             <button id="vmuChartModeUSD" class="toggle" type="button" data-mode="usd" aria-selected="false">$ Value</button>
           </div>
         </div>
-        <div id="vmuChart" style="width:100%; height:260px;"></div>
+        <div id="vmuChart"></div>
       </div>
     </div>
 
@@ -431,7 +426,7 @@
       <h2>Mint / Stake</h2>
 
       <!-- Wallet Balance Display -->
-      <div id="walletBalanceCard" class="wallet-balance-card" style="display:none;">
+      <div id="walletBalanceCard" class="wallet-balance-card">
         <div class="wallet-balance-row">
           <div class="wallet-balance-item">
             <div class="balance-label" id="nativeTokenLabel">ETH</div>
@@ -478,7 +473,7 @@
       </div>
 
       <!-- NEW: options visible only for XENFT -->
-      <div id="xenftOptionsRow" style="display:none; margin-top:10px;">
+      <div id="xenftOptionsRow" class="mint-options-row">
         <div class="mint-field">
           <label for="xenftKind">XENFT Type</label>
           <select id="xenftKind" class="mint-input">
@@ -486,7 +481,7 @@
             <option value="apex">APEX (burn XEN)</option>
           </select>
         </div>
-        <div id="apexTierWrap" class="mint-field" style="display:none;">
+        <div id="apexTierWrap" class="mint-field">
           <label for="apexTier">APEX Tier</label>
           <select id="apexTier" class="mint-input">
             <option value="rare" selected>Rare (500,000,000)</option>
@@ -497,9 +492,9 @@
           </select>
         </div>
 
-        <div id="xenftBurnWrap" class="mint-field" style="display:none;">
+        <div id="xenftBurnWrap" class="mint-field">
           <label for="xenftBurn">Burn (XEN tokens)</label>
-          <div style="display:flex; align-items:center; gap:8px;">
+          <div class="mint-inline-row xenft-burn-row">
             <input type="number" id="xenftBurn" placeholder="e.g. 5000000000" min="0" step="1" class="mint-input" />
             <span id="xenftBurnHuman" class="muted" aria-live="polite"></span>
           </div>
@@ -534,18 +529,18 @@
     <br>
     <div class="mint-actions" id="mintActions">
       <button id="startMintBtn" class="btn-mint">Start Minting</button>
-      <div id="mintConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to mint.</div>
+      <div id="mintConnectHint" class="muted mint-inline-hint">Connect your wallet to mint.</div>
     </div>
 
     <!-- Stake controls (hidden by default; shown when Action=Stake) -->
-    <div id="stakeControls" class="mint-controls" style="display:none; margin-top:10px;">
+    <div id="stakeControls" class="mint-controls">
       <div class="mint-field">
         <label for="stakeAmount">Amount (XEN)</label>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div class="mint-inline-row">
           <input type="number" id="stakeAmount" placeholder="e.g. 1000000" min="0" step="1" class="mint-input" />
           <button id="btnStakeGetBalance" type="button" class="btn-secondary">Get Balance</button>
         </div>
-        <div id="stakePercentOptions" class="muted" style="margin-top:6px; display:none;">
+        <div id="stakePercentOptions" class="muted mint-inline-hint">
           Use:
           <button type="button" class="linklike" data-pct="10">10%</button>
           <button type="button" class="linklike" data-pct="25">25%</button>
@@ -576,20 +571,20 @@
       </div>
     </div>
     <br>
-    <div class="mint-actions" id="stakeActions" style="display:none;">
+    <div class="mint-actions" id="stakeActions">
       <button id="startStakeBtn" class="btn-mint">Stake XEN</button>
-      <div id="stakeConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to stake.</div>
+      <div id="stakeConnectHint" class="muted mint-inline-hint">Connect your wallet to stake.</div>
     </div>
 
     <!-- Stake XENFT controls (hidden by default; shown when Action=Stake XENFT) -->
-    <div id="stakeXenftControls" class="mint-controls" style="display:none; margin-top:10px; grid-template-columns: 1fr; gap: 16px;">
+    <div id="stakeXenftControls" class="mint-controls">
       <div class="mint-field">
         <label for="stakeXenftAmount">Amount (XEN)</label>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div class="mint-inline-row">
           <input type="number" id="stakeXenftAmount" placeholder="e.g. 1000000" min="0" step="1" class="mint-input" />
           <button id="btnStakeXenftGetBalance" type="button" class="btn-secondary">Get Balance</button>
         </div>
-        <div id="stakeXenftPercentOptions" class="muted" style="margin-top:6px; display:none;">
+        <div id="stakeXenftPercentOptions" class="muted mint-inline-hint">
           Use:
           <button type="button" class="linklike" data-pct="10">10%</button>
           <button type="button" class="linklike" data-pct="25">25%</button>
@@ -623,9 +618,9 @@
       </div>
     </div>
 
-    <div id="stakeXenftActions" class="mint-actions" style="display:none; margin-top:10px;">
+    <div id="stakeXenftActions" class="mint-actions">
       <button id="startStakeXenftBtn" class="btn-mint">Mint Stake XENFT</button>
-      <div id="stakeXenftConnectHint" class="muted" style="margin-top:6px; display:none;">Connect your wallet to mint.</div>
+      <div id="stakeXenftConnectHint" class="muted mint-inline-hint">Connect your wallet to mint.</div>
     </div>
   </section>
 
@@ -790,9 +785,9 @@
       <!-- Addresses -->
       <div class="settings-card">
         <h3>Addresses</h3>
-        <p class="settings-note">Paste one Ethereum address per line.</p>
+        <p class="settings-note">Paste one wallet address per line.</p>
         <div class="field required" id="field-ethAddress">
-          <label for="ethAddress">Ethereum Addresses (one per line)</label>
+          <label for="ethAddress">Wallet Addresses (one per line)</label>
           <div class="input-with-toggle">
             <textarea id="ethAddress" rows="4" placeholder="0x...abc&#10;0x...def" required></textarea>
             <div class="reveal-row">
@@ -801,7 +796,7 @@
               </button>
             </div>
           </div>
-          <small class="error-message">At least one Ethereum address is required.</small>
+          <small class="error-message">At least one wallet address is required.</small>
         </div>
       </div>
 
@@ -811,7 +806,7 @@
         <div class="field required" id="field-etherscanApiKey">
           <label for="etherscanApiKey">Etherscan Multichain API Key</label>
           <div class="input-with-toggle">
-            <input type="text" id="etherscanApiKey" placeholder="Your Etherscan API Key (works for all chains)" required autocomplete="new-password" />
+            <input type="text" id="etherscanApiKey" placeholder="Your Etherscan Multichain API key" required autocomplete="new-password" />
             <div class="reveal-row">
               <button type="button" id="toggleApiKeyVisibility" class="reveal-btn" aria-label="Show API key" title="Show">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 5c6 0 10 5.33 10 8s-4 8-10 8S2 15.67 2 13 6 5 12 5zm0 2C7 7 4 12 4 13s3 6 8 6 8-5 8-6-3-6-8-6zm0 3a3 3 0 110 6 3 3 0 010-6z"/></svg>
@@ -819,12 +814,12 @@
             </div>
           </div>
           <small class="error-message">Etherscan API key is required.</small>
-          <div id="etherscanApiHelp" class="settings-status" style="display:none;">No key? <a href="https://etherscan.io/apidashboard" target="_blank" rel="noopener noreferrer">Get a free Etherscan Multichain API key</a> (works across 50+ chains including Base).</div>
+          <div id="etherscanApiHelp" class="settings-status settings-help-hidden">No key? <a href="https://etherscan.io/apidashboard" target="_blank" rel="noopener noreferrer">Get a free Etherscan Multichain API key</a> (works across 50+ chains including Base).</div>
         </div>
         <div class="field" id="field-customRPC">
           <label for="customRPC">Custom ETH RPCs (one per line, optional)</label>
           <textarea id="customRPC" rows="4" placeholder="Leave empty to use default RPCs"></textarea>
-          <div class="button-row" style="margin-top:6px;">
+          <div class="button-row settings-row-top">
             <button id="importRpcBtn" type="button">Find Active RPCs (by latency)</button>
           </div>
           <div id="importRpcStatus" class="settings-status" aria-live="polite"></div>
@@ -859,7 +854,7 @@
         <div class="field" id="field-cointoolMaxVmuPerTx">
           <label for="cointoolMaxVmuPerTx">Cointool Claim/Remint Chunk Size (VMUs per tx)</label>
           <input type="number" id="cointoolMaxVmuPerTx" min="1" max="128" step="1" placeholder="64" />
-          <small>Splits each Cointool claim/remint into smaller transactions to stay under Ethereum's per-tx gas cap (EIP-7825, ~16.7M gas). Lower = more txs but more reliable. Example: 50 → a 128-VMU mint is sent as 50+50+28. Default: 64. Remints are the gas-heavy case; pure claims rarely need splitting.</small>
+          <small>Splits each Cointool claim/remint into smaller transactions to stay under the per-transaction gas cap. Lower = more txs but more reliable. Example: 50 → a 128-VMU mint is sent as 50+50+28. Default: 64. Remints are the gas-heavy case; pure claims rarely need splitting.</small>
         </div>
         
         <!-- Fast Scan Toggles -->
@@ -885,7 +880,7 @@
           <label for="rescanBlockDepth">Incremental Scan Depth (blocks)</label>
           <input type="number" id="rescanBlockDepth" min="0" max="100000" step="100" placeholder="1000" />
           <small>How many blocks back to re-check when scanning. Set to 0 to only scan new mints. Default: 1000 blocks.</small>
-          <div id="rescanBlockPreview" class="settings-status" style="margin-top:8px; font-size:12px; color:#888;"></div>
+          <div id="rescanBlockPreview" class="settings-status settings-status-subtle"></div>
         </div>
 
       </div>
@@ -899,7 +894,7 @@
         <div class="grid-2">
           <!-- XEN Price -->
           <div>
-            <strong style="display:block; margin-bottom:6px;">XEN Price (USD)</strong>
+            <strong class="settings-label-block">XEN Price (USD)</strong>
             <div class="button-row">
               <button id="refreshXenPriceBtn" type="button">Refresh XEN Price</button>
             </div>
@@ -908,7 +903,7 @@
 
           <!-- cRank / globalRank -->
           <div>
-            <strong style="display:block; margin-bottom:6px;">XEN cRank (globalRank)</strong>
+            <strong class="settings-label-block">XEN cRank (globalRank)</strong>
             <div class="button-row">
               <button id="refreshCrankBtn" type="button">Refresh cRank</button>
             </div>
@@ -936,15 +931,22 @@
         <small class="settings-note">
           <strong>Chain-agnostic backup:</strong> Exports and restores data from <strong>all chains</strong>
           (Ethereum, Base, Avalanche, BSC, Moonbeam, Polygon, Optimism) regardless of which chain is currently selected.
-          Includes all mints, NFTs, stakes, and settings.
+          Includes all mints, NFTs, stakes, and settings. New exports are compressed when supported; old JSON backups still import.
         </small><br>
-        <div class="button-row" style="margin-bottom:6px;">
-          <button id="exportBackupBtn" type="button">Export Backup (.json)</button>
+        <div class="button-row settings-row-tight">
+          <button id="exportBackupBtn" type="button">Export Backup (.json.gz)</button>
         </div>
-        <div class="button-row" style="margin-bottom:6px;">
+        <div id="backupExportProgress" class="backup-export-progress" hidden aria-live="polite">
+          <div class="backup-export-progress-bar-wrap">
+            <div id="backupExportProgressBar" class="backup-export-progress-bar"></div>
+          </div>
+          <div id="backupExportProgressText" class="settings-status settings-status-tight">Preparing backup...</div>
+          <div id="backupExportProgressDetail" class="settings-status settings-status-small"></div>
+        </div>
+        <div class="button-row settings-row-tight">
           <button id="importBackupBtn" type="button">Import Backup…</button>
-          <input type="file" id="importBackupInput" accept="application/json"
-                 style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"/>
+          <input type="file" id="importBackupInput" accept=".json,.json.gz,.gz,.gzip,application/json,application/gzip,application/x-gzip,application/octet-stream"
+                 class="settings-file-input"/>
         </div>
 
       </div>
@@ -954,27 +956,67 @@
         <h3>Database Maintenance</h3>
         <small class="settings-note">
           Clean up duplicate entries that may have been created during scanning.
-          This will find and remove duplicates based on transaction hash across all data types.
+          This finds duplicate records by stable mint, token, stake, or transaction identity.
         </small>
-        <div class="button-row" style="margin-top:12px; margin-bottom:6px;">
-          <button id="removeDuplicatesBtn" type="button">Remove Duplicates</button>
-        </div>
-        <div id="lastCleanupTime" class="settings-note" style="margin-top:4px; font-size:12px; color:#888;"></div>
-        <div id="duplicatesProgress" style="display:none; margin-top:12px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-            <progress id="duplicatesProgressBar" value="0" max="100" style="flex:1; height:20px;"></progress>
-            <span id="duplicatesProgressText" style="min-width:50px; text-align:right;">0%</span>
+        <div class="dedupe-controls">
+          <label for="dedupeScope" class="settings-note dedupe-label">Scope:</label>
+          <select id="dedupeScope" class="danger-zone-select" aria-label="Duplicate cleanup scope">
+            <option value="current">Current chain</option>
+            <option value="selected">Selected chains</option>
+            <option value="all">All chains</option>
+          </select>
+          <div id="dedupeSelectedChains" class="dedupe-chain-select" aria-label="Chains to scan">
+            <label><input type="checkbox" value="ETHEREUM"> Ethereum</label>
+            <label><input type="checkbox" value="BASE"> Base</label>
+            <label><input type="checkbox" value="AVALANCHE"> Avalanche</label>
+            <label><input type="checkbox" value="BSC"> BSC</label>
+            <label><input type="checkbox" value="MOONBEAM"> Moonbeam</label>
+            <label><input type="checkbox" value="POLYGON"> Polygon</label>
+            <label><input type="checkbox" value="OPTIMISM"> Optimism</label>
           </div>
-          <div id="duplicatesStatus" class="settings-status" style="font-size:13px;"></div>
+          <label class="toggle-label settings-inline-toggle dedupe-dry-run">
+            <input type="checkbox" id="dedupeDryRun" class="settings-checkbox-large">
+            <span>Dry run only</span>
+          </label>
         </div>
-        <div id="duplicatesResult" class="settings-status" style="margin-top:8px;"></div>
-        <div class="field" style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border, #e5e7eb);">
-          <label class="toggle-label" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-            <input type="checkbox" id="autoDedupeAfterScan" checked style="width:18px; height:18px; cursor:pointer;">
+        <div class="button-row settings-row-spaced">
+          <button id="removeDuplicatesBtn" type="button">Check Duplicates</button>
+        </div>
+        <div id="lastCleanupTime" class="settings-note settings-status-subtle"></div>
+        <div id="duplicatesProgress" class="duplicates-progress">
+          <div class="duplicates-progress-row">
+            <progress id="duplicatesProgressBar" class="duplicates-progress-bar" value="0" max="100"></progress>
+            <span id="duplicatesProgressText" class="duplicates-progress-text">0%</span>
+          </div>
+          <div id="duplicatesStatus" class="settings-status settings-status-small"></div>
+        </div>
+        <div id="duplicatesResult" class="settings-status settings-status-result"></div>
+        <div class="field settings-separated-field">
+          <label class="toggle-label settings-inline-toggle">
+            <input type="checkbox" id="autoDedupeAfterScan" class="settings-checkbox-large" checked>
             <span>Auto-remove duplicates after each scan</span>
           </label>
-          <small class="settings-note" style="margin-top:4px; display:block;">When enabled, duplicates will be automatically removed after each scan completes.</small>
+          <small class="settings-note settings-note-block">When enabled, duplicates will be automatically removed after each scan completes.</small>
         </div>
+      </div>
+
+      <!-- Performance Diagnostics -->
+      <div class="settings-card">
+        <h3>Performance Diagnostics</h3>
+        <small class="settings-note">
+          Local timing and cache state for troubleshooting large wallets.
+        </small>
+        <div id="performanceMetrics" class="performance-metrics" aria-live="polite"></div>
+        <div id="performanceJobs" class="settings-status settings-status-small">No background jobs</div>
+        <div class="button-row settings-row-spaced">
+          <button id="refreshPerformanceBtn" type="button">Refresh Metrics</button>
+          <button id="copyPerformanceBtn" type="button">Copy Diagnostics</button>
+        </div>
+        <div id="performanceCopyStatus" class="settings-status settings-status-small"></div>
+        <label class="toggle-label settings-inline-toggle settings-separated-field">
+          <input type="checkbox" id="perfDebugLogging" class="settings-checkbox-large">
+          <span>Verbose performance logging</span>
+        </label>
       </div>
 
       <!-- Danger Zone -->
@@ -982,23 +1024,23 @@
         <h3>⚠️ Danger Zone</h3>
         <p class="settings-note">Permanently delete data for the current network. Use with caution!</p>
 
-        <div style="margin-top:16px; margin-bottom:8px;">
-          <label for="resetDbSelect" class="settings-note" style="display:block; margin-bottom:8px; font-weight:bold;">What to delete:</label>
-          <select id="resetDbSelect" aria-label="Select what data to delete" style="width:100%; padding:8px; font-size:14px;">
+        <div class="danger-zone-control">
+          <label for="resetDbSelect" class="settings-note danger-zone-label">What to delete:</label>
+          <select id="resetDbSelect" class="danger-zone-select" aria-label="Select what data to delete">
             <!-- Options will be dynamically populated based on current chain -->
             <option value="all-with-storage">Loading...</option>
           </select>
 
-          <div id="dangerZoneDescription" class="settings-note" style="display:block; margin-top:8px; padding:8px; background:rgba(255,0,0,0.1); border-radius:4px; font-style:italic; min-height:20px;">
+          <div id="dangerZoneDescription" class="settings-note danger-zone-description">
             Select an option to see what will be deleted.
           </div>
 
-          <div class="settings-note" style="display:block; margin-top:8px; color:#ff4444; font-weight:bold;">
+          <div class="settings-note danger-zone-warning">
             ⚠️ This action cannot be undone!
           </div>
         </div>
 
-        <button id="resetBtn" type="button" class="secondary" style="background:#ff4444; color:white; font-weight:bold;">🗑️ Delete Selected Data</button>
+        <button id="resetBtn" type="button" class="secondary danger-zone-button">🗑️ Delete Selected Data</button>
       </div>
 
     </div>
@@ -1053,13 +1095,13 @@
       <div class="about-quick-start">
         <h2>Quick Start Guide</h2>
         <ol>
-          <li><strong>Add Your Address</strong> - Go to Settings and add your Ethereum addresses</li>
+          <li><strong>Add Your Address</strong> - Go to Settings and add your wallet addresses</li>
           <li><strong>Add API Key</strong> - Add your free Etherscan Multichain API key (works for all 7 chains)</li>
           <li><strong>Scan Your Holdings</strong> - Hit the Scan button to discover all your XEN ecosystem assets</li>
           <li><strong>Explore Your Data</strong> - Use filters, search, and sort to analyze your portfolio</li>
         </ol>
 
-        <p style="margin-top: 20px;">
+        <p class="about-spaced-top">
           <strong>Pro Tip:</strong> The scanner remembers your data between sessions, so you only need to scan for new transactions!
         </p>
       </div>
@@ -1070,7 +1112,7 @@
           tracking XEN assets across multiple chains and contracts is complex. We believe in the XEN principles of
           self-custody, transparency, and decentralization - that's why WenXen runs entirely in your browser.
         </p>
-        <p style="margin-top: 15px;">
+        <p class="about-spaced-mid">
           <strong>Use it at wenxen.com or download it.</strong> Either way, no middlemen. No servers. No nonsense.
           Just you and your data. We're merely hosting static files - the app runs 100% on your machine.
         </p>
@@ -1081,7 +1123,7 @@
         <button class="btn btn-secondary" onclick="document.querySelector('[data-target=\'tab-settings\']').click()">Configure Settings</button>
       </div>
 
-      <p style="margin-top: 30px; text-align: center; opacity: 0.7;">
+      <p class="about-access-options">
         <strong>Access Options:</strong> <a href="https://wenxen.com" target="_blank" rel="noopener noreferrer">wenxen.com</a> or
         <a href="https://github.com/JozefJarosciak/wenxen.com" target="_blank" rel="noopener noreferrer">download from GitHub</a><br>
         <small>Both options provide the exact same privacy guarantees - your data never leaves your browser.</small>
@@ -1100,13 +1142,13 @@
   <span class="inline-sep">|</span>
   <a href="https://xen.pub/donate.php" id="donateLink" target="_blank" rel="noopener noreferrer">Donate</a>
   <span class="inline-sep">|</span>
-  <span id="deployVersion" title="Loading..." style="cursor: pointer;">v...</span>
+  <span id="deployVersion" title="Loading...">v...</span>
 </footer>
 <!-- Privacy Modal -->
 <div id="privacyModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="privacyTitle">
   <div class="modal-content">
-    <h3 id="privacyTitle" style="margin:0 0 8px 0;">Privacy &amp; Terms Notice</h3>
-    <div class="modal-body" style="max-height:50vh; overflow:auto;">
+    <h3 id="privacyTitle" class="modal-title">Privacy &amp; Terms Notice</h3>
+    <div class="modal-body modal-body-scroll">
       <p>
         This tracker is provided by WenXen.com on an open-source basis. It runs entirely in your browser and uses only public blockchain RPC endpoints and your own free API keys. We do not collect or store your data or keys on our servers.
       </p>
@@ -1127,10 +1169,10 @@
   </div>
 </div>
 <div id="actionModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="actionModalTitle">
-  <div class="modal-content"><h3 id="actionModalTitle" style="margin:0 0 8px 0;">Choose action</h3>
-    <p style="margin:0 0 10px 0;">What do you want to do with this mint?</p><label for="actionSelect"
-                                                                                   class="sr-only">Action</label><select
-      id="actionSelect" style="width:100%; padding:6px 8px; margin-bottom:12px;">
+  <div class="modal-content"><h3 id="actionModalTitle" class="modal-title">Choose action</h3>
+    <p class="action-modal-copy">What do you want to do with this mint?</p><label for="actionSelect"
+                                                                                    class="sr-only">Action</label><select
+      id="actionSelect" class="action-select">
       <option value="claim" selected>Claim</option>
       <option value="remint">Remint</option>
     </select>
@@ -1145,7 +1187,7 @@
 <div id="onboardingModal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="onboardingTitle">
   <div class="modal-content onboarding-content">
     <button id="onboardingCloseBtn" class="modal-close-btn" aria-label="Close">×</button>
-    <h3 id="onboardingTitle" style="margin:0 0 8px 0;">Welcome to WenXen.com!</h3>
+    <h3 id="onboardingTitle" class="modal-title">Welcome to WenXen.com!</h3>
     <div class="modal-body">
       <p>Tired of logging every XEN mint by hand? 🥱</p>
 
@@ -1153,7 +1195,7 @@
       <p>🔒100% browser-based & open-source (download and use it locally or run it from wenxen.com). Your data always stays on your device, no 3rd-party storage, no nonsense!</p>
     
       <div class="onboarding-steps">
-      <h4 style="margin: 16px 0 12px 0;">Get Started in 2 Steps:</h4>
+      <h4 class="onboarding-steps-title">Get Started in 2 Steps:</h4>
       
       <div class="onboarding-step">
         <div class="step-icon">📝</div>
@@ -1173,7 +1215,7 @@
     </div>
 
     <div class="onboarding-footer">
-      <p style="margin: 16px 0 8px 0; font-size: 0.9em; opacity: 0.8;">
+      <p class="onboarding-footer-note">
         ✨ Once set up, just click "Scan" to discover all your XEN activity! The first scan might take a little longer, but all subsequent ones will be fast.
       </p>
     </div>
@@ -1185,8 +1227,82 @@
   </div>
 </div>
 
-<!-- Global Configuration (load first) -->
-<script type="module" src="./js/config/configuration.js?v=PLACEHOLDER"></script>
+<script>
+  (function() {
+    function normalizeSettingsListValue(value, type) {
+      if (!value || typeof value !== 'string') return '';
+      var raw = value.replace(/\r\n?/g, '\n').replace(/\\n/g, '\n').trim();
+      if (!raw) return '';
+
+      if (type === 'address') {
+        var addressPattern = /0x[a-fA-F0-9]{40}/g;
+        var addressMatches = raw.match(addressPattern);
+        var addressLeftovers = raw.replace(addressPattern, '').replace(/[\s,;\n]+/g, '');
+        if (addressMatches && addressMatches.length && !addressLeftovers) {
+          return addressMatches.join('\n');
+        }
+      }
+
+      if (type === 'rpc') {
+        var urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|[\s,;]+|$)/g;
+        var urlMatches = raw.match(urlPattern);
+        var urlLeftovers = raw.replace(urlPattern, '').replace(/[\s,;\n]+/g, '');
+        if (urlMatches && urlMatches.length && !urlLeftovers) {
+          return urlMatches.join('\n');
+        }
+      }
+
+      return raw.split(/[\n,;]+/).map(function(s) {
+        return s.trim();
+      }).filter(Boolean).join('\n');
+    }
+
+    function installSettingsTextareaGuard(id, type) {
+      var el = document.getElementById(id);
+      var descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+      if (!el || !descriptor || el.dataset.settingsTextareaGuard === '1') return;
+
+      Object.defineProperty(el, 'value', {
+        configurable: true,
+        enumerable: true,
+        get: function() {
+          return descriptor.get.call(this);
+        },
+        set: function(nextValue) {
+          descriptor.set.call(this, normalizeSettingsListValue(String(nextValue || ''), type));
+        }
+      });
+
+      el.dataset.settingsTextareaGuard = '1';
+      el.value = el.value;
+      el.addEventListener('input', function() {
+        var normalized = normalizeSettingsListValue(el.value, type);
+        if (normalized && normalized !== el.value) el.value = normalized;
+      });
+    }
+
+    function normalizeSettingsTextareasEarly() {
+      installSettingsTextareaGuard('ethAddress', 'address');
+      installSettingsTextareaGuard('customRPC', 'rpc');
+      ['ethAddress', 'customRPC'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = el.value;
+      });
+    }
+
+    window.normalizeSettingsListValue = normalizeSettingsListValue;
+    window.normalizeSettingsTextareasEarly = normalizeSettingsTextareasEarly;
+    normalizeSettingsTextareasEarly();
+    document.addEventListener('DOMContentLoaded', normalizeSettingsTextareasEarly);
+    document.addEventListener('click', function(event) {
+      if (!event.target || !event.target.closest('[data-target="tab-settings"]')) return;
+      normalizeSettingsTextareasEarly();
+      requestAnimationFrame(normalizeSettingsTextareasEarly);
+      setTimeout(normalizeSettingsTextareasEarly, 0);
+      setTimeout(normalizeSettingsTextareasEarly, 100);
+    }, true);
+  })();
+</script>
 
 <!-- New Utility Modules (load first for compatibility) -->
 <script type="module" src="./js/utils/dateUtils.js?v=PLACEHOLDER"></script>
@@ -1211,6 +1327,7 @@
 <script type="module" src="./js/blockchain/web3Utils.js?v=PLACEHOLDER"></script>
 <script type="module" src="./js/data/indexedDbUtils.js?v=PLACEHOLDER"></script>
 <script type="module" src="./js/data/apiUtils.js?v=PLACEHOLDER"></script>
+<script src="./js/utils/explorerApiClient.js?v=PLACEHOLDER"></script>
 
 <!-- Auto-Rescan Manager -->
 <script src="./js/utils/autoRescanManager.js?v=PLACEHOLDER"></script>
@@ -1224,6 +1341,20 @@
   (function() {
     var moduleCheckCount = 0;
     var maxChecks = 50; // 5 seconds max wait (increased from 2)
+
+    function showBootstrapError(message) {
+      var existing = document.getElementById('bootstrapErrorBanner');
+      if (existing) {
+        existing.textContent = message;
+        return;
+      }
+      var banner = document.createElement('div');
+      banner.id = 'bootstrapErrorBanner';
+      banner.className = 'bootstrap-error-banner';
+      banner.setAttribute('role', 'alert');
+      banner.textContent = message;
+      document.body.prepend(banner);
+    }
     
     function checkModulesLoaded() {
       moduleCheckCount++;
@@ -1239,16 +1370,16 @@
       if (moduleCheckCount < maxChecks) {
         setTimeout(checkModulesLoaded, 100);
       } else {
-        console.warn('Modules failed to load after ' + (moduleCheckCount * 100) + 'ms, using fallback functions');
+        var msg = 'WenXen modules did not finish loading. Hard refresh the page and check the console if this persists.';
+        console.warn('Modules failed to load after ' + (moduleCheckCount * 100) + 'ms');
+        showBootstrapError(msg);
         
         // Provide fallback implementations
         window.acceptPrivacy = function() {
           localStorage.setItem('privacyAccepted', 'true');
           var modal = document.getElementById('privacyModal');
           if (modal) modal.style.display = 'none';
-          console.log('Privacy accepted (fallback)');
-          // Reload page to try loading modules again
-          setTimeout(function() { window.location.reload(); }, 1000);
+          showBootstrapError(msg);
         };
         
         window.declinePrivacy = function() {
@@ -1272,6 +1403,7 @@
 <!-- Chain configuration and network selector -->
 <script type="module">
   import { chainManager } from './js/config/chainConfig.js';
+  import './js/config/configuration.js';
   import { networkSelector } from './js/ui/networkSelectorWorking.js';
   import { chainStorage, migrateExistingData } from './js/utils/chainStorageUtils.js';
   import { migrateOldLocalStorage } from './js/utils/migrationUtils.js';
@@ -1353,19 +1485,19 @@
 <script src="./ABI/xenft-stake-correct-ABI.js?v=PLACEHOLDER"></script>
 <script src="./ABI/cointool-ABI.js?v=PLACEHOLDER"></script>
 
-<!-- Configuration modules -->
-<script type="module" src="./js/config/chainConfig.js?v=PLACEHOLDER"></script>
-<script type="module" src="./js/config/configuration.js?v=PLACEHOLDER"></script>
-
 <!-- Existing JavaScript files (order matters) -->
-<script src="./js/mint_flows.js?v=PLACEHOLDER"></script>
-<script src="./js/wallet_balance_display.js?v=PLACEHOLDER"></script>
+  <script src="./js/mint_flows.js?v=PLACEHOLDER"></script>
+  <script src="./js/utils/performanceMonitor.js?v=PLACEHOLDER"></script>
+  <script src="./js/utils/workerClient.js?v=PLACEHOLDER"></script>
+  <script src="./js/utils/backgroundJobScheduler.js?v=PLACEHOLDER"></script>
+  <script src="./js/wallet_balance_display.js?v=PLACEHOLDER"></script>
 <script src="./js/utils/databaseInitializer.js?v=PLACEHOLDER"></script>
 <script src="./js/scanners/cointool_scanner.js?v=PLACEHOLDER"></script>
 <script src="./js/scanners/xenft_scanner.js?v=PLACEHOLDER"></script>
 <script src="./js/scanners/xenft_stake_scanner.js?v=PLACEHOLDER"></script>
 <script src="./js/scanners/xen_scanner.js?v=PLACEHOLDER"></script>
 <script src="./js/summaryOption2.js?v=PLACEHOLDER"></script>
+<script src="./js/ui/calendarController.js?v=PLACEHOLDER"></script>
 <script src="./js/unified_view.js?v=PLACEHOLDER"></script>
 <script src="./js/main_app.js?v=PLACEHOLDER"></script>
 <script src="./js/xen-breakdown.js?v=PLACEHOLDER"></script>
@@ -1417,7 +1549,25 @@
 })();
 </script>
 
-<div id="mobile-tooltip" style="display: none;"></div>
+<div id="mobile-tooltip"></div>
+
+<!-- Default Statcounter code for wenxen.com
+https://wenxen.com -->
+<script type="text/javascript">
+var sc_project=13304969;
+var sc_invisible=1;
+var sc_security="9b8b4d99";
+</script>
+<script type="text/javascript"
+src="https://www.statcounter.com/counter/counter.js"
+async></script>
+<noscript><div class="statcounter"><a title="Web Analytics
+Made Easy - Statcounter" href="https://statcounter.com/"
+target="_blank"><img class="statcounter"
+src="https://c.statcounter.com/13304969/0/9b8b4d99/1/"
+alt="Web Analytics Made Easy - Statcounter"
+referrerPolicy="no-referrer-when-downgrade"></a></div></noscript>
+<!-- End of Statcounter Code -->
 </body>
 </html>
 

@@ -5,6 +5,7 @@
 // Get chain-specific values from chainManager
 const getXenAddress = () => window.chainManager?.getContractAddress('XEN_CRYPTO') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
 const getDefaultRPC = () => window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 'https://ethereum-rpc.publicnode.com';
+const getChainStorageKey = (baseKey) => window.chainManager?.getStorageKey?.(baseKey) || `ETHEREUM_${baseKey}`;
 
 // fmtTs function now provided by js/utils/dateUtils.js module
 
@@ -31,9 +32,7 @@ function updateTermPreview() {
   if (el) el.textContent = formatTermDate(termDays);
   try {
     // Make mintTermDays chain-specific
-    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-    localStorage.setItem(chainPrefix + 'mintTermDays', String(termDays));
+    localStorage.setItem(getChainStorageKey('mintTermDays'), String(termDays));
   } catch {}
 }
 
@@ -75,7 +74,7 @@ async function prefillStakeXenftAmountFromBalance(force = false) {
     const rounded = Math.floor(Number(balStr));
     
     document.getElementById('stakeXenftAmount').value = String(rounded);
-    document.getElementById('stakeXenftPercentOptions').style.display = '';
+    document.getElementById('stakeXenftPercentOptions').style.display = 'block';
     
     updateStakeXenftStartEnabled();
     console.debug('[STAKE-XENFT] Balance filled:', rounded, 'XEN');
@@ -159,9 +158,7 @@ async function setMaxTermFromXEN(){
         const rpcs = window.chainManager.getRPCEndpoints();
         rpcFromLs = rpcs.join('\n');
       } else {
-        const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-        const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-        rpcFromLs = (localStorage.getItem(chainPrefix + 'customRPC') || '').trim();
+        rpcFromLs = (localStorage.getItem(getChainStorageKey('customRPC')) || '').trim();
       }
       const rpcList = (rpcFromDom || rpcFromLs || getDefaultRPC())
         .split(/\r?\n+/)
@@ -181,9 +178,7 @@ async function setMaxTermFromXEN(){
     updateTermPreview();
     try {
       // Make mintTermDays chain-specific
-      const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-      const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-      localStorage.setItem(chainPrefix + 'mintTermDays', String(days));
+      localStorage.setItem(getChainStorageKey('mintTermDays'), String(days));
     } catch {}
     console.log(`[MINT] Max term from XEN: ${days} day(s).`);
   }catch(e){
@@ -531,7 +526,7 @@ async function prefillStakeAmountFromBalance(showAlert){
         const rounded = BN(wei).div(ONE).toString(); // round down to whole token
         amountEl.value = rounded;
       }
-      if (pctWrap) pctWrap.style.display = '';
+      if (pctWrap) pctWrap.style.display = 'block';
     } else {
       console.debug('[STAKE] Zero or missing XEN balance.');
       if (pctWrap) pctWrap.style.display = 'none';
@@ -654,11 +649,11 @@ async function startMintingFlow(){
 // NEW: toggle XENFT UI
   document.getElementById('mintPlatform')?.addEventListener('change', () => {
     const show = (document.getElementById('mintPlatform').value === 'xenft');
-    if (document.getElementById('xenftOptionsRow')) document.getElementById('xenftOptionsRow').style.display = show ? '' : 'none';
+    if (document.getElementById('xenftOptionsRow')) document.getElementById('xenftOptionsRow').style.display = show ? 'block' : 'none';
 
     const kind = (document.getElementById('xenftKind')?.value || 'regular');
-    if (document.getElementById('xenftBurnWrap')) document.getElementById('xenftBurnWrap').style.display = (show && kind === 'apex') ? '' : 'none';
-    if (document.getElementById('apexTierWrap')) document.getElementById('apexTierWrap').style.display = (show && kind === 'apex') ? '' : 'none';
+    if (document.getElementById('xenftBurnWrap')) document.getElementById('xenftBurnWrap').style.display = (show && kind === 'apex') ? 'block' : 'none';
+    if (document.getElementById('apexTierWrap')) document.getElementById('apexTierWrap').style.display = (show && kind === 'apex') ? 'block' : 'none';
 
     if (show && kind === 'apex') presetBurnForSelection();
   });
@@ -668,8 +663,8 @@ async function startMintingFlow(){
     const kind = (document.getElementById('xenftKind')?.value || 'regular');
     const showBurn = (kind === 'apex');
 
-    if (document.getElementById('xenftBurnWrap')) document.getElementById('xenftBurnWrap').style.display = showBurn ? '' : 'none';
-    if (document.getElementById('apexTierWrap')) document.getElementById('apexTierWrap').style.display = (kind === 'apex') ? '' : 'none';
+    if (document.getElementById('xenftBurnWrap')) document.getElementById('xenftBurnWrap').style.display = showBurn ? 'block' : 'none';
+    if (document.getElementById('apexTierWrap')) document.getElementById('apexTierWrap').style.display = (kind === 'apex') ? 'block' : 'none';
 
     if (showBurn) presetBurnForSelection();
   });
@@ -689,7 +684,7 @@ async function startMintingFlow(){
     const hint = document.getElementById('mintConnectHint');
     if (!hint) return;
     const connected = !!window.connectedAccount;
-    hint.style.display = connected ? 'none' : '';
+    hint.style.display = connected ? 'none' : 'block';
   };
   window.updateMintConnectHint();
 
@@ -698,7 +693,7 @@ async function startMintingFlow(){
     const hint = document.getElementById('stakeConnectHint');
     if (!hint) return;
     const connected = !!window.connectedAccount;
-    hint.style.display = connected ? 'none' : '';
+    hint.style.display = connected ? 'none' : 'block';
   };
   window.updateStakeConnectHint();
 
@@ -707,9 +702,7 @@ async function startMintingFlow(){
     const el = document.getElementById('mintTermDays');
     if (!el) return;
     // Load chain-specific mintTermDays
-    const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
-    const saved = (localStorage.getItem(chainPrefix + 'mintTermDays') || '').trim();
+    const saved = (localStorage.getItem(getChainStorageKey('mintTermDays')) || '').trim();
     if (saved) {
       el.value = saved;
       updateTermPreview();
@@ -733,9 +726,9 @@ async function startMintingFlow(){
     const show = (document.getElementById('mintPlatform')?.value === 'xenft');
     const kind = (document.getElementById('xenftKind')?.value || 'regular');
     const showBurn = (kind === 'apex');
-    if (document.getElementById('xenftOptionsRow')) document.getElementById('xenftOptionsRow').style.display = show ? '' : 'none';
-    if (document.getElementById('xenftBurnWrap')) document.getElementById('xenftBurnWrap').style.display = showBurn ? '' : 'none';
-    if (document.getElementById('apexTierWrap')) document.getElementById('apexTierWrap').style.display = (kind === 'apex') ? '' : 'none';
+    if (document.getElementById('xenftOptionsRow')) document.getElementById('xenftOptionsRow').style.display = show ? 'block' : 'none';
+    if (document.getElementById('xenftBurnWrap')) document.getElementById('xenftBurnWrap').style.display = showBurn ? 'block' : 'none';
+    if (document.getElementById('apexTierWrap')) document.getElementById('apexTierWrap').style.display = (kind === 'apex') ? 'block' : 'none';
     if (show && showBurn) presetBurnForSelection();
   })();
 
@@ -750,19 +743,19 @@ async function startMintingFlow(){
       
       // Hide/show minting controls/actions
       const mintCtrls = document.getElementById('mintControls');
-      if (mintCtrls) mintCtrls.style.display = showMint ? '' : 'none';
+      if (mintCtrls) mintCtrls.style.display = showMint ? 'grid' : 'none';
       const mintActs = document.getElementById('mintActions');
-      if (mintActs) mintActs.style.display = showMint ? '' : 'none';
+      if (mintActs) mintActs.style.display = showMint ? 'flex' : 'none';
       
       // Show/hide stake controls/actions
-      document.getElementById('stakeControls').style.display = showStake ? '' : 'none';
-      document.getElementById('stakeActions').style.display = showStake ? '' : 'none';
+      document.getElementById('stakeControls').style.display = showStake ? 'grid' : 'none';
+      document.getElementById('stakeActions').style.display = showStake ? 'flex' : 'none';
       
       // Show/hide stake XENFT controls/actions
       const stakeXenftCtrls = document.getElementById('stakeXenftControls');
-      if (stakeXenftCtrls) stakeXenftCtrls.style.display = showStakeXenft ? '' : 'none';
+      if (stakeXenftCtrls) stakeXenftCtrls.style.display = showStakeXenft ? 'grid' : 'none';
       const stakeXenftActs = document.getElementById('stakeXenftActions');
-      if (stakeXenftActs) stakeXenftActs.style.display = showStakeXenft ? '' : 'none';
+      if (stakeXenftActs) stakeXenftActs.style.display = showStakeXenft ? 'flex' : 'none';
       
       if (showStake) prefillStakeAmountFromBalance();
       if (showStakeXenft) prefillStakeXenftAmountFromBalance();

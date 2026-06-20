@@ -12,6 +12,11 @@
 //   • Actions include endStake with txHash/timeStamp when available.
 
 (function(){
+  const XENFT_STAKE_DEBUG = false;
+  const debugLog = (...args) => {
+    if (XENFT_STAKE_DEBUG || window.DEBUG_XENFT_STAKE) console.log(...args);
+  };
+
   // Helper function to get chain prefix for database names
   function getChainPrefix(chain) {
     const prefixMap = {
@@ -32,13 +37,13 @@
            "0xfEdA03b91514D31b435d4E1519Fd9e699C29BbFC"; // Ethereum fallback
   };
   
-  const CONTRACT_ADDRESS = getContractAddress();
-
-  // Get chain-specific deployment block from chainManager
-  const CONTRACT_CREATION_BLOCK = window.chainManager?.getXenftStakeDeploymentBlock() || 16339900;
+  const getContractCreationBlock = () =>
+    window.chainManager?.getDeploymentBlock?.('XENFT_STAKE') ||
+    window.chainManager?.getXenDeploymentBlock?.() ||
+    16339900;
   const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
-  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default ||
+  const getDefaultRpc = () => window.chainManager?.getCurrentConfig?.()?.rpcUrls?.default ||
     'https://ethereum-rpc.publicnode.com';
 
   // ABI moved to ./ABI/xenft-stake-ABI.js as window.xenftStakeAbi
@@ -47,21 +52,25 @@
   // cleanHexAddr function now provided by js/utils/stringUtils.js module
 
   function getAddressesFromSettings(){
-    const text = (document.getElementById("ethAddress")?.value || localStorage.getItem("ethAddress") || "").trim();
-    return text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    const el = document.getElementById("ethAddress");
+    const raw = (el?.value || localStorage.getItem("ethAddress") || "").trim();
+    const text = window.normalizeMultiLineValue ? window.normalizeMultiLineValue(raw, 'address') : raw;
+    if (el) el.value = text;
+    return window.splitMultiLineValue ? window.splitMultiLineValue(text, 'address') : text.split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);
   }
 
   function getRpcList(){
     const ta = document.getElementById("customRPC");
     if (ta && ta.value.trim()) {
-      return String(ta.value.trim()).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
+      ta.value = window.normalizeMultiLineValue ? window.normalizeMultiLineValue(ta.value, 'rpc') : ta.value.trim();
+      return window.splitMultiLineValue ? window.splitMultiLineValue(ta.value, 'rpc') : String(ta.value.trim()).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
     }
     if (window.chainManager) {
       const rpcs = window.chainManager.getRPCEndpoints();
-      return rpcs.length > 0 ? rpcs : [DEFAULT_RPC];
+      return rpcs.length > 0 ? rpcs : [getDefaultRpc()];
     }
-    const raw = DEFAULT_RPC;
-    return String(raw).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
+    const raw = getDefaultRpc();
+    return window.splitMultiLineValue ? window.splitMultiLineValue(raw, 'rpc') : String(raw).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
   }
 
   function newWeb3(){
@@ -128,17 +137,44 @@
   // --- IndexedDB ---
   const STORE_STAKES = "stakes";
   const STORE_STATE = "scanState";
+  const DB_VERSION = 3;
+
+  function ensureSummaryStores(db, tx) {
+    const createIndexedStore = (storeName, indexes = []) => {
+      let store = null;
+      if (!db.objectStoreNames.contains(storeName)) {
+        store = db.createObjectStore(storeName, { keyPath: "id" });
+      } else if (tx) {
+        try { store = tx.objectStore(storeName); } catch (_) {}
+      }
+      if (store) {
+        for (const [indexName, keyPath] of indexes) {
+          if (!store.indexNames.contains(indexName)) {
+            store.createIndex(indexName, keyPath, { unique: false });
+          }
+        }
+      }
+    };
+    createIndexedStore('summaryByType', [['byType', 'type']]);
+    createIndexedStore('summaryByStatus', [['byType', 'type'], ['byStatus', 'status']]);
+    createIndexedStore('summaryByDay', [['byDate', 'date'], ['byType', 'type']]);
+    createIndexedStore('summaryByOwner', [['byOwner', 'owner'], ['byType', 'type']]);
+    if (!db.objectStoreNames.contains('summaryMetadata')) {
+      db.createObjectStore('summaryMetadata', { keyPath: "id" });
+    }
+  }
 
   function openDB(){
     return new Promise((resolve, reject) => {
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
       const chainPrefix = getChainPrefix(currentChain);
-      const dbName = window.chainManager?.getDatabaseName('xenft_stake') || `${chainPrefix}_DB_XenftStake`;
+      const dbName = window.chainManager?.getDatabaseName?.('xenft_stake', currentChain) || `${chainPrefix}_DB_XenftStake`;
       
-      const req = indexedDB.open(dbName, 2);
+      const req = indexedDB.open(dbName, DB_VERSION);
       req.onupgradeneeded = e => {
         const db = e.target.result;
+        const tx = e.target.transaction;
         if (!db.objectStoreNames.contains(STORE_STAKES)) {
           db.createObjectStore(STORE_STAKES, { keyPath: "tokenId" });
         }
@@ -148,6 +184,7 @@
         if (!db.objectStoreNames.contains("processProgress")) {
           db.createObjectStore("processProgress", { keyPath: "address" });
         }
+        ensureSummaryStores(db, tx);
       };
       req.onsuccess = e => {
         const db = e.target.result;
@@ -179,27 +216,52 @@
       tx.onerror = e => reject(e);
     });
   }
-  function getAll(db){
-    return new Promise((resolve, reject) => {
-      try {
-        // Check if the store exists before creating transaction
-        if (!db.objectStoreNames.contains(STORE_STAKES)) {
-          console.error(`[XENFT Stake] Store '${STORE_STAKES}' not found in database. Available stores:`, Array.from(db.objectStoreNames));
-          resolve([]); // Return empty array instead of failing
-          return;
-        }
-
-        const tx = db.transaction(STORE_STAKES, "readonly");
-        tx.objectStore(STORE_STAKES).getAll().onsuccess = e => resolve(e.target.result || []);
-        tx.onerror = e => {
-          console.error(`[XENFT Stake] Error reading from '${STORE_STAKES}' store:`, e);
-          resolve([]); // Return empty array instead of failing
-        };
-      } catch (error) {
-        console.error(`[XENFT Stake] Error accessing store '${STORE_STAKES}':`, error);
-        resolve([]); // Return empty array instead of failing
+  async function getAll(db){
+    try {
+      if (!db.objectStoreNames.contains(STORE_STAKES)) {
+        console.error(`[XENFT Stake] Store '${STORE_STAKES}' not found in database. Available stores:`, Array.from(db.objectStoreNames));
+        return [];
       }
-    });
+
+      const out = [];
+      let range = null;
+      const batchSize = 500;
+
+      while (true) {
+        const { rows, keys } = await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_STAKES, "readonly");
+          const store = tx.objectStore(STORE_STAKES);
+          const rowsReq = store.getAll(range, batchSize);
+          const keysReq = store.getAllKeys(range, batchSize);
+          let rows = null;
+          let keys = null;
+          const finish = () => {
+            if (rows && keys) resolve({ rows, keys });
+          };
+          rowsReq.onsuccess = e => {
+            rows = e.target.result || [];
+            finish();
+          };
+          keysReq.onsuccess = e => {
+            keys = e.target.result || [];
+            finish();
+          };
+          rowsReq.onerror = e => reject(e.target.error);
+          keysReq.onerror = e => reject(e.target.error);
+        });
+
+        if (!rows.length) break;
+        out.push(...rows);
+        if (rows.length < batchSize || !keys.length) break;
+        range = IDBKeyRange.lowerBound(keys[keys.length - 1], true);
+        await (window.yieldToUi?.() || new Promise(resolve => setTimeout(resolve, 0)));
+      }
+
+      return out;
+    } catch (error) {
+      console.error(`[XENFT Stake] Error accessing store '${STORE_STAKES}':`, error);
+      return [];
+    }
   }
   function getByTokenId(db, tokenId){
     return new Promise((resolve, reject) => {
@@ -313,6 +375,16 @@
   async function fetchStakeTxsInRange(userAddress, apiKey, startBlock, endBlock) {
     const contractAddr = getContractAddress(); // Get current chain's contract
     const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
+
+    if (window.explorerApiClient?.fetchTokenNftTxs) {
+      return window.explorerApiClient.fetchTokenNftTxs({
+        address: userAddress,
+        contractAddress: contractAddr,
+        startBlock,
+        endBlock,
+        apiKey
+      });
+    }
     
     // Use Etherscan V2 multichain API for all chains (including Base with chainId 8453)
     const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${contractAddr}&address=${userAddress}&startblock=${startBlock}&endblock=${endBlock}&page=1&offset=10000&sort=asc&apikey=${apiKey}`;
@@ -384,7 +456,7 @@
     
     // Log current chain and contract for debugging
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    console.log(`[XENFT Stake Scanner] Starting scan on ${currentChain} with contract ${contractAddr}`);
+    debugLog(`[XENFT Stake Scanner] Starting scan on ${currentChain} with contract ${contractAddr}`);
 
     const addrLbl = document.getElementById("addressProgressText");
     const tokenBar = document.getElementById("tokenProgressBar");
@@ -404,7 +476,7 @@
         }
 
         const scanState = await getScanState(db, addr);
-        const creationBlock = CONTRACT_CREATION_BLOCK; // Get chain-specific creation block
+        const creationBlock = getContractCreationBlock();
         const startBlock = scanState ? scanState.lastScannedBlock + 1 : creationBlock;
 
         if (startBlock > latestBlock && !forceRescan) {
@@ -510,6 +582,7 @@
                 amount: String(amount || "0"),
                 term: term || 0,
                 apy: apy || 0,
+                startTs: mintTs || 0,
                 maturityTs: computedMaturityTs || 0,
                 status,
                 Maturity_Date_Fmt,
@@ -547,7 +620,7 @@
         await putScanState(db, addr, latestBlock);
         // Clear progress on successful completion of address scanning
         await clearProcessProgress(db, addr);
-        console.log(`[XENFT Stake] Scan completed successfully for ${addr} - cleared process progress`);
+        debugLog(`[XENFT Stake] Scan completed successfully for ${addr} - cleared process progress`);
       } catch (error) {
         console.error(`Failed to complete scan for address ${addr}:`, error);
         if (tokenTxt) tokenTxt.textContent = `Error scanning ${addr.slice(0,6)}... See console.`;

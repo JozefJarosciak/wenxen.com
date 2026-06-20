@@ -162,15 +162,24 @@ export const privacyStorage = {
       // Otherwise check if user has entered required data
       // Check if ANY addresses exist (check both chain-specific and legacy keys)
       const legacyAddress = localStorage.getItem('ethAddress');
-      const ethAddress = localStorage.getItem('ETHEREUM_ethAddress');
-      const baseAddress = localStorage.getItem('BASE_ethAddress');
+      const chains = Object.keys(window.SUPPORTED_CHAINS || {
+        ETHEREUM: true,
+        BASE: true,
+        AVALANCHE: true,
+        BSC: true,
+        MOONBEAM: true,
+        POLYGON: true,
+        OPTIMISM: true
+      });
+      const chainAddress = chains.some(chain => {
+        const value = localStorage.getItem(`${chain}_ethAddress`);
+        return !!(value && value.trim());
+      });
 
       // API key is global (not chain-specific)
       const etherscanApiKey = localStorage.getItem('etherscanApiKey');
 
-      const hasAddress = (legacyAddress && legacyAddress.trim()) ||
-                         (ethAddress && ethAddress.trim()) ||
-                         (baseAddress && baseAddress.trim());
+      const hasAddress = (legacyAddress && legacyAddress.trim()) || chainAddress;
 
       return !!(hasAddress && etherscanApiKey && etherscanApiKey.trim());
     } catch {
@@ -192,8 +201,16 @@ export const privacyStorage = {
 // Settings storage utilities
 export const settingsStorage = {
   getAddresses() {
-    const text = storageUtils.getItem('ethAddress', '').trim();
-    return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const key = window.chainManager?.getStorageKey?.('ethAddress') || 'ETHEREUM_ethAddress';
+    const text = (storageUtils.getItem(key, '') || storageUtils.getItem('ethAddress', '')).trim();
+    if (typeof window.splitMultiLineValue === 'function') {
+      return window.splitMultiLineValue(text, 'address');
+    }
+    const addressPattern = /0x[a-fA-F0-9]{40}/g;
+    const matches = text.match(addressPattern);
+    const leftovers = text.replace(addressPattern, '').replace(/[\s,;\n]+/g, '');
+    if (matches?.length && !leftovers) return matches;
+    return text.split(/[\r\n,;]+/).map(s => s.trim()).filter(Boolean);
   },
 
   getRPCList() {
@@ -202,10 +219,18 @@ export const settingsStorage = {
       return window.chainManager.getRPCEndpoints();
     }
     const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETHEREUM_';
+    const chainPrefix = `${currentChain}_`;
     const defaultRPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 'https://ethereum-rpc.publicnode.com';
     const raw = storageUtils.getItem(chainPrefix + 'customRPC', defaultRPC);
-    return String(raw).split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
+    if (typeof window.splitMultiLineValue === 'function') {
+      return window.splitMultiLineValue(raw, 'rpc');
+    }
+    const text = String(raw || '').trim();
+    const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|[\s,;]+|$)/g;
+    const matches = text.match(urlPattern);
+    const leftovers = text.replace(urlPattern, '').replace(/[\s,;\n]+/g, '');
+    if (matches?.length && !leftovers) return matches;
+    return text.split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
   },
 
   getApiKey() {

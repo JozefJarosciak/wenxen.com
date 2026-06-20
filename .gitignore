@@ -77,9 +77,16 @@ README-AWS.md
 AGENTS.md
 CHAIN_COMPARISON.md
 PRIORITY_FIX_ORDER.md
+ACTIVE_ENTRYPOINTS.md
+PERFORMANCE_ROADMAP.md
 current_issues.md
 improvements.md
+issue.md
 new_chain_blueprint.md
+
+# Generated public-site metadata managed outside GitHub
+robots.txt
+sitemap.xml
 
 # Development and debugging HTML files
 check-cointool-abi.html
@@ -96,3 +103,4 @@ python-server.bat
 
 # Internal diagrams folder
 diagrams/
+/tests/

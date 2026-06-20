@@ -78,20 +78,17 @@ function initializeXenTotalBreakdown() {
     
     // Check if desktop (screen width > 768px)
     const isDesktop = window.innerWidth > 768;
-    const fontSize = isDesktop ? '16px' : '15px';  // Mobile: 12px -> 15px (25% larger)
-    const buttonSize = isDesktop ? '15px' : '14px';  // Mobile: 12px -> 15px (25% larger)
-    const padding = isDesktop ? '4px 8px' : '3px 7px';
-    const buttonPadding = isDesktop ? '3px 8px' : '3px 7px';
+    const tableClass = `xen-breakdown-table xen-breakdown-table--compact${isDesktop ? ' is-desktop' : ''}`;
     
     return `
-      <table style="width: auto; border-collapse: collapse; font-size: ${fontSize};">
+      <table class="${tableClass}">
         <tr>
-          <td style="padding: ${padding}; font-weight: bold;">Total</td>
-          <td style="padding: ${padding}; text-align: right; font-weight: bold;">${totals.totalXenFormatted}</td>
-          <td style="padding: ${padding}; text-align: right; font-weight: bold;" class="usd-value">${totals.totalUsdFormatted}</td>
-          <td style="padding: 2px 4px; text-align: right; white-space: nowrap;">
-            <button id="refreshXenBtn" class="refresh-btn" title="Refresh XEN price & balances" style="padding: ${buttonPadding}; font-size: ${buttonSize};">⟳</button>
-            <button id="toggleXenBreakdown" class="toggle-btn" title="Show breakdown by address" style="padding: ${buttonPadding}; font-size: ${buttonSize};">+</button>
+          <td class="xen-breakdown-cell">Total</td>
+          <td class="xen-breakdown-cell xen-breakdown-align-right">${totals.totalXenFormatted}</td>
+          <td class="xen-breakdown-cell xen-breakdown-align-right usd-value">${totals.totalUsdFormatted}</td>
+          <td class="xen-breakdown-actions">
+            <button id="refreshXenBtn" class="refresh-btn xen-breakdown-button" title="Refresh XEN price & balances">⟳</button>
+            <button id="toggleXenBreakdown" class="toggle-btn xen-breakdown-button" title="Show breakdown by address">+</button>
           </td>
         </tr>
       </table>
@@ -102,13 +99,13 @@ function initializeXenTotalBreakdown() {
   function buildExpandedView() {
     const badge = document.getElementById("estXenTotal");
     if (!badge || !badge.dataset.breakdown) {
-      return '<p style="padding: 10px;">No data available</p>';
+      return '<p class="xen-breakdown-placeholder">No data available</p>';
     }
     
     try {
       const breakdown = JSON.parse(badge.dataset.breakdown);
       if (!breakdown || breakdown.length === 0) {
-        return '<p style="padding: 10px;">No data available</p>';
+        return '<p class="xen-breakdown-placeholder">No data available</p>';
       }
       
       // Sort by XEN amount descending (maturing mints only)
@@ -119,12 +116,12 @@ function initializeXenTotalBreakdown() {
       });
       
       // Build table (auto width)
-      let html = '<table style="border-collapse: collapse; font-size: 12px;">';
+      let html = '<table class="xen-breakdown-table xen-breakdown-table--expanded">';
       html += '<thead><tr>';
-      html += '<th style="text-align: left; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Address</th>';
-      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Total</th>';
-      html += '<th style="text-align: right; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Value</th>';
-      html += '<th style="width: 50px;"></th>'; // Space for buttons
+      html += '<th class="xen-breakdown-align-left">Address</th>';
+      html += '<th class="xen-breakdown-align-right">Total</th>';
+      html += '<th class="xen-breakdown-align-right">Value</th>';
+      html += '<th class="xen-breakdown-actions"></th>'; // Space for buttons
       html += '</tr></thead><tbody>';
       
       let totalXen = 0n;
@@ -160,9 +157,9 @@ function initializeXenTotalBreakdown() {
           : '-';
 
         html += '<tr>';
-        html += `<td style="padding: 2px 6px; opacity: 0.8;">${formatAddress(item.address)}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${xenFormatted}</td>`;
-        html += `<td style="padding: 2px 6px; text-align: right;" class="usd-value">${usdFormatted}</td>`;
+        html += `<td class="xen-breakdown-muted">${formatAddress(item.address)}</td>`;
+        html += `<td class="xen-breakdown-align-right xen-breakdown-bold">${xenFormatted}</td>`;
+        html += `<td class="xen-breakdown-align-right usd-value">${usdFormatted}</td>`;
         html += '<td></td>';
         html += '</tr>';
       });
@@ -183,13 +180,13 @@ function initializeXenTotalBreakdown() {
           })
         : '-';
       
-      html += '<tr style="border-top: 1px solid rgba(128,128,128,0.3);">';
-      html += '<td style="padding: 2px 6px; font-weight: bold;">Total</td>';
-      html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;">${totalXenFormatted}</td>`; // Total column
-      html += `<td style="padding: 2px 6px; text-align: right; font-weight: bold;" class="usd-value">${totalUsdFormatted}</td>`;
-      html += '<td style="padding: 2px 4px; text-align: right;">';
-      html += '<button id="refreshXenBtn2" class="refresh-btn" title="Refresh XEN price & balances" style="padding: 2px 6px; font-size: 12px;">⟳</button>';
-      html += '<button id="toggleXenBreakdown2" class="toggle-btn active" title="Hide breakdown" style="padding: 2px 6px; font-size: 12px;">−</button>';
+      html += '<tr class="xen-breakdown-total-row">';
+      html += '<td class="xen-breakdown-bold">Total</td>';
+      html += `<td class="xen-breakdown-align-right xen-breakdown-bold">${totalXenFormatted}</td>`; // Total column
+      html += `<td class="xen-breakdown-align-right xen-breakdown-bold usd-value">${totalUsdFormatted}</td>`;
+      html += '<td class="xen-breakdown-actions">';
+      html += '<button id="refreshXenBtn2" class="refresh-btn xen-breakdown-button" title="Refresh XEN price & balances">⟳</button>';
+      html += '<button id="toggleXenBreakdown2" class="toggle-btn active xen-breakdown-button" title="Hide breakdown">−</button>';
       html += '</td>';
       html += '</tr>';
       
@@ -199,7 +196,7 @@ function initializeXenTotalBreakdown() {
       
     } catch (e) {
       console.error('Error building breakdown:', e);
-      return '<p style="padding: 10px;">Error loading breakdown</p>';
+      return '<p class="xen-breakdown-placeholder">Error loading breakdown</p>';
     }
   }
   

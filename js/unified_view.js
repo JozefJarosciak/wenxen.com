@@ -7,6 +7,10 @@
 // - Calendar shows total VMUs across both
 // - Summary gets an extra XENFT line
 
+function getSummaryCacheForType(type) {
+  return window._summaryStatsCache?.byType?.[type] || null;
+}
+
 function updateStakeSummaryLine(){
   const container = document.getElementById("summaryContainer");
   if (!container) return;
@@ -19,14 +23,24 @@ function updateStakeSummaryLine(){
     container.appendChild(line);
   }
 
-  const all = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
-    ? window._allUnifiedRows
-    : (window.cointoolTable ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active")) : []);
+  const cached = getSummaryCacheForType("Stake");
+  let count;
+  let maturingCount;
+  let claimableCount;
+  if (cached) {
+    count = cached.totalCount || 0;
+    maturingCount = cached.maturing || 0;
+    claimableCount = cached.claimable || 0;
+  } else {
+    const all = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
+      ? window._allUnifiedRows
+      : (window.cointoolTable ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active")) : []);
 
-  const s = all.filter(r => r.SourceType === "Stake");
-  const count = s.length;
-  const maturingCount = s.filter(r => r.Status === "Maturing").length;
-  const claimableCount = s.filter(r => r.Status === "Claimable").length;
+    const s = all.filter(r => r.SourceType === "Stake");
+    count = s.length;
+    maturingCount = s.filter(r => r.Status === "Maturing").length;
+    claimableCount = s.filter(r => r.Status === "Claimable").length;
+  }
 
   line.innerHTML = `<strong>Stakes:</strong> ${count.toLocaleString()} | <strong>Maturing:</strong> ${maturingCount.toLocaleString()} | <strong>Claimable:</strong> ${claimableCount.toLocaleString()}`;
 }
@@ -137,22 +151,25 @@ function updateStakeSummaryLine(){
     try {
       const force = !!document.getElementById('forceRescan')?.checked;
       if (force) {
-        // Get chain-specific database names
         const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-        const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
+        const dbNames = window.chainManager?.getDatabaseNames?.(currentChain) || {
+          cointool: 'ETH_DB_Cointool',
+          xenft: 'ETH_DB_Xenft',
+          xenft_stake: 'ETH_DB_XenftStake',
+          xen_stake: 'ETH_DB_XenStake'
+        };
         
         const dbIds = (
-          mode === 'all' ? [`${chainPrefix}_DB_Cointool`,`${chainPrefix}_DB_Xenft`,`${chainPrefix}_DB_XenftStake`,`${chainPrefix}_DB_XenStake`] :
-          mode === 'cointool' ? [`${chainPrefix}_DB_Cointool`] :
-          mode === 'xenft' ? [`${chainPrefix}_DB_Xenft`] :
-          mode === 'stake-xenft' ? [`${chainPrefix}_DB_XenftStake`] :
-          mode === 'stake' ? [`${chainPrefix}_DB_XenStake`] :
-          [`${chainPrefix}_DB_Cointool`]
+          mode === 'all' ? [dbNames.cointool, dbNames.xenft, dbNames.xenft_stake, dbNames.xen_stake] :
+          mode === 'cointool' ? [dbNames.cointool] :
+          mode === 'xenft' ? [dbNames.xenft] :
+          mode === 'stake-xenft' ? [dbNames.xenft_stake] :
+          mode === 'stake' ? [dbNames.xen_stake] :
+          [dbNames.cointool]
         );
 
         const friendly = (id) => {
-          // Remove chain prefix for display
-          const baseId = id.replace(/^(ETH_|BASE_)/, '');
+          const baseId = id.replace(/^[A-Z0-9]+_/, '');
           return (
             baseId === 'DB_Cointool' ? 'Cointool (mints)' :
             baseId === 'DB_Xenft' ? 'XENFT (NFT scans)' :
@@ -175,8 +192,7 @@ function updateStakeSummaryLine(){
 
         // Run clears in parallel for speed (no DB deletion to avoid blocking)
         const tasks = dbIds.map((id) => {
-          // Extract base database type from chain-specific ID
-          const baseId = id.replace(/^(ETH_|BASE_)/, '');
+          const baseId = id.replace(/^[A-Z0-9]+_/, '');
           
           if (baseId === 'DB_Cointool') {
             const opener = (window.cointool && typeof window.cointool.openDB === 'function')
@@ -240,6 +256,9 @@ function updateStakeSummaryLine(){
     // Proceed to scanning; update label right away
     document.getElementById("scanBtnLabel").textContent = scanningText;
 
+    const previousUnifiedScanState = window.__scanUnifiedActive;
+    window.__scanUnifiedActive = true;
+
     try {
       // If we're scanning everything, keep the progress bar under our control
       if (mode === "all") {
@@ -263,6 +282,8 @@ function updateStakeSummaryLine(){
         if (window.xenStake && typeof window.xenStake.scan === "function") { await window.xenStake.scan(); }
       }
     } finally {
+      window.__scanUnifiedActive = previousUnifiedScanState;
+
       // Step 2: Restore the buttons right away
       liveScanBtn.disabled = false;
       if (modeToggleEl) modeToggleEl.disabled = false;
@@ -289,27 +310,22 @@ function updateStakeSummaryLine(){
           if (tt)  tt.textContent = "";
           if (etr) etr.textContent = "";
         }, 1200);
-      }
-    }
-
-    // Step 3: Refresh the UI. This can take a few seconds, but the button is already restored.
-    if (typeof window.refreshUnified === "function") {
-      try {
-        await window.refreshUnified();
-      } catch (e) {
-        console.error("Unified refresh failed:", e);
+      } else {
+        setTimeout(() => {
+          try { window.progressUI?.show?.(false); } catch (_) {}
+        }, 400);
       }
     }
 
     // Finally, uncheck the Force Rescan option after a completed scan
     try { const cb = document.getElementById('forceRescan'); if (cb) cb.checked = false; } catch {}
 
-    // Auto-remove duplicates after scan if enabled
+    // Step 3: Auto-remove duplicates before the single final UI refresh.
     try {
       const autoDedupeEnabled = localStorage.getItem('autoDedupeAfterScan') !== 'false'; // Default true
       if (autoDedupeEnabled && typeof window.removeDuplicatesFromAllDatabases === 'function') {
         console.log('[Scan] Running auto-dedupe after scan...');
-        const removed = await window.removeDuplicatesFromAllDatabases(true); // silent mode
+        const removed = await window.removeDuplicatesFromAllDatabases(true, { refresh: false, scope: 'current' }); // silent mode
         if (removed > 0) {
           console.log(`[Scan] Auto-dedupe removed ${removed} duplicates`);
           // Update last cleanup time
@@ -318,14 +334,19 @@ function updateStakeSummaryLine(){
           if (typeof window.updateLastCleanupDisplay === 'function') {
             window.updateLastCleanupDisplay();
           }
-          // Refresh the UI again to show deduplicated data
-          if (typeof window.refreshUnified === 'function') {
-            await window.refreshUnified();
-          }
         }
       }
     } catch (e) {
       console.warn('[Scan] Auto-dedupe failed:', e);
+    }
+
+    // Step 4: Refresh the UI once after all selected scans and optional dedupe.
+    if (typeof window.refreshUnified === "function") {
+      try {
+        await window.refreshUnified();
+      } catch (e) {
+        console.error("Unified refresh failed:", e);
+      }
     }
   }
 
@@ -381,9 +402,7 @@ function attachMaturityHeaderSync() {
   if (!input || input.dataset._syncBound) return;
 
   const jumpDebounced = debounce((dt) => {
-    const cal = (window.calendarPicker && typeof window.calendarPicker.jumpToDate === "function")
-      ? window.calendarPicker
-      : (window._calendar || null);
+    const cal = window.calendarController?.get?.() || null;
     if (!cal || typeof cal.jumpToDate !== "function") return;
     try { cal.jumpToDate(dt); } catch {}
   }, 200);
@@ -397,7 +416,7 @@ function attachMaturityHeaderSync() {
     if (e.key !== "Enter") return;
     const dt = parseYearMonDay(input.value);
     if (!dt) return;
-    const cal = window.calendarPicker || window._calendar;
+    const cal = window.calendarController?.get?.() || null;
     try { cal?.setDate?.(dt, true); cal?.jumpToDate?.(dt); } catch {}
   });
 
@@ -541,16 +560,698 @@ function setMaturityHeaderFilterFromDate(dt) {
     return Math.min(128, raw);
   }
 
+  function _yieldToBrowser() {
+    if (typeof window.yieldToUi === 'function') return window.yieldToUi();
+    return new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  async function _readStoreInBatches(db, storeName, batchSize = 5000) {
+    const out = [];
+    let range = null;
+
+    while (true) {
+      const { rows, keys } = await new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const rowsReq = store.getAll(range, batchSize);
+        const keysReq = store.getAllKeys(range, batchSize);
+
+        let rows = null;
+        let keys = null;
+        const finish = () => {
+          if (rows !== null && keys !== null) resolve({ rows, keys });
+        };
+
+        rowsReq.onsuccess = () => {
+          rows = rowsReq.result || [];
+          finish();
+        };
+        keysReq.onsuccess = () => {
+          keys = keysReq.result || [];
+          finish();
+        };
+        rowsReq.onerror = () => reject(rowsReq.error);
+        keysReq.onerror = () => reject(keysReq.error);
+        tx.onerror = () => reject(tx.error);
+      });
+
+      if (!rows.length) break;
+      out.push(...rows);
+      if (rows.length < batchSize || !keys.length) break;
+      range = IDBKeyRange.lowerBound(keys[keys.length - 1], true);
+      await _yieldToBrowser();
+    }
+
+    return out;
+  }
+
+  const COINTOOL_RENDER_CACHE_VERSION = 2;
+  const COINTOOL_RENDER_CACHE_CHUNK_SIZE = 250;
+  const COINTOOL_SUMMARY_VERSION = 1;
+  const COINTOOL_SUMMARY_STORES = ['summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'];
+
+  function _currentChainKey() {
+    return window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+  }
+
+  function _renderCacheInvalidationKey() {
+    return `${_currentChainKey()}_cointoolRenderCacheInvalidatedAt`;
+  }
+
+  function _renderCacheBaseKey(maxPerBatch) {
+    return `__renderCache_v${COINTOOL_RENDER_CACHE_VERSION}_${maxPerBatch}`;
+  }
+
+  function _getRenderCacheInvalidatedAt() {
+    return Number(localStorage.getItem(_renderCacheInvalidationKey()) || 0) || 0;
+  }
+
+  function _hasCointoolSummaryStores(db) {
+    return !!db?.objectStoreNames && COINTOOL_SUMMARY_STORES.every(storeName => db.objectStoreNames.contains(storeName));
+  }
+
+  function _emptyCounter() {
+    return {
+      totalCount: 0,
+      totalVMUs: 0,
+      remints: 0,
+      maturing: 0,
+      claimable: 0,
+      mintable: 0,
+      failed: 0,
+      claimed: 0,
+      unknown: 0,
+      xenRewards: 0
+    };
+  }
+
+  function _addCounter(counter, status, vmus, hasHistory) {
+    counter.totalVMUs += vmus;
+    if (hasHistory) counter.remints += vmus;
+    if (status === 'Maturing') counter.maturing += vmus;
+    else if (status === 'Claimable') counter.claimable += vmus;
+    else if (status === 'Mintable') counter.mintable += vmus;
+    else if (status === 'Failed') counter.failed += vmus;
+    else if (status === 'Claimed') counter.claimed += vmus;
+    else counter.unknown += vmus;
+  }
+
+  function _buildCointoolSummaryIndexFromProxies(proxies, maxPerBatch) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const typeStats = _emptyCounter();
+    const statusMap = new Map();
+    const dayMap = new Map();
+    const ownerMap = new Map();
+    const groupMap = new Map();
+    const dateKeyCache = new Map();
+
+    const getCachedDateKey = (ts) => {
+      const n = Number(ts) || 0;
+      if (n <= 0) return '';
+      if (!dateKeyCache.has(n)) dateKeyCache.set(n, _localDateKeyFromSeconds(n));
+      return dateKeyCache.get(n);
+    };
+
+    for (const proxy of proxies) {
+      const owner = String(proxy?.Owner || '').toLowerCase();
+      const status = _effectiveStatusFromProxy(proxy, nowSec) || 'Unknown';
+      const dayKey = getCachedDateKey(proxy?.Maturity_TS);
+      const hasHistory = Array.isArray(proxy?.History) && proxy.History.length > 0;
+      const vmus = 1;
+
+      _addCounter(typeStats, status, vmus, hasHistory);
+
+      if (!statusMap.has(status)) {
+        statusMap.set(status, { ..._emptyCounter(), id: `Cointool|${status}|${maxPerBatch}`, type: 'Cointool', status, maxPerBatch });
+      }
+      _addCounter(statusMap.get(status), status, vmus, hasHistory);
+
+      if (owner) {
+        if (!ownerMap.has(owner)) {
+          ownerMap.set(owner, { ..._emptyCounter(), id: `Cointool|${owner}|${maxPerBatch}`, type: 'Cointool', owner, maxPerBatch });
+        }
+        _addCounter(ownerMap.get(owner), status, vmus, hasHistory);
+      }
+
+      if (dayKey && status !== 'Claimed' && status !== 'Failed' && status !== 'Unknown') {
+        if (!dayMap.has(dayKey)) {
+          dayMap.set(dayKey, {
+            id: `Cointool|${dayKey}`,
+            type: 'Cointool',
+            date: dayKey,
+            totalVMUs: 0,
+            maturing: 0,
+            claimable: 0,
+            mintable: 0
+          });
+        }
+        const day = dayMap.get(dayKey);
+        day.totalVMUs += vmus;
+        if (status === 'Maturing') day.maturing += vmus;
+        else if (status === 'Claimable') day.claimable += vmus;
+        else if (status === 'Mintable') day.mintable += vmus;
+      }
+
+      const groupKey = `${owner}|${String(proxy?.Salt || '').toLowerCase()}|${status}|${proxy?.Term || 0}|${dayKey}`;
+      if (!groupMap.has(groupKey)) groupMap.set(groupKey, { owner, status, count: 0 });
+      groupMap.get(groupKey).count += 1;
+    }
+
+    for (const group of groupMap.values()) {
+      const batchCount = Math.ceil(group.count / maxPerBatch);
+      typeStats.totalCount += batchCount;
+      const status = statusMap.get(group.status);
+      if (status) status.totalCount += batchCount;
+      const owner = ownerMap.get(group.owner);
+      if (owner) owner.totalCount += batchCount;
+    }
+
+    const builtAt = Date.now();
+    const invalidatedAt = _getRenderCacheInvalidatedAt();
+    const byType = [{
+      id: `Cointool|${maxPerBatch}`,
+      type: 'Cointool',
+      maxPerBatch,
+      ...typeStats,
+      updatedAt: builtAt
+    }];
+    const byStatus = Array.from(statusMap.values()).map(row => ({ ...row, updatedAt: builtAt }));
+    const byDay = Array.from(dayMap.values()).map(row => ({ ...row, updatedAt: builtAt }));
+    const byOwner = Array.from(ownerMap.values()).map(row => ({ ...row, updatedAt: builtAt }));
+    const metadata = {
+      id: 'cointool',
+      version: COINTOOL_SUMMARY_VERSION,
+      type: 'Cointool',
+      maxPerBatch,
+      proxyCount: proxies.length,
+      groupCount: groupMap.size,
+      builtAt,
+      invalidatedAt,
+      updatedAt: builtAt
+    };
+
+    return _normalizeCointoolSummaryIndex({ metadata, byType, byStatus, byDay, byOwner });
+  }
+
+  function _normalizeCointoolSummaryIndex(index) {
+    const byTypeMap = Object.create(null);
+    const byStatusMap = Object.create(null);
+    const byDayMap = Object.create(null);
+    const byOwnerMap = Object.create(null);
+    for (const row of index.byType || []) byTypeMap[row.type] = row;
+    for (const row of index.byStatus || []) byStatusMap[row.status] = row;
+    for (const row of index.byDay || []) byDayMap[row.date] = row;
+    for (const row of index.byOwner || []) byOwnerMap[row.owner] = row;
+    return {
+      metadata: index.metadata || null,
+      byType: byTypeMap,
+      byStatus: byStatusMap,
+      byDay: byDayMap,
+      byOwner: byOwnerMap,
+      raw: {
+        byType: index.byType || [],
+        byStatus: index.byStatus || [],
+        byDay: index.byDay || [],
+        byOwner: index.byOwner || []
+      }
+    };
+  }
+
+  async function _readCointoolSummaryIndex(maxPerBatch = _getMaxVmuPerTx()) {
+    try {
+      const db = window.cointoolDb || window.dbInstance;
+      if (!_hasCointoolSummaryStores(db)) return null;
+      const [metadata, byType, byStatus, byDay, byOwner] = await Promise.all([
+        new Promise((resolve, reject) => {
+          const tx = db.transaction('summaryMetadata', 'readonly');
+          const req = tx.objectStore('summaryMetadata').get('cointool');
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        }),
+        _readStoreInBatches(db, 'summaryByType', 1000),
+        _readStoreInBatches(db, 'summaryByStatus', 1000),
+        _readStoreInBatches(db, 'summaryByDay', 5000),
+        _readStoreInBatches(db, 'summaryByOwner', 1000)
+      ]);
+
+      if (!metadata || metadata.version !== COINTOOL_SUMMARY_VERSION || metadata.maxPerBatch !== maxPerBatch) return null;
+      if (Number(metadata.builtAt || 0) < _getRenderCacheInvalidatedAt()) return null;
+      return _normalizeCointoolSummaryIndex({ metadata, byType, byStatus, byDay, byOwner });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function _writeCointoolSummaryIndex(index) {
+    const db = window.cointoolDb || window.dbInstance;
+    if (!_hasCointoolSummaryStores(db) || !index?.metadata) return false;
+
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(COINTOOL_SUMMARY_STORES, 'readwrite');
+      for (const storeName of COINTOOL_SUMMARY_STORES) {
+        tx.objectStore(storeName).clear();
+      }
+      for (const row of index.raw.byType || []) tx.objectStore('summaryByType').put(row);
+      for (const row of index.raw.byStatus || []) tx.objectStore('summaryByStatus').put(row);
+      for (const row of index.raw.byDay || []) tx.objectStore('summaryByDay').put(row);
+      for (const row of index.raw.byOwner || []) tx.objectStore('summaryByOwner').put(row);
+      tx.objectStore('summaryMetadata').put(index.metadata);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('summary write aborted'));
+    });
+
+    return true;
+  }
+
+  async function _buildCointoolSummaryIndex(proxies, maxPerBatch) {
+    const started = performance?.now?.() || Date.now();
+    const isCancellation = error => /cancel|chain-change|backup-import|chunk-size/i.test(error?.message || '');
+    try {
+      if (window.wenxen?.workerClient?.isAvailable?.()) {
+        const raw = await window.wenxen.workerClient.run('buildCointoolSummary', {
+          proxies,
+          maxPerBatch,
+          invalidatedAt: _getRenderCacheInvalidatedAt(),
+          nowSec: Math.floor(Date.now() / 1000)
+        }, {
+          jobName: 'summary:cointool',
+          meta: { records: proxies.length, maxPerBatch }
+        });
+        window.wenxen?.perf?.set?.('lastSummaryRebuildMs', Math.round((performance?.now?.() || Date.now()) - started));
+        return _normalizeCointoolSummaryIndex(raw);
+      }
+    } catch (error) {
+      if (isCancellation(error)) throw error;
+      window.wenxen?.perf?.event?.({ type: 'worker-fallback', task: 'buildCointoolSummary', message: error?.message || String(error) });
+    }
+
+    const index = _buildCointoolSummaryIndexFromProxies(proxies, maxPerBatch);
+    window.wenxen?.perf?.set?.('lastSummaryRebuildMs', Math.round((performance?.now?.() || Date.now()) - started));
+    return index;
+  }
+
+  async function _buildCointoolRenderData(proxies, maxPerBatch) {
+    const started = performance?.now?.() || Date.now();
+    const isCancellation = error => /cancel|chain-change|backup-import|chunk-size/i.test(error?.message || '');
+    try {
+      if (window.wenxen?.workerClient?.isAvailable?.()) {
+        const result = await window.wenxen.workerClient.run('buildCointoolRenderData', {
+          proxies,
+          maxPerBatch,
+          invalidatedAt: _getRenderCacheInvalidatedAt(),
+          nowSec: Math.floor(Date.now() / 1000)
+        }, {
+          jobName: 'render:cointool',
+          meta: { records: proxies.length, maxPerBatch }
+        });
+        const elapsedMs = Math.round((performance?.now?.() || Date.now()) - started);
+        window.wenxen?.perf?.set?.('lastCointoolGroupingMs', elapsedMs);
+        window.wenxen?.perf?.set?.('lastCointoolGroupingSource', 'worker');
+        window.wenxen?.perf?.set?.('lastSummaryRebuildMs', elapsedMs);
+        return {
+          rows: Array.isArray(result?.rows) ? result.rows : [],
+          summary: result?.summary ? _normalizeCointoolSummaryIndex(result.summary) : null,
+          source: 'worker',
+          elapsedMs
+        };
+      }
+    } catch (error) {
+      if (isCancellation(error)) throw error;
+      window.wenxen?.perf?.event?.({ type: 'worker-fallback', task: 'buildCointoolRenderData', message: error?.message || String(error) });
+    }
+
+    const summary = _buildCointoolSummaryIndexFromProxies(proxies, maxPerBatch);
+    const rows = await _groupAndChunkProxies(proxies, maxPerBatch);
+    const elapsedMs = Math.round((performance?.now?.() || Date.now()) - started);
+    window.wenxen?.perf?.set?.('lastCointoolGroupingMs', elapsedMs);
+    window.wenxen?.perf?.set?.('lastCointoolGroupingSource', 'main-thread');
+    window.wenxen?.perf?.set?.('lastSummaryRebuildMs', elapsedMs);
+    return { rows, summary, source: 'main-thread', elapsedMs };
+  }
+
+  async function _loadOrBuildCointoolSummaryIndex(options = {}) {
+    const maxPerBatch = options.maxPerBatch || _getMaxVmuPerTx();
+    let index = await _readCointoolSummaryIndex(maxPerBatch);
+    if (index) {
+      window._cointoolSummaryIndex = index;
+      return index;
+    }
+
+    if (!options.allowRebuild && !Array.isArray(options.proxies)) return null;
+    const proxies = Array.isArray(options.proxies) ? options.proxies : await _readAllProxies();
+    if (!proxies.length) return null;
+
+    index = await _buildCointoolSummaryIndex(proxies, maxPerBatch);
+    window._cointoolSummaryIndex = index;
+    _writeCointoolSummaryIndex(index).catch(() => {});
+    return index;
+  }
+
+  function _emptyRowTypeSummary(type) {
+    if (type === 'XENFT') {
+      return { totalCount: 0, totalVMUs: 0, apex: 0, collector: 0, limited: 0, maturing: 0, claimable: 0, xenRewards: 0 };
+    }
+    return { totalCount: 0, totalVMUs: 0, maturing: 0, claimable: 0, xenRewards: 0 };
+  }
+
+  function _summaryMetadataId(type) {
+    return String(type || '').toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'summary';
+  }
+
+  function _statusForSummary(row) {
+    try {
+      if (typeof window.computeLiveStatus === 'function') return window.computeLiveStatus(row);
+    } catch (_) {}
+    return String(row?.Status || row?.status || 'Unknown');
+  }
+
+  function _dateKeyForSummary(row) {
+    const direct = String(row?.maturityDateOnly || '').trim();
+    if (direct) return direct;
+    try {
+      if (typeof rowToLocalKey === 'function') return rowToLocalKey(row) || '';
+    } catch (_) {}
+    const ts = Number(row?.Maturity_Timestamp || row?.Maturity_TS || row?.maturityTs || 0);
+    if (!Number.isFinite(ts) || ts <= 0) return '';
+    return _localDateKeyFromSeconds(ts);
+  }
+
+  function _addRowSummaryTotals(target, row, type, status) {
+    const vmus = Number(row?.VMUs || 0) || 0;
+    target.totalCount = Number(target.totalCount || 0) + 1;
+    target.totalVMUs = Number(target.totalVMUs || 0) + vmus;
+
+    if (type === 'XENFT') {
+      const category = String(row?.Category || '').toLowerCase();
+      const klass = String(row?.Class || '').toLowerCase();
+      if (category === 'apex') target.apex = Number(target.apex || 0) + 1;
+      if (category === 'collector') target.collector = Number(target.collector || 0) + 1;
+      if (klass === 'limited') target.limited = Number(target.limited || 0) + 1;
+      if (status === 'Maturing') target.maturing = Number(target.maturing || 0) + vmus;
+      if (status === 'Claimable') target.claimable = Number(target.claimable || 0) + 1;
+      return;
+    }
+
+    if (status === 'Maturing') target.maturing = Number(target.maturing || 0) + 1;
+    if (status === 'Claimable') target.claimable = Number(target.claimable || 0) + 1;
+  }
+
+  function _buildRowSummaryIndex(type, rows, sourceCount = rows?.length || 0) {
+    const typeStats = _emptyRowTypeSummary(type);
+    const statusMap = new Map();
+    const dayMap = new Map();
+    const ownerMap = new Map();
+    const builtAt = Date.now();
+
+    for (const row of rows || []) {
+      const status = _statusForSummary(row) || 'Unknown';
+      const owner = String(row?.Owner || row?.owner || '').toLowerCase();
+      const vmus = Number(row?.VMUs || 0) || 0;
+
+      _addRowSummaryTotals(typeStats, row, type, status);
+
+      if (!statusMap.has(status)) {
+        statusMap.set(status, { id: `${type}|${status}`, type, status, ..._emptyRowTypeSummary(type) });
+      }
+      _addRowSummaryTotals(statusMap.get(status), row, type, status);
+
+      if (owner) {
+        if (!ownerMap.has(owner)) {
+          ownerMap.set(owner, { id: `${type}|${owner}`, type, owner, ..._emptyRowTypeSummary(type) });
+        }
+        _addRowSummaryTotals(ownerMap.get(owner), row, type, status);
+      }
+
+      const isDone = status === 'Claimed' || status === 'Failed' || status === 'Unknown' || status === 'Ended Early' || Number(row?.redeemed || 0) === 1;
+      const dayKey = _dateKeyForSummary(row);
+      if (!isDone && dayKey && vmus > 0) {
+        if (!dayMap.has(dayKey)) {
+          dayMap.set(dayKey, { id: `${type}|${dayKey}`, type, date: dayKey, totalVMUs: 0, maturing: 0, claimable: 0 });
+        }
+        const day = dayMap.get(dayKey);
+        day.totalVMUs += vmus;
+        if (status === 'Maturing') day.maturing += vmus;
+        if (status === 'Claimable') day.claimable += vmus;
+      }
+    }
+
+    const byType = [{ id: type, type, ...typeStats, updatedAt: builtAt }];
+    const byStatus = Array.from(statusMap.values()).map(row => ({ ...row, updatedAt: builtAt }));
+    const byDay = Array.from(dayMap.values()).map(row => ({ ...row, updatedAt: builtAt }));
+    const byOwner = Array.from(ownerMap.values()).map(row => ({ ...row, updatedAt: builtAt }));
+    const metadata = {
+      id: _summaryMetadataId(type),
+      version: COINTOOL_SUMMARY_VERSION,
+      type,
+      sourceCount,
+      builtAt,
+      updatedAt: builtAt
+    };
+
+    return _normalizeRowSummaryIndex({ metadata, byType, byStatus, byDay, byOwner });
+  }
+
+  function _normalizeRowSummaryIndex(index) {
+    const byTypeMap = Object.create(null);
+    const byStatusMap = Object.create(null);
+    const byDayMap = Object.create(null);
+    const byOwnerMap = Object.create(null);
+    for (const row of index.byType || []) byTypeMap[row.type] = row;
+    for (const row of index.byStatus || []) byStatusMap[row.status] = row;
+    for (const row of index.byDay || []) byDayMap[row.date] = row;
+    for (const row of index.byOwner || []) byOwnerMap[row.owner] = row;
+    return {
+      metadata: index.metadata || null,
+      byType: byTypeMap,
+      byStatus: byStatusMap,
+      byDay: byDayMap,
+      byOwner: byOwnerMap,
+      raw: {
+        byType: index.byType || [],
+        byStatus: index.byStatus || [],
+        byDay: index.byDay || [],
+        byOwner: index.byOwner || []
+      }
+    };
+  }
+
+  function _setSummaryIndexForType(type, index) {
+    if (!index) return null;
+    window._summaryIndexByType = window._summaryIndexByType || {};
+    window._summaryIndexByType[type] = index;
+    return index;
+  }
+
+  async function _readRowSummaryIndex(db, type) {
+    try {
+      if (!_hasCointoolSummaryStores(db)) return null;
+      const metadataId = _summaryMetadataId(type);
+      const [metadata, byTypeRows, byStatusRows, byDayRows, byOwnerRows] = await Promise.all([
+        new Promise((resolve, reject) => {
+          const tx = db.transaction('summaryMetadata', 'readonly');
+          const req = tx.objectStore('summaryMetadata').get(metadataId);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        }),
+        _readStoreInBatches(db, 'summaryByType', 1000),
+        _readStoreInBatches(db, 'summaryByStatus', 1000),
+        _readStoreInBatches(db, 'summaryByDay', 5000),
+        _readStoreInBatches(db, 'summaryByOwner', 1000)
+      ]);
+
+      if (!metadata || metadata.version !== COINTOOL_SUMMARY_VERSION || metadata.type !== type) return null;
+      return _normalizeRowSummaryIndex({
+        metadata,
+        byType: byTypeRows.filter(row => row?.type === type),
+        byStatus: byStatusRows.filter(row => row?.type === type),
+        byDay: byDayRows.filter(row => row?.type === type),
+        byOwner: byOwnerRows.filter(row => row?.type === type)
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function _writeRowSummaryIndex(db, index) {
+    if (!_hasCointoolSummaryStores(db) || !index?.metadata) return false;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(COINTOOL_SUMMARY_STORES, 'readwrite');
+      for (const storeName of COINTOOL_SUMMARY_STORES) {
+        tx.objectStore(storeName).clear();
+      }
+      for (const row of index.raw.byType || []) tx.objectStore('summaryByType').put(row);
+      for (const row of index.raw.byStatus || []) tx.objectStore('summaryByStatus').put(row);
+      for (const row of index.raw.byDay || []) tx.objectStore('summaryByDay').put(row);
+      for (const row of index.raw.byOwner || []) tx.objectStore('summaryByOwner').put(row);
+      tx.objectStore('summaryMetadata').put(index.metadata);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('summary write aborted'));
+    });
+    return true;
+  }
+
+  async function _loadOrBuildRowSummaryIndex(options = {}) {
+    const { db, type } = options;
+    if (!db || !type) return null;
+
+    if (!Array.isArray(options.rows)) {
+      const existing = await _readRowSummaryIndex(db, type);
+      if (existing) return _setSummaryIndexForType(type, existing);
+      if (!options.allowRebuild) return null;
+    }
+
+    const rows = Array.isArray(options.rows) ? options.rows : [];
+    const index = _buildRowSummaryIndex(type, rows, options.sourceCount ?? rows.length);
+    _setSummaryIndexForType(type, index);
+    _writeRowSummaryIndex(db, index).catch(() => {});
+    return index;
+  }
+
+  async function _loadExistingNonCointoolSummaryIndexes() {
+    const specs = [
+      { type: 'XENFT', api: window.xenft },
+      { type: 'Stake XENFT', api: window.xenftStake },
+      { type: 'Stake', api: window.xenStake }
+    ];
+    let loadedAny = false;
+    await Promise.all(specs.map(async spec => {
+      try {
+        if (!spec.api || typeof spec.api.openDB !== 'function') return;
+        const db = await spec.api.openDB();
+        try {
+          const index = await _loadOrBuildRowSummaryIndex({ db, type: spec.type, allowRebuild: false });
+          if (index) loadedAny = true;
+        } finally {
+          try { db.close(); } catch (_) {}
+        }
+      } catch (_) {}
+    }));
+    return loadedAny;
+  }
+
+  window.invalidateCointoolRenderCache = window.invalidateCointoolRenderCache || function() {
+    try {
+      localStorage.setItem(_renderCacheInvalidationKey(), String(Date.now()));
+    } catch (_) {}
+  };
+
+  function _scanStateGet(db, key) {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction('scanState', 'readonly');
+        const req = tx.objectStore('scanState').get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  function _scanStatePut(db, row) {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction('scanState', 'readwrite');
+        tx.objectStore('scanState').put(row);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      } catch (e) { resolve(); }
+    });
+  }
+
+  function _hydrateCachedCointoolRows(rows) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    return rows.map(row => {
+      if (!row || row.SourceType !== 'Cointool') return row;
+      const ts = Number(row.Maturity_Timestamp || 0);
+      if (row.Status === 'Maturing' && Number.isFinite(ts) && ts > 0 && ts <= nowSec) {
+        return { ...row, Status: 'Claimable' };
+      }
+      return row;
+    });
+  }
+
+  async function _readCointoolRenderCache(maxPerBatch) {
+    try {
+      const db = window.cointoolDb || window.dbInstance;
+      window.wenxen?.perf?.set?.('renderCacheVersion', COINTOOL_RENDER_CACHE_VERSION);
+      if (!db?.objectStoreNames?.contains?.('scanState')) {
+        window.wenxen?.perf?.set?.('renderCacheStatus', 'unavailable');
+        return null;
+      }
+      const baseKey = _renderCacheBaseKey(maxPerBatch);
+      const meta = await _scanStateGet(db, `${baseKey}:meta`);
+      if (!meta || meta.version !== COINTOOL_RENDER_CACHE_VERSION || meta.maxPerBatch !== maxPerBatch) {
+        window.wenxen?.perf?.set?.('renderCacheStatus', 'miss');
+        return null;
+      }
+      if (!Number.isFinite(Number(meta.createdAt)) || Number(meta.createdAt) < _getRenderCacheInvalidatedAt()) {
+        window.wenxen?.perf?.set?.('renderCacheStatus', 'stale');
+        return null;
+      }
+      const chunks = Number(meta.chunks || 0);
+      if (!Number.isFinite(chunks) || chunks <= 0) return [];
+
+      const rows = [];
+      for (let i = 0; i < chunks; i++) {
+        const chunk = await _scanStateGet(db, `${baseKey}:chunk:${i}`);
+        if (!chunk || !Array.isArray(chunk.rows)) return null;
+        rows.push(...chunk.rows);
+        if (i % 4 === 3) await _yieldToBrowser();
+      }
+      window.wenxen?.perf?.set?.('renderCacheStatus', 'hit');
+      return _hydrateCachedCointoolRows(rows);
+    } catch (_) {
+      window.wenxen?.perf?.set?.('renderCacheStatus', 'error');
+      return null;
+    }
+  }
+
+  function _scheduleWriteCointoolRenderCache(rows, maxPerBatch) {
+    if (!Array.isArray(rows)) return;
+    setTimeout(() => {
+      _writeCointoolRenderCache(rows, maxPerBatch).catch(() => {});
+    }, 0);
+  }
+
+  async function _writeCointoolRenderCache(rows, maxPerBatch) {
+    const db = window.cointoolDb || window.dbInstance;
+    if (!db?.objectStoreNames?.contains?.('scanState')) return;
+
+    const baseKey = _renderCacheBaseKey(maxPerBatch);
+    const createdAt = Date.now();
+    const invalidatedAtStart = _getRenderCacheInvalidatedAt();
+    const chunks = Math.ceil(rows.length / COINTOOL_RENDER_CACHE_CHUNK_SIZE);
+
+    for (let i = 0; i < chunks; i++) {
+      if (_getRenderCacheInvalidatedAt() !== invalidatedAtStart) return;
+      await _scanStatePut(db, {
+        address: `${baseKey}:chunk:${i}`,
+        rows: rows.slice(i * COINTOOL_RENDER_CACHE_CHUNK_SIZE, (i + 1) * COINTOOL_RENDER_CACHE_CHUNK_SIZE),
+        updatedAt: createdAt
+      });
+      await _yieldToBrowser();
+    }
+
+    if (_getRenderCacheInvalidatedAt() !== invalidatedAtStart) return;
+    await _scanStatePut(db, {
+      address: `${baseKey}:meta`,
+      version: COINTOOL_RENDER_CACHE_VERSION,
+      maxPerBatch,
+      chunks,
+      rowCount: rows.length,
+      createdAt,
+      updatedAt: createdAt
+    });
+  }
+
   async function _readAllProxies(){
     try {
       const db = window.cointoolDb || window.dbInstance;
       if (!db || !db.objectStoreNames || !db.objectStoreNames.contains('proxies')) return [];
-      return await new Promise((resolve, reject) => {
-        const tx = db.transaction('proxies', 'readonly');
-        const req = tx.objectStore('proxies').getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-      });
+      const rows = await _readStoreInBatches(db, 'proxies');
+      window.wenxen?.perf?.set?.('proxyRecordCount', rows.length);
+      return rows;
     } catch(e){ return []; }
   }
 
@@ -567,7 +1268,40 @@ function setMaturityHeaderFilterFromDate(dt) {
     return status;
   }
 
-  function _groupAndChunkProxies(proxies, maxPerBatch){
+  const LOCAL_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function _pad2(n) {
+    return n < 10 ? `0${n}` : String(n);
+  }
+
+  function _localDatePartsFromSeconds(ts) {
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const d = new Date(n * 1000);
+    if (!Number.isFinite(d.getTime())) return null;
+    return {
+      year: d.getFullYear(),
+      monthIndex: d.getMonth(),
+      day: d.getDate(),
+      hour24: d.getHours(),
+      minute: d.getMinutes()
+    };
+  }
+
+  function _localDateKeyFromSeconds(ts) {
+    const parts = _localDatePartsFromSeconds(ts);
+    if (!parts) return '';
+    return `${parts.year}-${_pad2(parts.monthIndex + 1)}-${_pad2(parts.day)}`;
+  }
+
+  function _localMaturityDisplayFromSeconds(ts) {
+    const parts = _localDatePartsFromSeconds(ts);
+    if (!parts) return '';
+    const hour12 = parts.hour24 % 12 || 12;
+    const ampm = parts.hour24 >= 12 ? 'PM' : 'AM';
+    return `${parts.year} ${LOCAL_MONTHS_SHORT[parts.monthIndex]} ${_pad2(parts.day)}, ${_pad2(hour12)}:${_pad2(parts.minute)} ${ampm}`;
+  }
+
+  async function _groupAndChunkProxies(proxies, maxPerBatch){
     // Group by (Owner|Salt|EffectiveStatus|Term|MaturityDay) so each batch
     // row contains only proxies maturing on the same calendar day. Otherwise
     // a chunk can mix proxies with different maturities (same Term but
@@ -577,55 +1311,52 @@ function setMaturityHeaderFilterFromDate(dt) {
     // siblings instead of forming a separate stale-status row.
     const nowSec = Math.floor(Date.now() / 1000);
     const groups = new Map();
-    for (const p of proxies) {
-      let dayKey = '';
-      const ts = Number(p.Maturity_TS);
-      if (window.luxon && Number.isFinite(ts) && ts > 0) {
-        dayKey = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
-      }
+    const dateKeyCache = new Map();
+    const getCachedDateKey = (ts) => {
+      const n = Number(ts) || 0;
+      if (n <= 0) return '';
+      if (!dateKeyCache.has(n)) dateKeyCache.set(n, _localDateKeyFromSeconds(n));
+      return dateKeyCache.get(n);
+    };
+
+    for (let i = 0; i < proxies.length; i++) {
+      const p = proxies[i];
+      const dayKey = getCachedDateKey(p.Maturity_TS);
       const effStatus = _effectiveStatusFromProxy(p, nowSec);
       const key = `${(p.Owner||'').toLowerCase()}|${(p.Salt||'').toLowerCase()}|${effStatus}|${p.Term||0}|${dayKey}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(p);
+      if (i > 0 && i % 5000 === 0) await _yieldToBrowser();
     }
 
     const rows = [];
-    for (const [key, list] of groups) {
+    let processedGroups = 0;
+    for (const [, list] of groups) {
       list.sort((a,b) => (Number(a.Maturity_TS||0) - Number(b.Maturity_TS||0)) || (Number(a.Index||0) - Number(b.Index||0)));
       for (let i = 0; i < list.length; i += maxPerBatch) {
         const chunk = list.slice(i, i + maxPerBatch);
         const first = chunk[0];
         const last  = chunk[chunk.length - 1];
 
-        const ranks = chunk
-          .map(p => {
-            try { return BigInt(p.Rank || '0'); } catch { return 0n; }
-          })
-          .filter(v => v > 0n)
-          .sort((a,b) => a < b ? -1 : a > b ? 1 : 0);
-        const rankRange = ranks.length
-          ? `${ranks[0].toString()}-${ranks[ranks.length-1].toString()}`
+        let minRank = null;
+        let maxRank = null;
+        for (const p of chunk) {
+          let rank = 0n;
+          try { rank = BigInt(p.Rank || '0'); } catch {}
+          if (rank <= 0n) continue;
+          if (minRank === null || rank < minRank) minRank = rank;
+          if (maxRank === null || rank > maxRank) maxRank = rank;
+        }
+        const rankRange = minRank !== null
+          ? `${minRank.toString()}-${maxRank.toString()}`
           : 'N/A';
 
-        const matFmt = (window.luxon && Number(last.Maturity_TS) > 0)
-          ? luxon.DateTime.fromSeconds(Number(last.Maturity_TS)).toFormat('yyyy LLL dd, hh:mm a')
-          : '';
-        const matKey = (window.luxon && Number(last.Maturity_TS) > 0)
-          ? luxon.DateTime.fromSeconds(Number(last.Maturity_TS)).toFormat('yyyy-MM-dd')
-          : '';
+        const matFmt = _localMaturityDisplayFromSeconds(last.Maturity_TS);
+        const matKey = _localDateKeyFromSeconds(last.Maturity_TS);
 
-        // Per-day VMU breakdown for the calendar: chunked proxies share
-        // Term but may have been minted at different times, so they can
-        // mature on different days. Calendar reads MaturityByDay so the
-        // VMU counts are accurate even for grouped rows.
-        const maturityByDay = {};
-        for (const p of chunk) {
-          const ts = Number(p.Maturity_TS);
-          if (!Number.isFinite(ts) || ts <= 0) continue;
-          if (!window.luxon) continue;
-          const day = luxon.DateTime.fromSeconds(ts).toFormat('yyyy-MM-dd');
-          maturityByDay[day] = (maturityByDay[day] || 0) + 1;
-        }
+        // Rows are grouped by maturity day, so the calendar count can be
+        // attached without reformatting every proxy in the chunk.
+        const maturityByDay = matKey ? { [matKey]: chunk.length } : {};
 
         // Aggregate History across the chunk into the row's Actions list,
         // dedup by txHash. Older callers display this as a links column.
@@ -659,8 +1390,6 @@ function setMaturityHeaderFilterFromDate(dt) {
           Term: String(first.Term || 0),
           VMUs: String(chunk.length),
           Indices: chunk.map(p => Number(p.Index)),
-          ProxyIds: chunk.map(p => p.id),
-          ProxyAddresses: chunk.map(p => p.ProxyAddress),
           Mint_id_Start: first.Index,
           Rank_Range: rankRange,
           Maturity_Timestamp: Number(last.Maturity_TS) || 0,
@@ -685,30 +1414,65 @@ function setMaturityHeaderFilterFromDate(dt) {
           Block_Number: 0,
           Est_XEN: 0
         });
+
+        if (rows.length > 0 && rows.length % 200 === 0) await _yieldToBrowser();
       }
+      processedGroups++;
+      if (processedGroups % 50 === 0) await _yieldToBrowser();
     }
     return rows;
   }
 
   async function fetchCointoolRows(){
+    const maxPerBatch = _getMaxVmuPerTx();
+    const cachedRows = await _readCointoolRenderCache(maxPerBatch);
+    if (Array.isArray(cachedRows)) {
+      _loadOrBuildCointoolSummaryIndex({ maxPerBatch, allowRebuild: true }).catch(() => {});
+      window.wenxen?.perf?.set?.('groupedCointoolRowCount', cachedRows.length);
+      window.wenxen?.perf?.set?.('lastCointoolGroupingSource', 'cache');
+      return cachedRows;
+    }
+
     const all = await _readAllProxies();
     if (!all.length) return [];
-    const maxPerBatch = _getMaxVmuPerTx();
-    return _groupAndChunkProxies(all, maxPerBatch);
+    const renderData = await _buildCointoolRenderData(all, maxPerBatch);
+    if (renderData.summary) {
+      window._cointoolSummaryIndex = renderData.summary;
+      _writeCointoolSummaryIndex(renderData.summary).catch(() => {});
+    }
+    window.wenxen?.perf?.set?.('groupedCointoolRowCount', renderData.rows.length);
+    _scheduleWriteCointoolRenderCache(renderData.rows, maxPerBatch);
+    return renderData.rows;
   }
 
 
   async function fetchStakeRows(){
     if (!window.xenStake || typeof window.xenStake.getAll !== "function") return [];
+    let db = null;
     try {
-      const db = await window.xenStake.openDB();
+      db = await window.xenStake.openDB();
       const rows = await window.xenStake.getAll(db);
+      if (Array.isArray(rows)) {
+        const mapped = rows.map(mapStakeToRow);
+        await _loadOrBuildRowSummaryIndex({
+          db,
+          type: 'Stake',
+          rows: mapped,
+          sourceCount: rows.length
+        }).catch(() => {});
+      }
       return Array.isArray(rows) ? rows : [];
     } catch(e){ console.error("Failed to fetch Stake rows", e); }
+    finally { if (db) { try { db.close(); } catch (_) {} } }
     return [];
   }
 
   function mapStakeToRow(s){
+    const startTs = Number(s.startTs || 0) || (
+      Number(s.maturityTs || 0) > 0 && Number(s.term || 0) > 0
+        ? Number(s.maturityTs) - Number(s.term) * 86400
+        : 0
+    );
     return {
       ID: "stake_" + (s.id || (s.owner + "_" + (s.startTs||0))),
       SourceType: "Stake",
@@ -725,6 +1489,7 @@ function setMaturityHeaderFilterFromDate(dt) {
       stakedAmount: s.amount,              // tokens
       amountWei: s.amountWei,              // raw wei
       apy: s.apy,
+      Start_Timestamp: startTs,
       Maturity_Timestamp: s.maturityTs,    // seconds
       maturityDateOnly: s.maturityDateOnly,
       Latest_Action_Timestamp: s.actions?.length ? (s.actions[s.actions.length-1].timeStamp || 0) : 0,
@@ -734,17 +1499,47 @@ function setMaturityHeaderFilterFromDate(dt) {
 
   async function fetchXenftRows(){
     if (!window.xenft || typeof window.xenft.openDB !== "function") return [];
+    let db = null;
     try {
-      var db = await window.xenft.openDB();
+      db = await window.xenft.openDB();
       var rows = await window.xenft.getAll(db);
+      if (Array.isArray(rows)) {
+        const mapped = rows.map(mapXenftToRow);
+        await _loadOrBuildRowSummaryIndex({
+          db,
+          type: 'XENFT',
+          rows: mapped,
+          sourceCount: rows.length
+        }).catch(() => {});
+      }
       return Array.isArray(rows) ? rows : [];
     } catch(e){}
+    finally { if (db) { try { db.close(); } catch (_) {} } }
     return [];
+  }
+
+  let ensureUnifiedColumnsRetryTimer = null;
+  function _scheduleEnsureUnifiedColumns() {
+    if (ensureUnifiedColumnsRetryTimer) return;
+    ensureUnifiedColumnsRetryTimer = setTimeout(() => {
+      ensureUnifiedColumnsRetryTimer = null;
+      try { ensureUnifiedColumns(); } catch (_) {}
+    }, 100);
+  }
+
+  function _isTabulatorColumnDomReady(table) {
+    const tableElement = table?.element || document.getElementById('cointool-table');
+    const headerElement = table?.columnManager?.headersElement || tableElement?.querySelector?.('.tabulator-headers');
+    return !!(tableElement && tableElement.isConnected && headerElement && headerElement.isConnected);
   }
 
   // Ensure XENFT columns exist on the main table
   function ensureUnifiedColumns(){
     if (!window.cointoolTable) return;
+    if (!_isTabulatorColumnDomReady(window.cointoolTable)) {
+      _scheduleEnsureUnifiedColumns();
+      return;
+    }
 
     // Ensure XENFT-specific columns exist
     var newCols = [
@@ -861,7 +1656,13 @@ function setMaturityHeaderFilterFromDate(dt) {
       var newDefs = specials.concat(ordered, rest);
 
       // Apply
-      table.setColumns(newDefs);
+      var currentOrder = defs.map(function(d){ return (d && d.field) || ""; });
+      var nextOrder = newDefs.map(function(d){ return (d && d.field) || ""; });
+      var sameOrder = currentOrder.length === nextOrder.length &&
+        currentOrder.every(function(field, index){ return field === nextOrder[index]; });
+      if (toAdd.length || !sameOrder) {
+        table.setColumns(newDefs);
+      }
     } catch(_) {}
   }
 
@@ -937,15 +1738,31 @@ function setMaturityHeaderFilterFromDate(dt) {
 
   async function fetchStakeXenftRows(){
     if (!window.xenftStake || typeof window.xenftStake.getAll !== "function") return [];
+    let db = null;
     try {
-      var db = await window.xenftStake.openDB();
+      db = await window.xenftStake.openDB();
       var rows = await window.xenftStake.getAll(db);
+      if (Array.isArray(rows)) {
+        const mapped = rows.map(mapStakeXenftToRow);
+        await _loadOrBuildRowSummaryIndex({
+          db,
+          type: 'Stake XENFT',
+          rows: mapped,
+          sourceCount: rows.length
+        }).catch(() => {});
+      }
       return Array.isArray(rows) ? rows : [];
     } catch(e){ console.error("Failed to fetch Stake XENFT rows", e); }
+    finally { if (db) { try { db.close(); } catch (_) {} } }
     return [];
   }
 
   function mapStakeXenftToRow(s) {
+    const startTs = Number(s.startTs || 0) || (
+      Number(s.maturityTs || 0) > 0 && Number(s.term || 0) > 0
+        ? Number(s.maturityTs) - Number(s.term) * 86400
+        : 0
+    );
     return {
       ID: "stake-xenft_" + s.tokenId,
       SourceType: "Stake XENFT",
@@ -961,6 +1778,7 @@ function setMaturityHeaderFilterFromDate(dt) {
       Salt: 'N/A',
       stakedAmount: s.amount, // For Est. XEN calculation
       apy: s.apy, // For Est. XEN calculation
+      Start_Timestamp: startTs,
       Maturity_Timestamp: s.maturityTs,
       maturityDateOnly: s.maturityDateOnly,
       Latest_Action_Timestamp: s.actions?.length > 0 ? s.maturityTs : 0
@@ -970,17 +1788,38 @@ function setMaturityHeaderFilterFromDate(dt) {
 
   // Unified calendar (sum VMUs across both) — accurate, clickable, and no clipping
   async function updateUnifiedCalendar(){
-    const ctRows = await fetchCointoolRows();
-    const xfRows = await fetchXenftRows();
-    const stakeXfRows = await fetchStakeXenftRows();
-    const stakeRows   = await fetchStakeRows();
-
+    const calendarStarted = performance?.now?.() || Date.now();
     // Build YYYY-MM-DD -> total VMUs using the *same date your table shows*
     const dateMap = Object.create(null);
+    const cointoolSummaryIndex = window._cointoolSummaryIndex || await _readCointoolSummaryIndex().catch(() => null);
+    const useCointoolDaySummary = !!(cointoolSummaryIndex?.byDay && Object.keys(cointoolSummaryIndex.byDay).length);
+    if (useCointoolDaySummary) {
+      window._cointoolSummaryIndex = cointoolSummaryIndex;
+      for (const row of Object.values(cointoolSummaryIndex.byDay)) {
+        const key = row?.date;
+        const total = Number(row?.totalVMUs || 0);
+        if (key && total > 0) dateMap[key] = (dateMap[key] || 0) + total;
+      }
+    }
+    const summaryDayTypes = new Set();
+    const summaryIndexesByType = window._summaryIndexByType || {};
+    for (const [type, index] of Object.entries(summaryIndexesByType)) {
+      const byDay = index?.byDay || {};
+      const days = Object.values(byDay);
+      if (!days.length) continue;
+      summaryDayTypes.add(type);
+      for (const row of days) {
+        const key = row?.date;
+        const total = Number(row?.totalVMUs || 0);
+        if (key && total > 0) dateMap[key] = (dateMap[key] || 0) + total;
+      }
+    }
 
     function addFromRow(row){
       const st = String(row.Status || row.status || "");
       if (st === "Unknown") return;
+      if (useCointoolDaySummary && row.SourceType === "Cointool") return;
+      if (summaryDayTypes.has(row.SourceType)) return;
 
       // Cointool batch rows: each row may contain proxies that mature on
       // different days (same Term but different mint timestamps), so use
@@ -1018,24 +1857,18 @@ function setMaturityHeaderFilterFromDate(dt) {
       }
     }
 
-    ctRows.forEach(addFromRow);
-    xfRows.map(mapXenftToRow).forEach(addFromRow);
-    stakeXfRows.map(mapStakeXenftToRow).forEach(addFromRow);
-    stakeRows.map(mapStakeToRow).forEach(addFromRow);
+    if (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length) {
+      window._allUnifiedRows.forEach(addFromRow);
+    } else {
+      const ctRows = useCointoolDaySummary ? [] : await fetchCointoolRows();
+      const xfRows = await fetchXenftRows();
+      const stakeXfRows = await fetchStakeXenftRows();
+      const stakeRows   = await fetchStakeRows();
 
-    // Preserve the current month/year view before destroying
-    let preservedYear = null;
-    let preservedMonth = null;
-    if (window.calendarPicker && window.calendarPicker.currentYear !== undefined && window.calendarPicker.currentMonth !== undefined) {
-      // Store the currently displayed month/year
-      preservedYear = window.calendarPicker.currentYear;
-      preservedMonth = window.calendarPicker.currentMonth;
-      console.log(`[Calendar] Preserving user's current view: ${preservedYear}-${preservedMonth + 1}`);
-    }
-
-    // If an old instance exists, remove it cleanly
-    if (window.calendarPicker && typeof window.calendarPicker.destroy === "function") {
-      try { window.calendarPicker.destroy(); } catch(e){}
+      ctRows.forEach(addFromRow);
+      xfRows.map(mapXenftToRow).forEach(addFromRow);
+      stakeXfRows.map(mapStakeXenftToRow).forEach(addFromRow);
+      stakeRows.map(mapStakeToRow).forEach(addFromRow);
     }
 
     // Helper: set header filter to "YYYY Mon" when user changes month/year
@@ -1047,144 +1880,39 @@ function setMaturityHeaderFilterFromDate(dt) {
       try { window.cointoolTable?.refreshFilter(); } catch (_) {}
     }
 
-    // Helper: ensure Flatpickr header (month/year) isn't pushed down by vendor padding
-    function __fixFlatpickrHeader(fpInstance){
-      try {
-        const root = fpInstance && fpInstance.calendarContainer;
-        if (!root) return;
-        const hdr = root.querySelector('.flatpickr-current-month');
-        if (hdr) {
-          hdr.style.paddingTop = '0px';
-          hdr.style.padding = '0px';
-        }
-      } catch {}
-    }
-
-    // Flag to prevent onMonthChange from firing during programmatic restore
-    let restoringCalendarView = false;
-
-    // Create a fresh Flatpickr with badges and navigation hooks
-    window.calendarPicker = flatpickr("#calendar", {
-      inline: true,
-      // Week starts on Monday
-      locale: { firstDayOfWeek: 1 },
-
-      onDayCreate: function(dObj, dStr, fp, dayElem){
-        const dt = dayElem.dateObj;
-        if (!dt) return;
-
-        // Hide days from prev/next month (but keep grid alignment)
-        const isOtherMonth = dayElem.classList.contains("prevMonthDay") ||
-          dayElem.classList.contains("nextMonthDay");
-        if (isOtherMonth) {
-          dayElem.style.visibility = "hidden";
-          dayElem.style.pointerEvents = "none";
-          return;
-        }
-
-        // Allow pill to overflow
-        dayElem.style.position = "relative";
-        dayElem.style.overflow = "visible";
-
-        // Clicking the day cell sets the header filter (full date)
-        dayElem.addEventListener("click", function(){
-          try { setMaturityHeaderFilterFromDate(dt); } catch(_) {}
-        });
-
-        // --- badge creation (sum VMUs) ---
-        const key = buildDayKeyFromDate(dt);
-        const count = dateMap[key];
-        if (!count) return;
-
-        const badge = document.createElement("span");
-        badge.textContent = String(count);
-        badge.style.position = "absolute";
-        badge.style.top = "-2px";
-        badge.style.right = "-2px";
-        badge.style.minWidth = "18px";
-        badge.style.height = "18px";
-        badge.style.padding = "0 6px";
-        badge.style.lineHeight = "18px";
-        badge.style.textAlign = "center";
-        badge.style.fontSize = "10px";
-        badge.style.backgroundColor = "#063d85";
-        badge.style.color = "yellow";
-        badge.style.borderRadius = "999px";
-        badge.style.cursor = "pointer";
-        badge.style.whiteSpace = "nowrap";
-        badge.style.zIndex = "2";
-
-        badge.addEventListener("click", function(e){
-          e.stopPropagation();
-          try { setMaturityHeaderFilterFromDate(dt); } catch(_) {}
-        });
-
-        dayElem.appendChild(badge);
+    window.calendarController?.update?.(dateMap, {
+      firstDayOfWeek: 1,
+      hideOtherMonthDays: true,
+      onDateClick: function(dt) {
+        try { setMaturityHeaderFilterFromDate(dt); } catch(_) {}
       },
-
-      // ✅ New: when user navigates months/years via arrows or header,
-      //        set the header filter to "YYYY Mon"
-      onMonthChange: function(selectedDates, dateStr, fp){
-        // Skip if we're programmatically restoring the view (not user navigation)
-        if (restoringCalendarView) return;
-        try { setMaturityHeaderFilterFromYearMonth(fp.currentYear, fp.currentMonth); } catch(_) {}
-        __fixFlatpickrHeader(fp);
-        // Update XEN total badge to reflect filtered data
-        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
+      onDateChange: function(dt) {
+        try { setMaturityHeaderFilterFromDate(dt); } catch(_) {}
       },
-      onYearChange: function(selectedDates, dateStr, fp){
-        // Skip if we're programmatically restoring the view (not user navigation)
-        if (restoringCalendarView) return;
-        try { setMaturityHeaderFilterFromYearMonth(fp.currentYear, fp.currentMonth); } catch(_) {}
-        __fixFlatpickrHeader(fp);
-        // Update XEN total badge to reflect filtered data
-        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
-      },
-
-      // Selecting a specific date (even if no badge) sets the header filter (full date)
-      onChange: function(selectedDates){
-        if (selectedDates && selectedDates.length) {
-          try { setMaturityHeaderFilterFromDate(selectedDates[0]); } catch(_) {}
-        } else {
-          try {
-            const input = document.querySelector(
-              '.tabulator-col[tabulator-field="Maturity_Date_Fmt"] .tabulator-header-filter input'
-            );
-            if (input) {
-              input.value = "";
-              input.dispatchEvent(new Event("input",  { bubbles: true }));
-              input.dispatchEvent(new Event("change", { bubbles: true }));
-            }
-          } catch(_) {}
-        }
-        // Update XEN total badge to reflect filtered data
-        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
-      },
-      onReady: function(selectedDates, dateStr, fp){
-        __fixFlatpickrHeader(fp);
-        // Restore preserved month/year after initialization
-        if (preservedYear !== null && preservedMonth !== null) {
-          try {
-            // Set flag to prevent onMonthChange from firing during restoration
-            restoringCalendarView = true;
-            fp.changeMonth(preservedMonth, false);
-            fp.changeYear(preservedYear);
-            console.log(`[Calendar] Restored user's view to: ${preservedYear}-${preservedMonth + 1}`);
-            // Reset flag after restoration
-            restoringCalendarView = false;
-          } catch(e) {
-            console.warn('[Calendar] Failed to restore month/year:', e);
-            restoringCalendarView = false;
+      onClear: function() {
+        try {
+          const input = document.querySelector(
+            '.tabulator-col[tabulator-field="Maturity_Date_Fmt"] .tabulator-header-filter input'
+          );
+          if (input) {
+            input.value = "";
+            input.dispatchEvent(new Event("input",  { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
           }
-        }
+        } catch(_) {}
+      },
+      onMonthYearChange: function(year, monthIndex) {
+        try { setMaturityHeaderFilterFromYearMonth(year, monthIndex); } catch(_) {}
+      },
+      afterInteraction: function() {
+        try { if (typeof updateXENTotalBadge === 'function') updateXENTotalBadge(); } catch(_) {}
       }
     });
-
-    // Keep the bootstrap pointer synchronized with the live instance
-    window._calendar = window.calendarPicker;
-    // NEW: attach header → calendar sync
     attachMaturityHeaderSync();
+    window.wenxen?.perf?.set?.('lastCalendarUpdateMs', Math.round((performance?.now?.() || Date.now()) - calendarStarted));
   }
+
+  window.updateUnifiedCalendar = updateUnifiedCalendar;
 
 
   function updateStakeXenftSummaryLine(){
@@ -1199,14 +1927,24 @@ function setMaturityHeaderFilterFromDate(dt) {
       container.appendChild(line);
     }
 
-    const all = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
-      ? window._allUnifiedRows
-      : (window.cointoolTable ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active")) : []);
+    const cached = getSummaryCacheForType("Stake XENFT");
+    let count;
+    let maturingCount;
+    let claimableCount;
+    if (cached) {
+      count = cached.totalCount || 0;
+      maturingCount = cached.maturing || 0;
+      claimableCount = cached.claimable || 0;
+    } else {
+      const all = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
+        ? window._allUnifiedRows
+        : (window.cointoolTable ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active")) : []);
 
-    const sxf = all.filter(r => r.SourceType === "Stake XENFT");
-    const count = sxf.length;
-    const maturingCount = sxf.filter(r => r.Status === "Maturing").length;
-    const claimableCount = sxf.filter(r => r.Status === "Claimable").length;
+      const sxf = all.filter(r => r.SourceType === "Stake XENFT");
+      count = sxf.length;
+      maturingCount = sxf.filter(r => r.Status === "Maturing").length;
+      claimableCount = sxf.filter(r => r.Status === "Claimable").length;
+    }
 
     line.innerHTML = `<strong>XENFT Stakes:</strong> ${count.toLocaleString()} | <strong>Maturing:</strong> ${maturingCount.toLocaleString()} | <strong>Claimable:</strong> ${claimableCount.toLocaleString()}`;
   }
@@ -1224,20 +1962,39 @@ function setMaturityHeaderFilterFromDate(dt) {
       container.appendChild(line);
     }
 
-    // Overall, unfiltered data
-    const all = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
-      ? window._allUnifiedRows
-      : (window.cointoolTable ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active")) : []);
+    const cached = getSummaryCacheForType("XENFT");
+    let xfCount;
+    let xfVMUs;
+    let apex;
+    let collector;
+    let limited;
+    let maturingVMUs;
+    let claimableCount;
 
-    const xf = all.filter(r => r.SourceType === "XENFT");
-    const xfCount = xf.length;
-    const xfVMUs  = xf.reduce((s, r) => s + (Number(r.VMUs)||0), 0);
-    const apex     = xf.filter(r => String(r.Category||"").toLowerCase() === "apex").length;
-    const collector= xf.filter(r => String(r.Category||"").toLowerCase() === "collector").length;
-    const limited  = xf.filter(r => String(r.Class||"").toLowerCase() === "limited").length;
+    if (cached) {
+      xfCount = cached.totalCount || 0;
+      xfVMUs = cached.totalVMUs || 0;
+      apex = cached.apex || 0;
+      collector = cached.collector || 0;
+      limited = cached.limited || 0;
+      maturingVMUs = cached.maturing || 0;
+      claimableCount = cached.claimable || 0;
+    } else {
+      // Overall, unfiltered data
+      const all = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
+        ? window._allUnifiedRows
+        : (window.cointoolTable ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active")) : []);
 
-    const maturingVMUs = xf.filter(r => r.Status === "Maturing").reduce((s, r) => s + (Number(r.VMUs)||0), 0);
-    const claimableCount = xf.filter(r => r.Status === "Claimable").length;
+      const xf = all.filter(r => r.SourceType === "XENFT");
+      xfCount = xf.length;
+      xfVMUs  = xf.reduce((s, r) => s + (Number(r.VMUs)||0), 0);
+      apex     = xf.filter(r => String(r.Category||"").toLowerCase() === "apex").length;
+      collector= xf.filter(r => String(r.Category||"").toLowerCase() === "collector").length;
+      limited  = xf.filter(r => String(r.Class||"").toLowerCase() === "limited").length;
+
+      maturingVMUs = xf.filter(r => r.Status === "Maturing").reduce((s, r) => s + (Number(r.VMUs)||0), 0);
+      claimableCount = xf.filter(r => r.Status === "Claimable").length;
+    }
 
     line.innerHTML = `<strong>XENFTs:</strong> ${xfCount.toLocaleString()}
     | <strong>Total VMUs:</strong> ${xfVMUs.toLocaleString()} (Apex: ${apex.toLocaleString()} | Collector: ${collector.toLocaleString()} | Limited: ${limited.toLocaleString()})
@@ -1251,33 +2008,231 @@ function setMaturityHeaderFilterFromDate(dt) {
   // Unified refresh: columns + merge + summary + calendar
   async function refreshUnified(){
     if (!window.cointoolTable) return;
+    if (window.__refreshUnifiedInFlight) return window.__refreshUnifiedInFlight;
 
-    ensureUnifiedColumns();
+    const refreshStarted = performance?.now?.() || Date.now();
+    window.__refreshUnifiedInFlight = (async () => {
+      window.__wenxenInitialDataLoading = true;
+      window.__wenxenUnifiedDataReady = false;
+      try { window.summaryOption2?.requestRefresh?.(); } catch(_) {}
 
-    const ctRows = await fetchCointoolRows();
-    const xfRows = await fetchXenftRows();
-    const stakeXfRows = await fetchStakeXenftRows();
-    const stakeRows   = await fetchStakeRows();
+      try {
+        ensureUnifiedColumns();
 
-    const merged = ctRows.map(r => { r.SourceType = "Cointool"; return r; })
-      .concat(xfRows.map(mapXenftToRow))
-      .concat(stakeXfRows.map(mapStakeXenftToRow))
-      .concat(stakeRows.map(mapStakeToRow));
+        const [earlyCointoolSummary, earlyOtherSummaries] = await Promise.all([
+          _loadOrBuildCointoolSummaryIndex({ allowRebuild: false }).catch(() => null),
+          _loadExistingNonCointoolSummaryIndexes().catch(() => false)
+        ]);
+        if (earlyCointoolSummary || earlyOtherSummaries) {
+          try { if (typeof updateSummaryStats === "function") updateSummaryStats(); } catch(_) {}
+          try { updateXenftSummaryLine(); } catch(_) {}
+          try { updateStakeXenftSummaryLine(); } catch(_) {}
+          try { updateStakeSummaryLine(); } catch(_) {}
+          try { await updateUnifiedCalendar(); } catch(_) {}
+          try { window.summaryOption2?.requestRefresh?.(); } catch(_) {}
+        }
 
-    // Cache an unfiltered snapshot for global stats
-    window._allUnifiedRows = merged.slice();
+        const [ctRows, xfRows, stakeXfRows, stakeRows] = await Promise.all([
+          fetchCointoolRows(),
+          fetchXenftRows(),
+          fetchStakeXenftRows(),
+          fetchStakeRows()
+        ]);
 
-    // Replace data without losing filters/formatters
-    window.cointoolTable.replaceData(merged);
-    const hasNonCointool = (xfRows.length + stakeXfRows.length + stakeRows.length) > 0;
-    clearXenftBlockingFilters(hasNonCointool);
+        await _loadOrBuildCointoolSummaryIndex({ allowRebuild: true }).catch(() => null);
 
-    // Update summary & calendar (now read from _allUnifiedRows)
-    if (typeof updateSummaryStats === "function") { try { updateSummaryStats(); } catch(_){} }
-    try { updateXenftSummaryLine(); } catch(_) {}
-    try { updateStakeXenftSummaryLine(); } catch(_) {}
-    try { updateStakeSummaryLine(); } catch(_) {} // ✅ ADD THIS LINE
-    try { await updateUnifiedCalendar(); } catch(_) {}
+        const merged = ctRows.map(r => { r.SourceType = "Cointool"; return r; })
+          .concat(xfRows.map(mapXenftToRow))
+          .concat(stakeXfRows.map(mapStakeXenftToRow))
+          .concat(stakeRows.map(mapStakeToRow));
+
+        // Cache an unfiltered snapshot for global stats. Reuse the merged array to
+        // avoid cloning hundreds of thousands of rows during startup.
+        window._allUnifiedRows = merged;
+
+        // Apply data without full replacement when the table helper is available.
+        const tableApplyStarted = performance?.now?.() || Date.now();
+        if (typeof window.applyTableRows === "function") {
+          await window.applyTableRows(window.cointoolTable, merged, {
+            preferReplaceLarge: true,
+            suppressDerived: true
+          });
+        } else {
+          await window.cointoolTable.replaceData(merged);
+        }
+        window.wenxen?.perf?.set?.('lastTableApplyMs', Math.round((performance?.now?.() || Date.now()) - tableApplyStarted));
+        window.wenxen?.perf?.set?.('totalUnifiedRowCount', merged.length);
+        pendingCointoolChunkTableRows = null;
+        window.__cointoolChunkTableApplyDeferred = false;
+        window.__pendingCointoolChunkTableRows = 0;
+        const hasNonCointool = (xfRows.length + stakeXfRows.length + stakeRows.length) > 0;
+        clearXenftBlockingFilters(hasNonCointool);
+
+        // Update summary & calendar (now read from _allUnifiedRows)
+        if (typeof updateSummaryStats === "function") { try { updateSummaryStats(); } catch(_){} }
+        try { updateXenftSummaryLine(); } catch(_) {}
+        try { updateStakeXenftSummaryLine(); } catch(_) {}
+        try { updateStakeSummaryLine(); } catch(_) {}
+        try { await updateUnifiedCalendar(); } catch(_) {}
+      } finally {
+        window.__wenxenInitialDataLoading = false;
+        window.__wenxenUnifiedDataReady = true;
+        window.wenxen?.perf?.set?.('lastUnifiedRefreshMs', Math.round((performance?.now?.() || Date.now()) - refreshStarted));
+        try { window.summaryOption2?.requestRefresh?.(); } catch(_) {}
+        try { window.dispatchEvent(new CustomEvent('unifiedDataRefresh')); } catch(_) {}
+      }
+    })();
+
+    try {
+      return await window.__refreshUnifiedInFlight;
+    } finally {
+      window.__refreshUnifiedInFlight = null;
+    }
+  }
+
+  function _mergeCointoolRowsWithCurrentSnapshot(ctRows) {
+    const existing = (Array.isArray(window._allUnifiedRows) && window._allUnifiedRows.length)
+      ? window._allUnifiedRows
+      : (window.cointoolTable
+        ? (window.cointoolTable.getData("all") || window.cointoolTable.getData("active") || [])
+        : []);
+    const nonCointool = existing.filter(row => row && row.SourceType !== "Cointool");
+    const cointoolRows = ctRows.map(row => {
+      row.SourceType = "Cointool";
+      return row;
+    });
+    return {
+      merged: cointoolRows.concat(nonCointool),
+      hasNonCointool: nonCointool.length > 0
+    };
+  }
+
+  let cointoolChunkRefreshToken = 0;
+  let cointoolChunkRefreshPromise = null;
+  let pendingCointoolChunkTableRows = null;
+
+  function _isDashboardTableActive() {
+    const dashboard = document.getElementById('tab-dashboard');
+    return !!dashboard?.classList?.contains('active');
+  }
+
+  async function _replaceUnifiedTableRows(rows) {
+    const applyStarted = performance?.now?.() || Date.now();
+    if (typeof window.applyTableRows === "function") {
+      await window.applyTableRows(window.cointoolTable, rows, {
+        forceReplace: true,
+        preferReplaceLarge: true,
+        suppressDerived: true
+      });
+    } else {
+      await window.cointoolTable.replaceData(rows);
+    }
+    window.__cointoolChunkTableAppliedAt = Date.now();
+    window.__cointoolChunkTableApplyDeferred = false;
+    window.wenxen?.perf?.set?.('lastTableApplyMs', Math.round((performance?.now?.() || Date.now()) - applyStarted));
+  }
+
+  async function _applyOrDeferCointoolChunkRows(rows) {
+    if (!_isDashboardTableActive()) {
+      pendingCointoolChunkTableRows = rows;
+      window.__cointoolChunkTableApplyDeferred = true;
+      window.__pendingCointoolChunkTableRows = rows.length;
+      return { deferred: true };
+    }
+    await _replaceUnifiedTableRows(rows);
+    return { deferred: false };
+  }
+
+  async function flushPendingCointoolChunkTableRows() {
+    if (!pendingCointoolChunkTableRows || !window.cointoolTable || !_isDashboardTableActive()) return false;
+    const rows = pendingCointoolChunkTableRows;
+    pendingCointoolChunkTableRows = null;
+    await _replaceUnifiedTableRows(rows);
+    try { if (typeof updateXENTotalBadge === "function") updateXENTotalBadge(); } catch(_) {}
+    try { if (typeof updateVmuChart === "function") updateVmuChart(); } catch(_) {}
+    try { if (typeof updateDownloadButtonsVisibility === "function") updateDownloadButtonsVisibility(); } catch(_) {}
+    try {
+      window.dispatchEvent(new CustomEvent("cointoolChunkTableApplied", {
+        detail: { rows: rows.length }
+      }));
+    } catch (_) {}
+    return true;
+  }
+
+  async function refreshCointoolChunkSizeOnly() {
+    if (!window.cointoolTable) return false;
+
+    const token = ++cointoolChunkRefreshToken;
+    const previousRefresh = cointoolChunkRefreshPromise;
+    if (previousRefresh) {
+      window.wenxen?.workerClient?.cancelAll?.('chunk-size-change');
+    }
+    const promise = (async () => {
+      if (previousRefresh) await previousRefresh.catch(() => {});
+      if (token !== cointoolChunkRefreshToken) return false;
+
+      if (window.__refreshUnifiedInFlight) {
+        await window.__refreshUnifiedInFlight.catch(() => {});
+      }
+      if (token !== cointoolChunkRefreshToken) return false;
+
+      const started = (window.performance && typeof window.performance.now === "function")
+        ? window.performance.now()
+        : Date.now();
+      const targetMaxVmu = _getMaxVmuPerTx();
+      window.__wenxenCointoolChunkRefreshing = true;
+      window.__wenxenCointoolChunkRefreshValue = targetMaxVmu;
+
+      try {
+        const ctRows = await fetchCointoolRows();
+        if (token !== cointoolChunkRefreshToken) return false;
+        await _loadOrBuildCointoolSummaryIndex({ maxPerBatch: targetMaxVmu, allowRebuild: true }).catch(() => null);
+
+        const { merged, hasNonCointool } = _mergeCointoolRowsWithCurrentSnapshot(ctRows);
+        window._allUnifiedRows = merged;
+
+        const tableApply = await _applyOrDeferCointoolChunkRows(merged);
+        if (token !== cointoolChunkRefreshToken) return false;
+
+        clearXenftBlockingFilters(hasNonCointool);
+        if (typeof updateSummaryStats === "function") { try { updateSummaryStats(); } catch(_){} }
+        try { updateXenftSummaryLine(); } catch(_) {}
+        try { updateStakeXenftSummaryLine(); } catch(_) {}
+        try { updateStakeSummaryLine(); } catch(_) {}
+        try { await updateUnifiedCalendar(); } catch(_) {}
+        try { if (typeof updateXENTotalBadge === "function") updateXENTotalBadge(); } catch(_) {}
+        try { if (typeof updateVmuChart === "function") updateVmuChart(); } catch(_) {}
+        try { if (typeof updateDownloadButtonsVisibility === "function") updateDownloadButtonsVisibility(); } catch(_) {}
+
+        const ended = (window.performance && typeof window.performance.now === "function")
+          ? window.performance.now()
+          : Date.now();
+        window.__cointoolChunkRefreshAppliedAt = Date.now();
+        window.__cointoolChunkRefreshElapsedMs = Math.max(0, Math.round(ended - started));
+        try {
+          window.dispatchEvent(new CustomEvent("cointoolChunkRefresh", {
+            detail: {
+              value: targetMaxVmu,
+              rows: ctRows.length,
+              elapsedMs: window.__cointoolChunkRefreshElapsedMs,
+              tableDeferred: !!tableApply.deferred
+            }
+          }));
+        } catch (_) {}
+        return true;
+      } finally {
+        window.__wenxenCointoolChunkRefreshing = false;
+      }
+    })();
+
+    cointoolChunkRefreshPromise = promise;
+    window.__cointoolChunkRefreshInFlight = promise;
+    try {
+      return await promise;
+    } finally {
+      if (cointoolChunkRefreshPromise === promise) cointoolChunkRefreshPromise = null;
+      if (window.__cointoolChunkRefreshInFlight === promise) window.__cointoolChunkRefreshInFlight = null;
+    }
   }
 
 
@@ -1291,19 +2246,6 @@ function setMaturityHeaderFilterFromDate(dt) {
         if (typeof window.refreshUnified === "function") window.refreshUnified();
       };
       window._unifyWrappedPopulate = true;
-    }
-
-    if (!window.cointoolTable._unifyPatched) {
-      var _origReplace = window.cointoolTable.replaceData.bind(window.cointoolTable);
-      var _merging = false;
-      window.cointoolTable.replaceData = async function(data){
-        var res = await _origReplace(data);
-        if (!_merging && typeof window.refreshUnified === "function") {
-          _merging = true; try { await window.refreshUnified(); } finally { _merging = false; }
-        }
-        return res;
-      };
-      window.cointoolTable._unifyPatched = true;
     }
 
     // Always use unified calendar
@@ -1320,12 +2262,19 @@ function setMaturityHeaderFilterFromDate(dt) {
     if (!input || input._unifyWired) return;
     input._unifyWired = true;
     let t = null;
+    let lastRenderedValue = _getMaxVmuPerTx();
     const trigger = () => {
       if (t) clearTimeout(t);
-      t = setTimeout(() => { try { refreshUnified(); } catch(_){} }, 200);
+      t = setTimeout(() => {
+        const nextValue = _getMaxVmuPerTx();
+        if (nextValue === lastRenderedValue) return;
+        lastRenderedValue = nextValue;
+        refreshCointoolChunkSizeOnly().catch(err => console.warn('Cointool chunk refresh failed:', err));
+      }, 200);
     };
     input.addEventListener('change', trigger);
-    input.addEventListener('input', trigger);
+    input.addEventListener('blur', trigger);
+    window.addEventListener('cointoolMaxVmuPerTxChanged', trigger);
   }
 
   // Boot
@@ -1333,6 +2282,14 @@ function setMaturityHeaderFilterFromDate(dt) {
   whenTableReady(function(){
     attachGuards();
     window.refreshUnified = refreshUnified;
+    window.refreshCointoolChunkSizeOnly = refreshCointoolChunkSizeOnly;
+    window.flushPendingCointoolChunkTableRows = flushPendingCointoolChunkTableRows;
+    document.addEventListener('tabChanged', event => {
+      if (event?.detail?.tabId !== 'tab-dashboard') return;
+      setTimeout(() => {
+        flushPendingCointoolChunkTableRows().catch(err => console.warn('Pending Cointool table apply failed:', err));
+      }, 0);
+    });
     wireMaxVmuListener();
     refreshUnified();
   });

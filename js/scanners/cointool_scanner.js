@@ -5,7 +5,7 @@
 // proxies into virtual batch rows of size up to `cointoolMaxVmuPerTx` for
 // display and execution.
 //
-// DB v4 schema:
+// DB v5 schema:
 //   proxies   keyPath: id  ("ownerLc-saltLc-index")
 //             indices:
 //               byOwner                  on Owner
@@ -13,6 +13,11 @@
 //               byOwnerSaltStatusTerm    on [Owner, Salt, Status, Term]
 //               byMaturity               on Maturity_TS
 //   scanState keyPath: address
+//   summaryByType     keyPath: id
+//   summaryByStatus   keyPath: id
+//   summaryByDay      keyPath: id
+//   summaryByOwner    keyPath: id
+//   summaryMetadata   keyPath: id
 //
 // Wrapped in IIFE to avoid global variable conflicts.
 
@@ -21,7 +26,7 @@
   // Constants & helpers
   // -----------------------------
 
-  const DB_VERSION = 4;
+  const DB_VERSION = 5;
 
   function getChainPrefix(chain) {
     const prefixMap = {
@@ -137,6 +142,17 @@
     return `${getChainPrefix(chain)}_DB_Cointool`;
   }
 
+  function invalidateRenderCache() {
+    try {
+      if (typeof window.invalidateCointoolRenderCache === 'function') {
+        window.invalidateCointoolRenderCache();
+        return;
+      }
+      const chain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+      localStorage.setItem(`${chain}_cointoolRenderCacheInvalidatedAt`, String(Date.now()));
+    } catch (_) {}
+  }
+
   function openDB() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open(dbName(), DB_VERSION);
@@ -157,6 +173,28 @@
         }
         if (!db.objectStoreNames.contains('scanState')) {
           db.createObjectStore('scanState', { keyPath: 'address' });
+        }
+        if (!db.objectStoreNames.contains('summaryByType')) {
+          const s = db.createObjectStore('summaryByType', { keyPath: 'id' });
+          s.createIndex('byType', 'type', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('summaryByStatus')) {
+          const s = db.createObjectStore('summaryByStatus', { keyPath: 'id' });
+          s.createIndex('byType', 'type', { unique: false });
+          s.createIndex('byStatus', 'status', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('summaryByDay')) {
+          const s = db.createObjectStore('summaryByDay', { keyPath: 'id' });
+          s.createIndex('byDate', 'date', { unique: false });
+          s.createIndex('byType', 'type', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('summaryByOwner')) {
+          const s = db.createObjectStore('summaryByOwner', { keyPath: 'id' });
+          s.createIndex('byOwner', 'owner', { unique: false });
+          s.createIndex('byType', 'type', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('summaryMetadata')) {
+          db.createObjectStore('summaryMetadata', { keyPath: 'id' });
         }
       };
       req.onsuccess = (event) => resolve(event.target.result);
@@ -218,6 +256,7 @@
   // TransactionInactiveError on huge writes.
   async function bulkPutProxies(db, records) {
     const TX_BATCH = 5000;
+    if (Array.isArray(records) && records.length > 0) invalidateRenderCache();
     for (let i = 0; i < records.length; i += TX_BATCH) {
       const slice = records.slice(i, i + TX_BATCH);
       await new Promise((resolve, reject) => {
@@ -249,34 +288,48 @@
 
     if (fromBlock > toBlock) return;
 
-    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=txlist&address=${address}&startblock=${fromBlock}&endblock=${toBlock}&page=1&offset=${PAGE_SIZE}&sort=asc&apikey=${etherscanApiKey}`;
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 60000);
-    let data;
-    try {
-      const res = await fetch(url, { signal: ctl.signal });
-      clearTimeout(t);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      data = await res.json();
-    } catch (e) {
-      clearTimeout(t);
-      throw e;
+    let rows;
+    if (window.explorerApiClient?.request) {
+      rows = await window.explorerApiClient.request({
+        module: 'account',
+        action: 'txlist',
+        address,
+        startblock: fromBlock,
+        endblock: toBlock,
+        page: 1,
+        offset: PAGE_SIZE,
+        sort: 'asc'
+      }, etherscanApiKey, { timeoutMs: 60000 });
+    } else {
+      const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=txlist&address=${address}&startblock=${fromBlock}&endblock=${toBlock}&page=1&offset=${PAGE_SIZE}&sort=asc&apikey=${etherscanApiKey}`;
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 60000);
+      try {
+        const res = await fetch(url, { signal: ctl.signal });
+        clearTimeout(t);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        rows = data.status === '1' && Array.isArray(data.result) ? data.result : [];
+      } catch (e) {
+        clearTimeout(t);
+        throw e;
+      }
     }
 
-    if (data.status !== '1' || !Array.isArray(data.result) || data.result.length === 0) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       ui?.setStage?.(`Fetching ${address}: blocks ${fromBlock}-${toBlock} → 0 txs (${out.length} cointool so far)`, 0, 1);
       return;
     }
 
-    const filtered = data.result.filter(tx =>
+    const filtered = rows.filter(tx =>
       lc(tx.to) === cointool &&
       String(tx.isError || '0') === '0' &&
       lc(tx.from) === lc(address)
     );
     out.push(...filtered);
 
-    if (data.result.length >= PAGE_SIZE && depth < MAX_DEPTH) {
-      const lastBlock = Number(data.result[data.result.length - 1].blockNumber);
+    if (rows.length >= PAGE_SIZE && depth < MAX_DEPTH) {
+      const lastBlock = Number(rows[rows.length - 1].blockNumber);
       if (!Number.isFinite(lastBlock)) return;
 
       if (lastBlock >= toBlock) {
@@ -304,7 +357,7 @@
       return;
     }
 
-    console.log(`[COINTOOL] ${address}: blocks ${fromBlock}-${toBlock} → ${filtered.length}/${data.result.length} cointool txs (total ${out.length})`);
+    console.log(`[COINTOOL] ${address}: blocks ${fromBlock}-${toBlock} → ${filtered.length}/${rows.length} cointool txs (total ${out.length})`);
     ui?.setStage?.(`Fetching ${address}: blocks ${fromBlock}-${toBlock} (${out.length} cointool txs)`, 0, 1);
   }
 
@@ -616,7 +669,7 @@
     const pool = createRpcPool(web3);
     console.log(`[COINTOOL] RPC pool initialized with ${pool.size()} endpoint(s)`);
 
-    const deploymentBlock = window.chainManager?.getXenDeploymentBlock?.() || 15704871;
+    const deploymentBlock = window.chainManager?.getDeploymentBlock?.('COINTOOL') || window.chainManager?.getXenDeploymentBlock?.() || 15704871;
     const toBlock = await pool.getBlockNumber();
 
     // Honor the user's `rescanBlockDepth` setting (default 1000 blocks).
@@ -712,6 +765,7 @@
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
+      invalidateRenderCache();
       // Also remove from in-memory state.
       for (const id of phantomIds) proxiesById.delete(id);
       console.log(`[COINTOOL] ${address}: deleted ${phantomIds.length} phantom records`);
@@ -1125,16 +1179,20 @@
   // -----------------------------
 
   async function scan() {
-    const addressInput = (document.getElementById('ethAddress')?.value || '').trim();
-    const rpcInput = (document.getElementById('customRPC')?.value || '').trim();
+    const addressEl = document.getElementById('ethAddress');
+    const rpcEl = document.getElementById('customRPC');
+    const addressInput = (window.normalizeMultiLineValue ? window.normalizeMultiLineValue(addressEl?.value || '', 'address') : (addressEl?.value || '')).trim();
+    const rpcInput = (window.normalizeMultiLineValue ? window.normalizeMultiLineValue(rpcEl?.value || '', 'rpc') : (rpcEl?.value || '')).trim();
+    if (addressEl) addressEl.value = addressInput;
+    if (rpcEl) rpcEl.value = rpcInput;
     const etherscanApiKey = (document.getElementById('etherscanApiKey')?.value || '').trim();
     const forceRescan = !!document.getElementById('forceRescan')?.checked;
 
-    if (!addressInput) { alert('Please enter at least one Ethereum address.'); return; }
-    if (!etherscanApiKey) { alert('Please enter an Etherscan API Key.'); return; }
+    if (!addressInput) { alert('Please enter at least one wallet address.'); return; }
+    if (!etherscanApiKey) { alert('Please enter an Etherscan Multichain API key.'); return; }
 
-    const addresses = addressInput.split('\n').map(s => s.trim()).filter(Boolean);
-    const rpcEndpoints = rpcInput.split('\n').map(s => s.trim()).filter(Boolean);
+    const addresses = window.splitMultiLineValue ? window.splitMultiLineValue(addressInput, 'address') : addressInput.split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
+    const rpcEndpoints = window.splitMultiLineValue ? window.splitMultiLineValue(rpcInput, 'rpc') : rpcInput.split(/\s+|\n+/).map(s => s.trim()).filter(Boolean);
 
     const web3 = window.newWeb3
       ? window.newWeb3(rpcEndpoints[0] || null)
@@ -1275,7 +1333,7 @@
       return {
         name: 'Cointool',
         type: 'cointool',
-        description: 'Per-proxy Cointool scanner (DB v4)',
+        description: 'Per-proxy Cointool scanner (DB v5)',
         contractAddress: getCointoolAddress()
       };
     },

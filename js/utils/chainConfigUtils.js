@@ -1,6 +1,28 @@
 // Chain Configuration Utilities
 // Provides standardized access to chain-specific configuration across all scanners
 
+function splitSettingsList(value, type = 'address') {
+  if (!value || typeof value !== 'string') return [];
+  if (typeof window.normalizeMultiLineValue === 'function') {
+    return window.normalizeMultiLineValue(value, type).split('\n').map(s => s.trim()).filter(Boolean);
+  }
+  const raw = value.replace(/\r\n?/g, '\n').trim();
+  if (!raw) return [];
+  if (type === 'address') {
+    const addressPattern = /0x[a-fA-F0-9]{40}/g;
+    const matches = raw.match(addressPattern);
+    const leftovers = raw.replace(addressPattern, '').replace(/[\s,;\n]+/g, '');
+    if (matches?.length && !leftovers) return matches;
+  }
+  if (type === 'rpc') {
+    const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|[\s,;]+|$)/g;
+    const matches = raw.match(urlPattern);
+    const leftovers = raw.replace(urlPattern, '').replace(/[\s,;\n]+/g, '');
+    if (matches?.length && !leftovers) return matches;
+  }
+  return raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+}
+
 /**
  * Get the current chain configuration with fallbacks
  * @returns {Object} Current chain configuration
@@ -53,6 +75,12 @@ export function getCurrentChainConfig() {
       COINTOOL_SALT_BYTES: '0x29A2241A010000000000',
       XEN_GENESIS_TIMESTAMP: 1665250163,
       XEN_DEPLOYMENT_BLOCK: 15704871,
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 15704871,
+        XENFT_TORRENT: 15704871,
+        XENFT_STAKE: 15704871,
+        COINTOOL: 15704871
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -107,18 +135,28 @@ export function getDatabaseName(dbType) {
     console.debug('Using fallback database name');
   }
   
-  // Fallback logic
-  const currentChain = getCurrentChainName();
-  const chainPrefix = currentChain === 'BASE' ? 'BASE' : 'ETH';
-  
+  const config = getCurrentChainConfig();
   const dbMap = {
-    'cointool': `${chainPrefix}_DB_Cointool`,
-    'xenft': `${chainPrefix}_DB_Xenft`, 
-    'xen_stake': `${chainPrefix}_DB_XenStake`,
-    'xenft_stake': `${chainPrefix}_DB_XenftStake`
+    'cointool': config.databases.COINTOOL_DB,
+    'xenft': config.databases.XENFT_DB,
+    'xen_stake': config.databases.XEN_STAKE_DB,
+    'xenft_stake': config.databases.XENFT_STAKE_DB
   };
   
-  return dbMap[dbType.toLowerCase()] || `${chainPrefix}_DB_${dbType}`;
+  return dbMap[String(dbType || '').toLowerCase()] || null;
+}
+
+export function getDatabasePrefix() {
+  try {
+    if (window.chainManager && typeof window.chainManager.getDatabasePrefix === 'function') {
+      return window.chainManager.getDatabasePrefix();
+    }
+  } catch (error) {
+    console.debug('Using fallback database prefix');
+  }
+
+  const config = getCurrentChainConfig();
+  return (config.databases.COINTOOL_DB || 'ETH_DB_Cointool').replace(/_DB_Cointool$/, '');
 }
 
 /**
@@ -137,7 +175,7 @@ export function getRPCEndpoints() {
   // Fallback: check DOM or use defaults
   const customRPC = document.getElementById('customRPC')?.value?.trim();
   if (customRPC) {
-    return customRPC.split('\n').map(s => s.trim()).filter(Boolean);
+    return splitSettingsList(customRPC, 'rpc');
   }
   
   const config = getCurrentChainConfig();
@@ -213,15 +251,17 @@ export function getChainConstant(constantName) {
  * @returns {number} Block number
  */
 export function getCreationBlock(contractName = 'XEN_CRYPTO') {
-  const config = getCurrentChainConfig();
-  
-  // Use chain-specific deployment blocks
-  if (contractName === 'XEN_CRYPTO') {
-    return config.constants.XEN_DEPLOYMENT_BLOCK || 0;
+  try {
+    if (window.chainManager && typeof window.chainManager.getDeploymentBlock === 'function') {
+      return window.chainManager.getDeploymentBlock(contractName);
+    }
+  } catch (error) {
+    console.debug('Using fallback creation block');
   }
-  
-  // For other contracts, use XEN deployment as a safe starting point
-  return config.constants.XEN_DEPLOYMENT_BLOCK || 0;
+
+  const config = getCurrentChainConfig();
+  const blocks = config.constants.DEPLOYMENT_BLOCKS || {};
+  return Number(blocks[String(contractName || 'XEN_CRYPTO').toUpperCase()] || config.constants.XEN_DEPLOYMENT_BLOCK || 0);
 }
 
 /**
@@ -263,7 +303,7 @@ export function getUserSettings() {
 export function getAddressesFromSettings() {
   const addressInput = document.getElementById('ethAddress')?.value?.trim() || 
                       localStorage.getItem('ethAddress') || '';
-  return addressInput.split('\n').map(s => s.trim()).filter(Boolean);
+  return splitSettingsList(addressInput, 'address');
 }
 
 /**
@@ -344,6 +384,7 @@ if (typeof window !== 'undefined') {
     getCurrentChainName,
     getContractAddress,
     getDatabaseName,
+    getDatabasePrefix,
     getRPCEndpoints,
     getEtherscanApiUrl,
     getExplorerTxUrl,

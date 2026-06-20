@@ -1,22 +1,30 @@
 // Multi-chain configuration system
 // Each chain has its own contract addresses, RPCs, and explorer URLs
 
+const CHAIN_RPC_DEBUG = false;
+function logChainRpc(...args) {
+  if (CHAIN_RPC_DEBUG || (typeof window !== 'undefined' && window.DEBUG_CHAIN_RPC)) {
+    console.log(...args);
+  }
+}
+
 // Helper to split concatenated URLs that may have lost their newlines
 function splitConcatenatedUrls(value) {
   if (!value || typeof value !== 'string') return [];
-  // If value already contains newlines, split normally
-  if (value.includes('\n')) {
-    return value.split('\n').map(s => s.trim()).filter(Boolean);
-  }
-  // Otherwise, try to detect concatenated URLs (e.g., "https://...https://...")
-  const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|$)/g;
-  const matches = value.match(urlPattern);
-  if (matches && matches.length > 0) {
-    console.log(`[Chain RPC] Split ${matches.length} concatenated URLs`);
+  const raw = value.replace(/\r\n?/g, '\n').trim();
+  if (!raw) return [];
+
+  // Detect both normal separated URLs and concatenated URLs
+  // (e.g. "https://...https://...") without depending on textarea newlines.
+  const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|[\s,;]+|$)/g;
+  const leftovers = raw.replace(urlPattern, '').replace(/[\s,;\n]+/g, '');
+  const matches = raw.match(urlPattern);
+  if (matches && matches.length > 0 && !leftovers) {
+    logChainRpc(`[Chain RPC] Split ${matches.length} concatenated URLs`);
     return matches.map(s => s.trim()).filter(Boolean);
   }
-  // Single URL or empty
-  return value.trim() ? [value.trim()] : [];
+
+  return raw.split(/[\s,;\n]+/).map(s => s.trim()).filter(Boolean);
 }
 
 export const SUPPORTED_CHAINS = {
@@ -64,6 +72,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1665250163,
       XEN_GENESIS_DATE_MS: Date.UTC(2022, 9, 8, 0, 0, 0, 0),
       XEN_DEPLOYMENT_BLOCK: 15704871, // XEN deployed at this block on Ethereum
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 15704871,
+        XENFT_TORRENT: 15704871,
+        XENFT_STAKE: 15704871,
+        COINTOOL: 15704871
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -74,8 +88,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 3,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto'
@@ -139,6 +153,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1692986123, // Base XEN launch timestamp (Aug-25-2023 04:13:53 PM UTC)
       XEN_GENESIS_DATE_MS: Date.UTC(2023, 7, 25, 16, 13, 53, 0), // Base XEN launch date (month is 0-indexed)
       XEN_DEPLOYMENT_BLOCK: 3098388, // XEN deployed at this block on Base
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 3098388,
+        XENFT_TORRENT: 3098388,
+        XENFT_STAKE: 3098388,
+        COINTOOL: 3098388
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -149,8 +169,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 1,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
@@ -208,6 +228,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1665700430, // Avalanche XEN launch timestamp (Oct 13, 2022)
       XEN_GENESIS_DATE_MS: 1665700430000, // Avalanche XEN launch date in milliseconds (Oct 13, 2022)
       XEN_DEPLOYMENT_BLOCK: 27265450, // XEN deployed at this block on Avalanche
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 27265450,
+        XENFT_TORRENT: 27265450,
+        XENFT_STAKE: 27265450,
+        COINTOOL: 27265450
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -218,8 +244,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 1,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
@@ -277,6 +303,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1665527037,
       XEN_GENESIS_DATE_MS: 1665527037000, // Oct 11, 2022
       XEN_DEPLOYMENT_BLOCK: 25361679,
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 25361679,
+        XENFT_TORRENT: 25361679,
+        XENFT_STAKE: 25361679,
+        COINTOOL: 25361679
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -287,8 +319,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 1,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
@@ -346,6 +378,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1666118622,
       XEN_GENESIS_DATE_MS: 1666118622000, // Oct 18, 2022
       XEN_DEPLOYMENT_BLOCK: 3203586,
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 3203586,
+        XENFT_TORRENT: 3203586,
+        XENFT_STAKE: 3203586,
+        COINTOOL: 3203586
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -356,8 +394,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 1,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
@@ -415,6 +453,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1665615710,
       XEN_GENESIS_DATE_MS: 1665615710000, // Oct 12, 2022
       XEN_DEPLOYMENT_BLOCK: 39156314,
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 39156314,
+        XENFT_TORRENT: 39156314,
+        XENFT_STAKE: 39156314,
+        COINTOOL: 39156314
+      },
       BASE_AMP: 3000
     },
     databases: {
@@ -425,8 +469,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 1,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
@@ -484,6 +528,12 @@ export const SUPPORTED_CHAINS = {
       XEN_GENESIS_TIMESTAMP: 1694825551,
       XEN_GENESIS_DATE_MS: 1694825551000, // Sep 16, 2023
       XEN_DEPLOYMENT_BLOCK: 109613518,
+      DEPLOYMENT_BLOCKS: {
+        XEN_CRYPTO: 109613518,
+        XENFT_TORRENT: 109613518,
+        XENFT_STAKE: 109613518,
+        COINTOOL: 109613518
+      },
       BASE_AMP: 300
     },
     databases: {
@@ -494,8 +544,8 @@ export const SUPPORTED_CHAINS = {
     },
     dbVersions: {
       COINTOOL: 1,
-      XENFT: 1,
-      STAKE: 1
+      XENFT: 4,
+      STAKE: 2
     },
     coingecko: {
       xenId: 'xen-crypto' // Same ID for XEN across chains
@@ -606,16 +656,32 @@ class ChainManager {
     return `${chain}_${baseKey}`;
   }
 
+  getDatabasePrefix(chainKey = this.getCurrentChain()) {
+    const config = SUPPORTED_CHAINS[chainKey] || this.getCurrentConfig();
+    const dbName = config?.databases?.COINTOOL_DB || 'ETH_DB_Cointool';
+    return dbName.replace(/_DB_Cointool$/, '');
+  }
+
   // Get chain-specific database name
-  getDatabaseName(dbType) {
-    const config = this.getCurrentConfig();
+  getDatabaseName(dbType, chainKey = this.getCurrentChain()) {
+    const config = SUPPORTED_CHAINS[chainKey] || this.getCurrentConfig();
     const dbMap = {
       'cointool': config.databases.COINTOOL_DB,
       'xenft': config.databases.XENFT_DB,
       'xen_stake': config.databases.XEN_STAKE_DB,
       'xenft_stake': config.databases.XENFT_STAKE_DB
     };
-    return dbMap[dbType.toLowerCase()] || null;
+    return dbMap[String(dbType || '').toLowerCase()] || null;
+  }
+
+  getDatabaseNames(chainKey = this.getCurrentChain()) {
+    const config = SUPPORTED_CHAINS[chainKey] || this.getCurrentConfig();
+    return {
+      cointool: config.databases.COINTOOL_DB,
+      xenft: config.databases.XENFT_DB,
+      xen_stake: config.databases.XEN_STAKE_DB,
+      xenft_stake: config.databases.XENFT_STAKE_DB
+    };
   }
 
   // Get chain-specific RPC endpoints
@@ -631,7 +697,7 @@ class ChainManager {
     const sourceChain = localStorage.getItem(customRPCSourceKey);
     const lastKnown = localStorage.getItem(lastKnownKey);
 
-    console.log(`[Chain RPC] Getting RPCs for ${chain}, customRPCKey: ${customRPCKey}, found custom: ${!!customRPCs}, source: ${sourceChain || 'none'}`);
+    logChainRpc(`[Chain RPC] Getting RPCs for ${chain}, customRPCKey: ${customRPCKey}, found custom: ${!!customRPCs}, source: ${sourceChain || 'none'}`);
 
     if (customRPCs && (!sourceChain || sourceChain === chain)) {
       // Use helper to handle concatenated URLs that may have lost newlines
@@ -661,7 +727,7 @@ class ChainManager {
               return restored.length ? restored : [config.rpcUrls.default, ...config.rpcUrls.fallback];
             } else {
               localStorage.removeItem(customRPCKey);
-              console.log(`[Chain RPC] No lastKnown for ${chain}; falling back to defaults.`);
+              logChainRpc(`[Chain RPC] No lastKnown for ${chain}; falling back to defaults.`);
               return [config.rpcUrls.default, ...config.rpcUrls.fallback];
             }
           }
@@ -669,7 +735,7 @@ class ChainManager {
       }
 
       if (rpcList.length > 0) {
-        console.log(`[Chain RPC] Using ${rpcList.length} custom RPCs for ${chain}:`, rpcList.slice(0, 3));
+        logChainRpc(`[Chain RPC] Using ${rpcList.length} custom RPCs for ${chain}:`, rpcList.slice(0, 3));
         try {
           localStorage.setItem(lastKnownKey, joined);
           if (!sourceChain) {
@@ -683,14 +749,14 @@ class ChainManager {
       localStorage.removeItem(customRPCKey);
       localStorage.removeItem(customRPCSourceKey);
       if (lastKnown) {
-        console.log(`[Chain RPC] Restoring ${chain} RPCs from lastKnown after mismatch cleanup.`);
+        logChainRpc(`[Chain RPC] Restoring ${chain} RPCs from lastKnown after mismatch cleanup.`);
         const restored = splitConcatenatedUrls(lastKnown);
         if (restored.length) {
           return restored;
         }
       }
     } else if (!customRPCs && lastKnown) {
-      console.log(`[Chain RPC] No stored RPCs for ${chain}, using lastKnown cache.`);
+      logChainRpc(`[Chain RPC] No stored RPCs for ${chain}, using lastKnown cache.`);
       const restored = splitConcatenatedUrls(lastKnown);
       if (restored.length) {
         return restored;
@@ -699,7 +765,7 @@ class ChainManager {
 
     // Return default RPCs for all chains if no custom RPCs are configured
     const defaultRPCs = [config.rpcUrls.default, ...config.rpcUrls.fallback];
-    console.log(`[Chain RPC] Using ${defaultRPCs.length} default RPCs for ${chain}:`, defaultRPCs.slice(0, 3));
+    logChainRpc(`[Chain RPC] Using ${defaultRPCs.length} default RPCs for ${chain}:`, defaultRPCs.slice(0, 3));
     return defaultRPCs;
   }
 
@@ -709,9 +775,12 @@ class ChainManager {
     const customRPCKey = `${chain}_customRPC`;
     const customRPCSourceKey = `${chain}_customRPC_source`;
     const lastKnownKey = `${chain}_customRPC_lastKnown`;
+    const normalizedRpcList = Array.isArray(rpcList)
+      ? splitConcatenatedUrls(rpcList.join('\n'))
+      : splitConcatenatedUrls(String(rpcList || ''));
     
-    if (rpcList && rpcList.length > 0) {
-      const rpcString = rpcList.join('\n');
+    if (normalizedRpcList && normalizedRpcList.length > 0) {
+      const rpcString = normalizedRpcList.join('\n');
 
       // Guard against accidental cross-chain contamination (e.g., saving Ethereum list onto Base)
       for (const [otherChain, otherConfig] of Object.entries(SUPPORTED_CHAINS)) {
@@ -726,7 +795,7 @@ class ChainManager {
       localStorage.setItem(customRPCKey, rpcString);
       localStorage.setItem(customRPCSourceKey, chain);
       localStorage.setItem(lastKnownKey, rpcString);
-      console.log(`[Chain RPC] Saved ${rpcList.length} RPCs for ${chain} into ${customRPCKey}`);
+      logChainRpc(`[Chain RPC] Saved ${normalizedRpcList.length} RPCs for ${chain} into ${customRPCKey}`);
       try {
         if (typeof window !== 'undefined' && typeof window.__setRpcLastValueForChain === 'function') {
           window.__setRpcLastValueForChain(chain, rpcString);
@@ -736,7 +805,7 @@ class ChainManager {
       localStorage.removeItem(customRPCKey);
       localStorage.removeItem(customRPCSourceKey);
       localStorage.removeItem(lastKnownKey);
-      console.log(`[Chain RPC] Cleared custom RPCs for ${chain} at key ${customRPCKey}`);
+      logChainRpc(`[Chain RPC] Cleared custom RPCs for ${chain} at key ${customRPCKey}`);
       try {
         if (typeof window !== 'undefined' && typeof window.__setRpcLastValueForChain === 'function') {
           window.__setRpcLastValueForChain(chain, '');
@@ -770,8 +839,14 @@ class ChainManager {
   
   // Get XEN deployment block for current chain
   getXenDeploymentBlock() {
+    return this.getDeploymentBlock('XEN_CRYPTO');
+  }
+
+  getDeploymentBlock(contractKey = 'XEN_CRYPTO') {
     const config = this.getCurrentConfig();
-    return config.constants.XEN_DEPLOYMENT_BLOCK || 0;
+    const key = String(contractKey || 'XEN_CRYPTO').toUpperCase();
+    const blocks = config?.constants?.DEPLOYMENT_BLOCKS || {};
+    return Number(blocks[key] || config?.constants?.XEN_DEPLOYMENT_BLOCK || 0);
   }
 
   // Calculate chain-specific XEN values

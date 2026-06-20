@@ -4,8 +4,9 @@
   // Database schemas for each scanner type
   const DATABASE_SCHEMAS = {
     'cointool': {
-      version: 4,
-      // v4: per-proxy storage. The cointool_scanner module owns the upgrade
+      version: 5,
+      // v5: per-proxy storage plus summary indexes. The cointool_scanner
+      // module owns the upgrade
       // path; this initializer just makes sure the DB exists at the right
       // version with the right stores when a fresh chain is opened.
       stores: {
@@ -18,35 +19,231 @@
             byMaturity: { keyPath: 'Maturity_TS', unique: false }
           }
         },
-        'scanState': { keyPath: 'address' }
+        'scanState': { keyPath: 'address' },
+        'summaryByType': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByStatus': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false },
+            byStatus: { keyPath: 'status', unique: false }
+          }
+        },
+        'summaryByDay': {
+          keyPath: 'id',
+          indexes: {
+            byDate: { keyPath: 'date', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByOwner': {
+          keyPath: 'id',
+          indexes: {
+            byOwner: { keyPath: 'owner', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryMetadata': { keyPath: 'id' }
       },
       // Legacy stores to drop when upgrading from v3.
       dropStores: ['mints', 'mintProgress', 'actionsCache']
     },
     'xenft': {
-      version: 3,
+      version: 5,
       stores: {
-        'xenfts': { keyPath: 'Xenft_id' },
+        'xenfts': {
+          keyPath: 'Xenft_id',
+          indexes: {
+            byTokenId: { keyPath: 'tokenId', unique: false }
+          }
+        },
         'scanState': { keyPath: 'address' },
-        'processProgress': { keyPath: 'id' }
+        'processProgress': { keyPath: 'address' },
+        'summaryByType': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByStatus': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false },
+            byStatus: { keyPath: 'status', unique: false }
+          }
+        },
+        'summaryByDay': {
+          keyPath: 'id',
+          indexes: {
+            byDate: { keyPath: 'date', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByOwner': {
+          keyPath: 'id',
+          indexes: {
+            byOwner: { keyPath: 'owner', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryMetadata': { keyPath: 'id' }
       }
     },
     'xenft-stake': {
-      version: 2,
+      version: 3,
       stores: {
         'stakes': { keyPath: 'tokenId' },
         'scanState': { keyPath: 'address' },
-        'processProgress': { keyPath: 'address' }
+        'processProgress': { keyPath: 'address' },
+        'summaryByType': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByStatus': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false },
+            byStatus: { keyPath: 'status', unique: false }
+          }
+        },
+        'summaryByDay': {
+          keyPath: 'id',
+          indexes: {
+            byDate: { keyPath: 'date', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByOwner': {
+          keyPath: 'id',
+          indexes: {
+            byOwner: { keyPath: 'owner', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryMetadata': { keyPath: 'id' }
       }
     },
     'xen-stake': {
-      version: 1,
+      version: 3,
       stores: {
         'stakes': { keyPath: 'id', indexes: { 'byOwner': { keyPath: 'owner', unique: false } } },
-        'scanState': { keyPath: 'address' }
+        'scanState': { keyPath: 'address' },
+        'processProgress': { keyPath: 'address' },
+        'summaryByType': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByStatus': {
+          keyPath: 'id',
+          indexes: {
+            byType: { keyPath: 'type', unique: false },
+            byStatus: { keyPath: 'status', unique: false }
+          }
+        },
+        'summaryByDay': {
+          keyPath: 'id',
+          indexes: {
+            byDate: { keyPath: 'date', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryByOwner': {
+          keyPath: 'id',
+          indexes: {
+            byOwner: { keyPath: 'owner', unique: false },
+            byType: { keyPath: 'type', unique: false }
+          }
+        },
+        'summaryMetadata': { keyPath: 'id' }
       }
     }
   };
+
+  const DB_TYPE_ORDER = ['cointool', 'xenft', 'xenft_stake', 'xen_stake'];
+  const DB_TYPE_ALIASES = {
+    'xenft-stake': 'xenft_stake',
+    'xen-stake': 'xen_stake',
+    xenftStake: 'xenft_stake',
+    xenStake: 'xen_stake'
+  };
+
+  function normalizeDbType(dbType) {
+    return DB_TYPE_ALIASES[dbType] || dbType;
+  }
+
+  function getSchema(dbType) {
+    const normalized = normalizeDbType(dbType);
+    if (normalized === 'xenft_stake') return DATABASE_SCHEMAS['xenft-stake'];
+    if (normalized === 'xen_stake') return DATABASE_SCHEMAS['xen-stake'];
+    return DATABASE_SCHEMAS[normalized] || null;
+  }
+
+  function getDatabaseNameForType(chainPrefix, dbType) {
+    const normalized = normalizeDbType(dbType);
+    const suffixes = {
+      cointool: 'Cointool',
+      xenft: 'Xenft',
+      xenft_stake: 'XenftStake',
+      xen_stake: 'XenStake'
+    };
+    return `${chainPrefix}_DB_${suffixes[normalized] || dbType}`;
+  }
+
+  function getSchemaForDatabaseName(dbName) {
+    if (dbName.includes('Cointool')) return getSchema('cointool');
+    if (dbName.includes('XenftStake')) return getSchema('xenft_stake');
+    if (dbName.includes('Xenft')) return getSchema('xenft');
+    if (dbName.includes('XenStake')) return getSchema('xen_stake');
+    return null;
+  }
+
+  function getExportDbTypes() {
+    return DB_TYPE_ORDER.map(key => {
+      const schema = getSchema(key);
+      return {
+        key,
+        version: schema.version,
+        stores: Object.keys(schema.stores)
+      };
+    });
+  }
+
+  function applySchema(db, schema, transaction) {
+    if (!schema || !schema.stores) return;
+
+    if (Array.isArray(schema.dropStores)) {
+      for (const oldName of schema.dropStores) {
+        if (db.objectStoreNames.contains(oldName)) {
+          try { db.deleteObjectStore(oldName); } catch (_) {}
+        }
+      }
+    }
+
+    for (const [storeName, storeConfig] of Object.entries(schema.stores)) {
+      let store = null;
+      if (!db.objectStoreNames.contains(storeName)) {
+        store = db.createObjectStore(storeName, { keyPath: storeConfig.keyPath });
+      } else if (storeConfig.indexes && transaction) {
+        store = transaction.objectStore(storeName);
+      }
+
+      if (store && storeConfig.indexes) {
+        for (const [indexName, indexConfig] of Object.entries(storeConfig.indexes)) {
+          if (!store.indexNames.contains(indexName)) {
+            store.createIndex(indexName, indexConfig.keyPath, { unique: indexConfig.unique || false });
+          }
+        }
+      }
+    }
+  }
 
   // Initialize a single database
   async function initializeDatabase(dbName, schema) {
@@ -56,29 +253,7 @@
         
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-
-          // Drop legacy stores that no longer fit the schema.
-          if (Array.isArray(schema.dropStores)) {
-            for (const oldName of schema.dropStores) {
-              if (db.objectStoreNames.contains(oldName)) {
-                try { db.deleteObjectStore(oldName); } catch (_) {}
-              }
-            }
-          }
-
-          // Create stores if they don't exist
-          for (const [storeName, storeConfig] of Object.entries(schema.stores)) {
-            if (!db.objectStoreNames.contains(storeName)) {
-              const store = db.createObjectStore(storeName, { keyPath: storeConfig.keyPath });
-
-              // Add indexes if specified
-              if (storeConfig.indexes) {
-                for (const [indexName, indexConfig] of Object.entries(storeConfig.indexes)) {
-                  store.createIndex(indexName, indexConfig.keyPath, { unique: indexConfig.unique || false });
-                }
-              }
-            }
-          }
+          applySchema(db, schema, event.target.transaction);
         };
         
         request.onsuccess = () => {
@@ -97,25 +272,9 @@
   async function initializeChainDatabases(chainPrefix) {
     const results = [];
     
-    for (const [dbType, schema] of Object.entries(DATABASE_SCHEMAS)) {
-      // Always use manual naming that matches scanner expectations
-      let dbName;
-      switch(dbType) {
-        case 'cointool':
-          dbName = `${chainPrefix}_DB_Cointool`;
-          break;
-        case 'xenft':
-          dbName = `${chainPrefix}_DB_Xenft`;
-          break;
-        case 'xenft-stake':
-          dbName = `${chainPrefix}_DB_XenftStake`;
-          break;
-        case 'xen-stake':
-          dbName = `${chainPrefix}_DB_XenStake`;
-          break;
-        default:
-          dbName = `${chainPrefix}_DB_${dbType}`;
-      }
+    for (const dbType of DB_TYPE_ORDER) {
+      const schema = getSchema(dbType);
+      const dbName = getDatabaseNameForType(chainPrefix, dbType);
       
       try {
         await initializeDatabase(dbName, schema);
@@ -130,13 +289,19 @@
     return results;
   }
 
+  function getChainPrefixes() {
+    if (window.chainManager?.getChainList && window.chainManager?.getDatabasePrefix) {
+      return window.chainManager.getChainList().map(chain => window.chainManager.getDatabasePrefix(chain.key));
+    }
+    return ['ETH', 'BASE', 'AVAX', 'BSC', 'GLMR', 'POL', 'OPT'];
+  }
+
   // Initialize databases for the current chain
   async function initializeCurrentChainDatabases() {
     try {
       // Get current chain
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-      const isEthereum = currentChain === 'ETHEREUM';
-      const chainPrefix = isEthereum ? 'ETH' : 'BASE';
+      const chainPrefix = window.chainManager?.getDatabasePrefix?.(currentChain) || 'ETH';
       
       // Initializing databases for chain
       const results = await initializeChainDatabases(chainPrefix);
@@ -158,7 +323,7 @@
   async function initializeAllChainDatabases() {
     const results = [];
     
-    for (const chainPrefix of ['ETH', 'BASE']) {
+    for (const chainPrefix of getChainPrefixes()) {
       // Initializing databases for chain
       const chainResults = await initializeChainDatabases(chainPrefix);
       results.push(...chainResults);
@@ -171,7 +336,7 @@
   async function autoInitialize() {
     // Wait for chainManager to be ready
     let attempts = 0;
-    while (!window.chainManager && attempts < 10) {
+    while ((!window.chainManager || !window.chainManager.initialized) && attempts < 50) {
       await new Promise(resolve => setTimeout(resolve, 100));
       attempts++;
     }
@@ -189,12 +354,22 @@
   }
 
   // Export functions
+  window.databaseSchemaRegistry = {
+    schemas: DATABASE_SCHEMAS,
+    getSchema,
+    getSchemaForDatabaseName,
+    getDatabaseNameForType,
+    getExportDbTypes,
+    applySchema
+  };
+
   window.databaseInitializer = {
     initializeDatabase,
     initializeChainDatabases,
     initializeCurrentChainDatabases,
     initializeAllChainDatabases,
-    autoInitialize
+    autoInitialize,
+    schemas: DATABASE_SCHEMAS
   };
 
   // Auto-initialize when DOM is ready

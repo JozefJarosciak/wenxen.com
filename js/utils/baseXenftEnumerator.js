@@ -20,7 +20,8 @@ export class BaseXenftEnumerator {
    * @returns {Promise<string[]>} Array of token IDs
    */
   async getTokenIds(address, forceRefresh = false) {
-    const cacheKey = address.toLowerCase();
+    const chain = window.chainManager?.getCurrentChain?.() || 'BASE';
+    const cacheKey = `${chain}:${address.toLowerCase()}`;
     
     // Check cache first
     if (!forceRefresh && this.cache.has(cacheKey)) {
@@ -44,12 +45,15 @@ export class BaseXenftEnumerator {
         return [];
       }
 
-      // Get tokens using multiple strategies for robustness
+      // Get tokens using multiple strategies for robustness. The ownerOf sweep
+      // is intentionally opt-in because it can issue thousands of RPC calls.
       const strategies = [
         () => this.getTokensFromTransferEvents(address),
-        () => this.getTokensFromEtherscanAPI(address),
-        () => this.getTokensFromFallbackEnumeration(address, Number(currentBalance))
+        () => this.getTokensFromEtherscanAPI(address)
       ];
+      if (window.ALLOW_XENFT_OWNEROF_ENUMERATION === true) {
+        strategies.push(() => this.getTokensFromFallbackEnumeration(address, Number(currentBalance)));
+      }
 
       let tokenIds = [];
       for (const strategy of strategies) {
@@ -156,6 +160,17 @@ export class BaseXenftEnumerator {
     }
 
     const contractAddress = this.contract.options.address;
+    if (window.explorerApiClient?.fetchTokenNftTxs) {
+      const rows = await window.explorerApiClient.fetchTokenNftTxs({
+        address,
+        contractAddress,
+        startBlock: 0,
+        endBlock: 99999999,
+        apiKey: this.etherscanApiKey
+      });
+      return this.getOwnedTokensFromTransfers(address, rows);
+    }
+
     const url = window.chainConfigUtils?.getEtherscanApiUrl('account', 'tokennfttx', {
       contractaddress: contractAddress,
       address: address,
@@ -186,10 +201,14 @@ export class BaseXenftEnumerator {
       throw new Error(`Etherscan API error: ${data.message || 'Unknown error'}`);
     }
 
+    return this.getOwnedTokensFromTransfers(address, data.result);
+  }
+
+  getOwnedTokensFromTransfers(address, transfers) {
     // Track token ownership changes
     const tokenHistory = new Map();
-    
-    for (const tx of data.result) {
+
+    for (const tx of transfers || []) {
       const tokenId = tx.tokenID;
       const isIncoming = tx.to.toLowerCase() === address.toLowerCase();
       const isOutgoing = tx.from.toLowerCase() === address.toLowerCase();
@@ -220,6 +239,9 @@ export class BaseXenftEnumerator {
    * @returns {Promise<string[]>} Array of token IDs
    */
   async getTokensFromFallbackEnumeration(address, expectedBalance) {
+    if (window.ALLOW_XENFT_OWNEROF_ENUMERATION !== true) {
+      throw new Error('ownerOf fallback enumeration is disabled');
+    }
     console.log(`[Base XENFT] Using fallback enumeration for ${expectedBalance} expected tokens`);
     
     const tokenIds = [];

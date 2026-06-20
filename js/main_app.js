@@ -6,8 +6,18 @@
 // About tab loading state
 let _aboutLoaded = false;
 
+const WENXEN_STARTUP_DEBUG = false;
+function logStartup(...args) {
+  if (WENXEN_STARTUP_DEBUG || window.DEBUG_WENXEN_STARTUP) {
+    console.log(...args);
+  }
+}
+
 // Helper function to get chain prefix for database names
 function getChainPrefix(chain) {
+  if (window.chainManager?.getDatabasePrefix) {
+    return window.chainManager.getDatabasePrefix(chain || window.chainManager.getCurrentChain());
+  }
   const prefixMap = {
     'ETHEREUM': 'ETH',
     'BASE': 'BASE',
@@ -20,11 +30,58 @@ function getChainPrefix(chain) {
   return prefixMap[chain] || 'ETH';
 }
 
+function getSupportedChainKeys() {
+  if (window.chainManager?.getChainList) {
+    return window.chainManager.getChainList().map(chain => chain.key);
+  }
+  return ['ETHEREUM', 'BASE', 'AVALANCHE', 'BSC', 'MOONBEAM', 'POLYGON', 'OPTIMISM'];
+}
+
+function getDatabaseNamesForChain(chain) {
+  if (window.chainManager?.getDatabaseNames) {
+    return window.chainManager.getDatabaseNames(chain);
+  }
+  const prefix = getChainPrefix(chain);
+  return {
+    cointool: `${prefix}_DB_Cointool`,
+    xenft: `${prefix}_DB_Xenft`,
+    xenft_stake: `${prefix}_DB_XenftStake`,
+    xen_stake: `${prefix}_DB_XenStake`
+  };
+}
+
+function getAllChainDatabaseNames() {
+  return getSupportedChainKeys().flatMap(chain => Object.values(getDatabaseNamesForChain(chain)));
+}
+
+function yieldToUi() {
+  return new Promise(resolve => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => resolve(), { timeout: 50 });
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+function waitForNextPaint() {
+  return new Promise(resolve => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+window.yieldToUi = window.yieldToUi || yieldToUi;
+
 // Update UI labels based on current chain
 function updateChainSpecificLabels() {
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainName = currentChain === 'BASE' ? 'Base' : 'Ethereum';
-  const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
+  const chainConfig = window.chainManager?.getCurrentConfig?.() || {};
+  const chainName = chainConfig.name || currentChain;
+  const explorerName = chainConfig.explorer?.name || 'Explorer';
   
   if (!window.__rpcLastValuesByChain) {
     window.__rpcLastValuesByChain = {};
@@ -69,7 +126,9 @@ function updateChainSpecificLabels() {
   if (rpcTextarea && window.chainManager) {
     const actualChain = window.chainManager.getCurrentChain();
     const chainRPCs = window.chainManager.getRPCEndpoints();
-    const rpcString = chainRPCs.join('\n');
+    const rpcString = typeof normalizeMultiLineValue === 'function'
+      ? normalizeMultiLineValue(chainRPCs.join('\n'), 'rpc')
+      : chainRPCs.join('\n');
     rpcTextarea.value = rpcString;
     window.__setRpcLastValueForChain(actualChain, rpcString);
     try {
@@ -380,14 +439,13 @@ function ensureImportProgressUI() {
   if (!wrap) {
     wrap = document.createElement("div");
     wrap.id = "importRpcProgress";
-    wrap.style.marginTop = "6px";
-    wrap.style.display = "none";
+    wrap.className = "import-rpc-progress";
     wrap.innerHTML = `
-      <div id="importRpcProgressBarWrap" style="background:#e5e7eb;border-radius:6px;height:8px;max-width:480px;overflow:hidden;">
-        <div id="importRpcProgressBar" style="background:#3b82f6;height:100%;width:0%;transition:width .2s ease;"></div>
+      <div id="importRpcProgressBarWrap" class="import-rpc-progress-bar-wrap">
+        <div id="importRpcProgressBar" class="import-rpc-progress-bar"></div>
       </div>
-      <div id="importRpcProgressText" class="settings-status" style="margin-top:4px;"></div>
-      <div id="importRpcActiveList" class="settings-status" style="font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+      <div id="importRpcProgressText" class="settings-status settings-status-tight"></div>
+      <div id="importRpcActiveList" class="settings-status settings-status-ellipsis"></div>
     `;
     // Insert after status line
     const status = document.getElementById("importRpcStatus");
@@ -452,9 +510,9 @@ async function importAndRankRPCs() {
   console.log('Current chain from chainManager:', currentChain);
   
   // Call getChainConfig as a function
-  const chainConfig = typeof window.getChainConfig === 'function' ? window.getChainConfig() : { id: 1, name: 'Ethereum' };
-  const chainId = chainConfig.id || (currentChain === 'BASE' ? 8453 : 1);
-  const chainName = chainConfig.name || (currentChain === 'BASE' ? 'Base' : 'Ethereum');
+  const chainConfig = window.chainManager?.getCurrentConfig?.() || (typeof window.getChainConfig === 'function' ? window.getChainConfig() : { id: 1, name: 'Ethereum' });
+  const chainId = chainConfig.id || 1;
+  const chainName = chainConfig.name || currentChain;
   
   console.log(`[RPC Import] Importing RPCs for chain: ${chainName} (ID: ${chainId}), currentChain: ${currentChain}`);
 
@@ -499,13 +557,14 @@ async function importAndRankRPCs() {
   }
 
   // 2) Merge with user-provided list
-  const userList = ta.value.split("\n").map(s => s.trim()).filter(Boolean);
+  ta.value = normalizeMultiLineValue(ta.value, 'rpc');
+  const userList = splitMultiLineValue(ta.value, 'rpc');
   let merged = uniqueUrls([...userList, ...candidates]);
 
   // 3) Probe each RPC concurrently (cap concurrency) with live progress
   showImportStatus(`Pinging ${merged.length} ${chainName} RPCs for latency (this uses your local network)…`);
   const results = [];
-  const CONCURRENCY = 6;
+  const CONCURRENCY = 3;
   let index = 0;
   let done = 0;
   let failed = 0;
@@ -577,20 +636,14 @@ function checkAutoImportRPCs() {
   if (!ta) return;
   
   // Get the current RPC list
-  const rpcList = ta.value.split("\n").map(s => s.trim()).filter(Boolean);
+  ta.value = normalizeMultiLineValue(ta.value, 'rpc');
+  const rpcList = splitMultiLineValue(ta.value, 'rpc');
   
   // Get current chain
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
   
-  // Auto-run if:
-  // 1. There's exactly one RPC (for Ethereum compatibility)
-  // 2. Base chain has no RPCs (first time switching to Base)
-  if (rpcList.length === 1 || (currentChain === 'BASE' && rpcList.length === 0)) {
-    // Small delay to ensure page is fully loaded
-    setTimeout(() => {
-      console.log(`Auto-importing RPCs for ${currentChain} (RPC count: ${rpcList.length})`);
-      importAndRankRPCs();
-    }, 500);
+  if (rpcList.length <= 1) {
+    showImportStatus(`RPC import is available for ${window.chainManager?.getCurrentConfig?.()?.name || currentChain}. Use Import RPCs when you want to test public endpoints.`, "info");
   }
 }
 
@@ -618,12 +671,436 @@ if (window.chainManager) {
   }
 }
 const selectedRows = new Set();
+
+const TABLE_UPDATE_DEBOUNCE_MS = 80;
+let tableDerivedUpdateTimer = null;
+let tableDerivedUpdateOptions = {};
+
+function mergeTableUpdateOptions(current, next) {
+  return {
+    summary: current.summary !== false && next.summary !== false,
+    chart: current.chart !== false && next.chart !== false,
+    download: current.download !== false && next.download !== false,
+    bulk: current.bulk !== false && next.bulk !== false,
+    calendar: !!current.calendar || !!next.calendar,
+    badge: !!current.badge || !!next.badge,
+    syncMaster: !!current.syncMaster || !!next.syncMaster,
+    mobileFilters: current.mobileFilters !== false && next.mobileFilters !== false
+  };
+}
+
+function scheduleTableDerivedUpdates(reason = 'table', options = {}) {
+  if (window.__suppressTableDerivedUpdates) return;
+  tableDerivedUpdateOptions = mergeTableUpdateOptions(tableDerivedUpdateOptions, options);
+  if (tableDerivedUpdateTimer) clearTimeout(tableDerivedUpdateTimer);
+
+  tableDerivedUpdateTimer = setTimeout(() => {
+    const opts = tableDerivedUpdateOptions;
+    tableDerivedUpdateOptions = {};
+    tableDerivedUpdateTimer = null;
+
+    requestAnimationFrame(() => {
+      if (!window.cointoolTable) return;
+      try { if (opts.syncMaster && window._cointoolSyncMasterCheckbox) window._cointoolSyncMasterCheckbox(); } catch {}
+      try { if (opts.bulk) refreshBulkUI(); } catch {}
+      try { if (opts.summary && typeof updateSummaryStats === "function") updateSummaryStats(); } catch {}
+      try { if (opts.badge && typeof updateXENTotalBadge === "function") updateXENTotalBadge(); } catch {}
+      try { if (opts.chart && typeof updateVmuChart === "function") updateVmuChart(); } catch {}
+      try { if (opts.download && typeof updateDownloadButtonsVisibility === "function") updateDownloadButtonsVisibility(); } catch {}
+      try { if (opts.calendar && typeof updateCalendar === "function") updateCalendar(); } catch {}
+      try {
+        if (opts.mobileFilters && window.innerWidth <= 768 && document.querySelector('.filter-chips.expanded')) {
+          window.updateMobileDropdownContent?.();
+        }
+      } catch {}
+    });
+  }, options.delayMs ?? TABLE_UPDATE_DEBOUNCE_MS);
+}
+
+function getTableRowId(row) {
+  return row && row.ID != null ? String(row.ID) : '';
+}
+
+const LOCAL_CLAIM_SUBMISSION_STORAGE_KEY = 'wenxen.localClaimSubmissions.v1';
+const LOCAL_CLAIM_SUBMISSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let localClaimSubmissionCache = null;
+
+function getCurrentClaimSubmissionChain() {
+  return String(window.chainManager?.getCurrentChain?.() || 'ETHEREUM').toUpperCase();
+}
+
+function normalizeClaimSubmissionPart(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function getLocalClaimSubmissionStore() {
+  if (localClaimSubmissionCache) return localClaimSubmissionCache;
+
+  let parsed = {};
+  try {
+    const raw = window.sessionStorage?.getItem?.(LOCAL_CLAIM_SUBMISSION_STORAGE_KEY);
+    parsed = raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    parsed = {};
+  }
+
+  const now = Date.now();
+  const markers = parsed && typeof parsed === 'object' && parsed.markers && typeof parsed.markers === 'object'
+    ? parsed.markers
+    : (parsed && typeof parsed === 'object' ? parsed : {});
+  let pruned = false;
+
+  for (const [key, marker] of Object.entries(markers)) {
+    if (!marker || Number(marker.expiresAt || 0) <= now) {
+      delete markers[key];
+      pruned = true;
+    }
+  }
+
+  localClaimSubmissionCache = markers;
+  if (pruned) saveLocalClaimSubmissionStore(markers);
+  return markers;
+}
+
+function saveLocalClaimSubmissionStore(markers = localClaimSubmissionCache || {}) {
+  localClaimSubmissionCache = markers;
+  try {
+    window.sessionStorage?.setItem?.(LOCAL_CLAIM_SUBMISSION_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      markers
+    }));
+  } catch (error) {
+    console.warn('[Local Claim] Failed to persist submitted claim markers:', error);
+  }
+}
+
+function getClaimSubmissionSource(rowData) {
+  const source = String(rowData?.SourceType || 'Cointool');
+  if (source === 'XENFT') return 'xenft';
+  if (source === 'Stake XENFT') return 'stake-xenft';
+  if (source === 'Stake') return 'stake';
+  return 'cointool';
+}
+
+function getClaimSubmissionIds(rowData, ids = null) {
+  if (Array.isArray(ids)) {
+    return ids.map(id => String(id ?? '').trim()).filter(Boolean);
+  }
+  if (typeof getActionableIdsForRow === 'function') {
+    return getActionableIdsForRow(rowData).map(id => String(id ?? '').trim()).filter(Boolean);
+  }
+  const fallback = rowData?.Mint_id_Start ?? rowData?.Xenft_id ?? rowData?.tokenId ?? rowData?.id;
+  const normalized = String(fallback ?? '').trim();
+  return normalized ? [normalized] : [];
+}
+
+function getLocalClaimItemKeys(rowData, ids = null) {
+  if (!rowData) return [];
+  const chain = getCurrentClaimSubmissionChain();
+  const source = getClaimSubmissionSource(rowData);
+  const owner = normalizeClaimSubmissionPart(rowData.Owner || connectedAccount || '');
+  const itemIds = getClaimSubmissionIds(rowData, ids);
+
+  if (source === 'cointool') {
+    const salt = normalizeClaimSubmissionPart(rowData.Salt || '');
+    if (!owner || !salt) return [];
+    return itemIds.map(id => ({
+      id,
+      key: [chain, source, owner, salt, normalizeClaimSubmissionPart(id)].join('|')
+    }));
+  }
+
+  return itemIds.map(id => ({
+    id,
+    key: [chain, source, owner, normalizeClaimSubmissionPart(id)].join('|')
+  }));
+}
+
+function getRowIdsIntersectingLocalClaim(rowData, candidateIds) {
+  const source = getClaimSubmissionSource(rowData);
+  if (!Array.isArray(candidateIds) || candidateIds.length === 0) return getClaimSubmissionIds(rowData);
+  if (source !== 'cointool') return getClaimSubmissionIds(rowData, candidateIds);
+
+  const rowIds = new Set(getClaimSubmissionIds(rowData));
+  return candidateIds
+    .map(id => String(id ?? '').trim())
+    .filter(id => id && rowIds.has(id));
+}
+
+function getLocalClaimSubmissionForRow(rowData, actionableIds = null) {
+  const ids = getClaimSubmissionIds(rowData, actionableIds);
+  if (!ids.length) return null;
+
+  const markers = getLocalClaimSubmissionStore();
+  const keys = getLocalClaimItemKeys(rowData, ids);
+  const submittedIds = [];
+  let latest = null;
+
+  for (const entry of keys) {
+    const marker = markers[entry.key];
+    if (!marker) continue;
+    submittedIds.push(entry.id);
+    if (!latest || Number(marker.submittedAt || 0) > Number(latest.submittedAt || 0)) {
+      latest = marker;
+    }
+  }
+
+  if (!submittedIds.length) return null;
+  return {
+    ids,
+    submittedIds,
+    submittedCount: submittedIds.length,
+    totalCount: ids.length,
+    allSubmitted: submittedIds.length >= ids.length,
+    latest
+  };
+}
+
+function getUnsubmittedActionableIdsForRow(rowData, actionableIds = null) {
+  const ids = getClaimSubmissionIds(rowData, actionableIds);
+  if (!ids.length) return [];
+
+  const markers = getLocalClaimSubmissionStore();
+  const keys = getLocalClaimItemKeys(rowData, ids);
+  return keys
+    .filter(entry => !markers[entry.key])
+    .map(entry => {
+      const asNumber = Number(entry.id);
+      return Number.isFinite(asNumber) && String(asNumber) === String(entry.id) ? asNumber : entry.id;
+    });
+}
+
+function isRowFullyLocallySubmitted(rowData, actionableIds = null) {
+  const submission = getLocalClaimSubmissionForRow(rowData, actionableIds);
+  return !!submission?.allSubmitted;
+}
+
+function escapeHtmlAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function formatLocalClaimSubmissionStatus(submission) {
+  if (!submission) return '';
+  const latest = submission.latest || {};
+  const txHash = latest.txHash || '';
+  const shortHash = txHash ? `${txHash.slice(0, 10)}...${txHash.slice(-6)}` : '';
+  const label = submission.allSubmitted
+    ? 'Submitted'
+    : `Submitted ${submission.submittedCount}/${submission.totalCount}`;
+  const titleParts = [
+    'Transaction submitted locally.',
+    'Run a scan when you want the table to confirm it on-chain.'
+  ];
+  if (shortHash) titleParts.push(`Tx: ${shortHash}`);
+  return `<span class="claim-submitted-badge" title="${escapeHtmlAttr(titleParts.join(' '))}">${label}</span>`;
+}
+
+function formatManualClaimSubmissionButton(title = 'Mark Sent') {
+  const safeTitle = escapeHtmlAttr(title);
+  return `<span class="mark-submitted-button" role="button" tabindex="0" title="${safeTitle}" aria-label="${safeTitle}">✓</span>`;
+}
+
+function manuallyMarkClaimSubmitted(rowData) {
+  if (!rowData) return;
+
+  const actionable = typeof getActionableIdsForRow === 'function'
+    ? getActionableIdsForRow(rowData)
+    : [];
+  const remaining = getUnsubmittedActionableIdsForRow(rowData, actionable);
+  if (!remaining.length) {
+    if (typeof showToast === 'function') {
+      showToast('This row is already marked as submitted locally.', 'info');
+    }
+    return;
+  }
+
+  const countLabel = remaining.length === 1 ? '1 item' : `${remaining.length.toLocaleString()} items`;
+  const proceed = confirm(
+    `Mark ${countLabel} as submitted locally?\n\n` +
+    `Use this only when your wallet has queued or accepted the transaction but has not returned a transaction hash to WenXen yet. ` +
+    `This does not write scan data and the next scan remains the source of truth.`
+  );
+  if (!proceed) return;
+
+  markLocalClaimSubmittedForRows(rowData, {
+    ids: remaining,
+    action: 'manual',
+    txType: 'Manual submitted marker'
+  });
+
+  if (typeof showToast === 'function') {
+    showToast(`Marked ${countLabel} as submitted locally.`, 'success');
+  }
+}
+
+function refreshLocalClaimSubmissionRows(rowDatas = []) {
+  const table = window.cointoolTable || null;
+  if (!table || typeof table.getRow !== 'function') return;
+
+  const seen = new Set();
+  const stamp = Date.now();
+  for (const rowData of rowDatas) {
+    const id = getTableRowId(rowData);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    try {
+      const row = table.getRow(id);
+      if (!row) continue;
+      const locallySubmitted = isRowFullyLocallySubmitted(row.getData?.() || rowData);
+      try { row.getElement?.()?.classList.toggle('local-claim-submitted-row', !!locallySubmitted); } catch (_) {}
+      if (locallySubmitted) {
+        try { row.deselect?.(); } catch (_) {}
+        try { selectedRows.delete(id); } catch (_) {}
+      }
+      try {
+        const data = row.getData?.();
+        if (data) data._localClaimSubmissionStamp = stamp;
+      } catch (_) {}
+      const updateResult = row.update?.({ _localClaimSubmissionStamp: stamp });
+      try { row.reformat?.(); } catch (_) {}
+      try { row.normalizeHeight?.(); } catch (_) {}
+      if (updateResult && typeof updateResult.then === 'function') {
+        updateResult.then(() => {
+          try { row.reformat?.(); } catch (_) {}
+          try { row.normalizeHeight?.(); } catch (_) {}
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  try { refreshBulkUI(); } catch (_) {}
+  try { table.redraw?.(true); } catch (_) {}
+}
+
+function markLocalClaimSubmittedForRows(rowDatas, options = {}) {
+  const rows = Array.isArray(rowDatas) ? rowDatas.filter(Boolean) : [rowDatas].filter(Boolean);
+  if (!rows.length) return 0;
+
+  const markers = getLocalClaimSubmissionStore();
+  const now = Date.now();
+  const txHash = options.txHash || options.tx?.transactionHash || options.tx?.hash || '';
+  const action = options.action || 'claim';
+  let marked = 0;
+
+  for (const rowData of rows) {
+    const ids = getRowIdsIntersectingLocalClaim(rowData, options.ids);
+    const keys = getLocalClaimItemKeys(rowData, ids);
+    for (const entry of keys) {
+      markers[entry.key] = {
+        action,
+        txHash,
+        txType: options.txType || '',
+        submittedAt: now,
+        expiresAt: now + LOCAL_CLAIM_SUBMISSION_TTL_MS
+      };
+      marked++;
+    }
+  }
+
+  if (marked > 0) {
+    saveLocalClaimSubmissionStore(markers);
+    refreshLocalClaimSubmissionRows(rows);
+  }
+  return marked;
+}
+
+function clearLocalClaimSubmissions() {
+  localClaimSubmissionCache = {};
+  try { window.sessionStorage?.removeItem?.(LOCAL_CLAIM_SUBMISSION_STORAGE_KEY); } catch (_) {}
+  try { window.cointoolTable?.redraw?.(true); } catch (_) {}
+}
+
+window.wenxen = window.wenxen || {};
+window.wenxen.localClaimSubmissions = {
+  getForRow: getLocalClaimSubmissionForRow,
+  markForRows: markLocalClaimSubmittedForRows,
+  clear: clearLocalClaimSubmissions
+};
+window.clearLocalClaimSubmissions = clearLocalClaimSubmissions;
+
+async function applyTableRows(table, rows, options = {}) {
+  if (!table || !Array.isArray(rows)) return;
+
+  const forceReplace = !!options.forceReplace || !table.getRows || !table.updateData || !table.addData;
+  const hasStableIds = rows.every(row => getTableRowId(row));
+  const currentCount = typeof table.getDataCount === 'function'
+    ? Number(table.getDataCount()) || 0
+    : (Array.isArray(table.getData?.()) ? table.getData().length : 0);
+  const shouldReplaceLarge = options.preferReplaceLarge !== false && rows.length >= 50000;
+  const replaceRows = async () => {
+    const previousSuppress = window.__suppressTableDerivedUpdates;
+    if (options.suppressDerived) window.__suppressTableDerivedUpdates = true;
+    try {
+      await table.replaceData(rows);
+    } finally {
+      if (options.suppressDerived) window.__suppressTableDerivedUpdates = previousSuppress;
+    }
+    if (!options.suppressDerived) {
+      scheduleTableDerivedUpdates('table-replace', { badge: !!options.badge });
+    }
+  };
+  if (forceReplace || !hasStableIds) {
+    await replaceRows();
+    return;
+  }
+
+  // Initial/very large full loads are faster and much less event-heavy as a
+  // single Tabulator data replacement. Incremental add/update paths are kept
+  // for smaller refreshes where preserving row components is worth it.
+  if (currentCount === 0 || shouldReplaceLarge) {
+    await replaceRows();
+    return;
+  }
+
+  const existingRows = table.getRows();
+  const existingIds = new Set();
+  for (const row of existingRows) {
+    const id = row?.getIndex?.();
+    if (id != null) existingIds.add(String(id));
+  }
+
+  const incomingIds = new Set();
+  const updates = [];
+  const additions = [];
+
+  for (const row of rows) {
+    const id = getTableRowId(row);
+    incomingIds.add(id);
+    if (existingIds.has(id)) updates.push(row);
+    else additions.push(row);
+  }
+
+  const deletes = [];
+  existingIds.forEach(id => {
+    if (!incomingIds.has(id)) deletes.push(id);
+  });
+
+  if (updates.length) await table.updateData(updates);
+  if (additions.length) await table.addData(additions, false);
+  if (deletes.length && typeof table.deleteRow === 'function') {
+    for (let i = 0; i < deletes.length; i += 500) {
+      await table.deleteRow(deletes.slice(i, i + 500));
+      await yieldToUi();
+    }
+  }
+
+  scheduleTableDerivedUpdates('table-diff', { badge: !!options.badge });
+}
+
+window.wenxen = window.wenxen || {};
+window.wenxen.scheduleTableDerivedUpdates = scheduleTableDerivedUpdates;
+window.wenxen.applyTableRows = applyTableRows;
+window.applyTableRows = applyTableRows;
 // This address is hard-coded in the Python remint path (Ethereum)
 const REMINT_HELPER_ETH = '0xc7ba94123464105a42f0f6c4093f0b16a5ce5c98';
 // Hard contract cap: CoinTool itself cannot handle more than this many VMUs per tx
 const MAX_VMU_PER_TX = 128;
 
-// User-configurable chunk size to keep each tx under Ethereum's per-tx gas cap
+// User-configurable chunk size to keep each tx under the chain's per-tx gas cap
 // (EIP-7825, 16,777,216 gas / 2^24). Default 64 — empirically safe for remints.
 function getCointoolMaxVmuPerTx() {
   const raw = parseInt(localStorage.getItem("cointoolMaxVmuPerTx") || "", 10);
@@ -637,6 +1114,40 @@ function _formatRemintDate(termDays){
   const ms  = Math.max(0, Number(termDays) || 0) * 24 * 60 * 60 * 1000;
   const dt  = new Date(now.getTime() + ms);
   return dt.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function getCurrentChainKey() {
+  return window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+}
+
+function getRemintTermStorageKey(chain = getCurrentChainKey()) {
+  return `${chain}_remintTermDays`;
+}
+
+function getInitialRemintTermDays() {
+  const chain = getCurrentChainKey();
+  const candidates = [
+    localStorage.getItem(getRemintTermStorageKey(chain)),
+    localStorage.getItem(`${chain}_mintTermDays`),
+    document.getElementById('mintTermDays')?.value,
+    localStorage.getItem('mintTermDays'),
+    '100'
+  ];
+
+  for (const candidate of candidates) {
+    const value = parseInt(candidate, 10);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return 100;
+}
+
+function saveRemintTermDays(days) {
+  const value = Math.max(1, parseInt(days, 10) || 1);
+  try {
+    localStorage.setItem(getRemintTermStorageKey(), String(value));
+  } catch (error) {
+    console.warn('[Remint] Failed to save remint term:', error);
+  }
 }
 
 // Read-only call to XEN.getCurrentMaxTerm() → days
@@ -666,13 +1177,13 @@ function openRemintTermDialog(){
     modal.setAttribute('aria-labelledby', 'remintModalTitle');
     modal.innerHTML = `
       <div class="modal-content">
-        <h3 id="remintModalTitle" style="margin:0 0 8px 0;">Remint Term</h3>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
-          <input id="remintTermInput" type="number" min="1" step="1" style="width:100px; padding:6px 8px;" />
+        <h3 id="remintModalTitle" class="modal-title">Remint Term</h3>
+        <div class="remint-term-row">
+          <input id="remintTermInput" class="remint-term-input" type="number" min="1" step="1" />
           <button id="remintSetMaxBtn" type="button" class="btn-secondary">Set Max Term</button>
         </div>
-        <div id="remintDatePreview" class="muted" aria-live="polite"></div>
-        <div class="modal-actions" style="margin-top:12px;">
+        <div id="remintDatePreview" class="muted remint-date-preview" aria-live="polite"></div>
+        <div class="modal-actions modal-actions-tight">
           <button id="remintOkBtn" type="button">OK</button>
           <button id="remintCancelBtn" type="button" class="secondary">Cancel</button>
         </div>
@@ -685,12 +1196,19 @@ function openRemintTermDialog(){
     const ok = modal.querySelector('#remintOkBtn');
     const cancel = modal.querySelector('#remintCancelBtn');
 
-    // Default from Mint tab or saved value
-    const mintVal = document.getElementById('mintTermDays')?.value || localStorage.getItem('mintTermDays') || '100';
-    input.value = String(Math.max(1, parseInt(mintVal, 10) || 100));
+    input.value = String(Math.max(1, getInitialRemintTermDays()));
 
-    let maxDays = null; // unknown until user clicks Set Term
-    const updatePreview = () => { prev.textContent = _formatRemintDate(parseInt(input.value, 10) || 0); };
+    let maxDays = null;
+    const formatMaxDelta = (term) => {
+      if (!Number.isFinite(maxDays) || maxDays <= 0) return '';
+      const behind = maxDays - term;
+      if (behind > 0) return ` <span class="remint-max-delta">(${behind.toLocaleString()} day${behind === 1 ? '' : 's'} below max)</span>`;
+      return ` <span class="remint-max-delta">(max term)</span>`;
+    };
+    const updatePreview = () => {
+      const term = Math.max(1, parseInt(input.value, 10) || 1);
+      prev.innerHTML = `${escapeHtmlAttr(_formatRemintDate(term))}${formatMaxDelta(term)}`;
+    };
     const clamp = () => {
       let v = Math.max(1, parseInt(input.value, 10) || 1);
       if (maxDays != null) v = Math.min(v, maxDays);
@@ -699,6 +1217,13 @@ function openRemintTermDialog(){
     };
     input.addEventListener('input', clamp);
     updatePreview();
+
+    fetchCurrentMaxTermDays().then(days => {
+      if (days && Number.isFinite(days)) {
+        maxDays = days;
+        clamp();
+      }
+    }).catch(() => {});
 
     btnMax.addEventListener('click', async () => {
       btnMax.disabled = true;
@@ -725,6 +1250,7 @@ function openRemintTermDialog(){
         try { maxDays = await fetchCurrentMaxTermDays(); } catch {}
       }
       if (maxDays != null && v > maxDays) v = maxDays;
+      saveRemintTermDays(v);
       done(v);
     });
   });
@@ -738,11 +1264,12 @@ async function sendCointoolTx({ ids, dataHex, salt, w3, action }) {
   const c = new w3.eth.Contract(cointoolAbi, COINTOOL_MAIN);
   const uniq = Array.from(new Set(ids)).sort((a,b)=>a-b);
   const chunkSize = getCointoolMaxVmuPerTx();
+  const submitted = [];
 
   // If exceeds chunk size, alert once with planned tx count
   if (uniq.length > chunkSize) {
     const txCount = Math.ceil(uniq.length / chunkSize);
-    alert(`This mint has ${uniq.length} VMUs. With your chunk size of ${chunkSize} VMUs/tx, it will be sent in ${txCount} transaction(s) to stay under Ethereum's per-tx gas cap.`);
+    alert(`This mint has ${uniq.length} VMUs. With your chunk size of ${chunkSize} VMUs/tx, it will be sent in ${txCount} transaction(s) to stay under the per-transaction gas cap.`);
   }
 
   for (let i = 0; i < uniq.length; i += chunkSize) {
@@ -752,6 +1279,7 @@ async function sendCointoolTx({ ids, dataHex, salt, w3, action }) {
         c.methods.f(chunk, dataHex, salt).send({ from: connectedAccount }),
         `CoinTool ${action || 'claim'} (${chunk.length} VMUs)`
       );
+      submitted.push({ tx, ids: chunk.slice() });
     } catch (err) {
       console.error(err);
       alert(err?.message || `CoinTool ${action || 'claim'} failed.`);
@@ -759,6 +1287,8 @@ async function sendCointoolTx({ ids, dataHex, salt, w3, action }) {
       break;
     }
   }
+
+  return submitted;
 }
 
 async function sendCointoolMintTx({ fIds = [], tIds = [], dataHex, salt, w3 }) {
@@ -769,16 +1299,18 @@ async function sendCointoolMintTx({ fIds = [], tIds = [], dataHex, salt, w3 }) {
 
   const c = new w3.eth.Contract(cointoolAbi, COINTOOL_MAIN);
   const chunkSize = getCointoolMaxVmuPerTx();
+  const submitted = [];
   const sendChunks = async (ids, methodName, label) => {
     const uniq = Array.from(new Set(ids)).sort((a, b) => a - b);
     for (let i = 0; i < uniq.length; i += chunkSize) {
       const chunk = uniq.slice(i, i + chunkSize);
       try {
         const method = methodName === 't_' ? c.methods.t_(chunk, dataHex, salt) : c.methods.f(chunk, dataHex, salt);
-        await executeWithAutoRescan(
+        const tx = await executeWithAutoRescan(
           method.send({ from: connectedAccount }),
           `CoinTool ${label} (${chunk.length} VMUs)`
         );
+        submitted.push({ tx, ids: chunk.slice(), label });
       } catch (err) {
         console.error(err);
         alert(err?.message || `CoinTool ${label} failed.`);
@@ -789,6 +1321,7 @@ async function sendCointoolMintTx({ fIds = [], tIds = [], dataHex, salt, w3 }) {
 
   await sendChunks(fIds, 'f', 'mint existing proxies');
   await sendChunks(tIds, 't_', 'mint missing proxies');
+  return submitted;
 }
 
 
@@ -802,18 +1335,19 @@ function getRpcList() {
   // Prefer Settings textarea; fall back to chain-specific RPCs or DEFAULT_RPC
   const ta = document.getElementById("customRPC");
   if (ta && ta.value.trim()) {
-    return String(ta.value.trim()).split("\n").map(s => s.trim()).filter(Boolean);
+    ta.value = normalizeMultiLineValue(ta.value, 'rpc');
+    return splitMultiLineValue(ta.value, 'rpc');
   }
 
   // Use chain-specific RPCs if available
   if (window.chainManager) {
     const rpcs = window.chainManager.getRPCEndpoints();
-    console.log(`[getRpcList] Using ${rpcs.length} chain-specific RPCs for ${window.chainManager.getCurrentChain()}`);
+    logStartup(`[getRpcList] Using ${rpcs.length} chain-specific RPCs for ${window.chainManager.getCurrentChain()}`);
     return rpcs.length > 0 ? rpcs : [DEFAULT_RPC];
   }
 
   // Final fallback to DEFAULT_RPC only
-  console.log(`[getRpcList] Using DEFAULT_RPC fallback`);
+  logStartup(`[getRpcList] Using DEFAULT_RPC fallback`);
   return [DEFAULT_RPC];
 }
 
@@ -833,10 +1367,10 @@ async function fetchXenGlobalRank(){
 
   // Debug logging for chain-specific data
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  console.log(`[Rank] Fetching global rank for ${currentChain}, XEN contract: ${XEN_CRYPTO_ADDRESS}, using ${rpcs.length} RPCs:`, rpcs.slice(0, 3));
+  logStartup(`[Rank] Fetching global rank for ${currentChain}, XEN contract: ${XEN_CRYPTO_ADDRESS}, using ${rpcs.length} RPCs:`, rpcs.slice(0, 3));
 
   for (const rpc of rpcs) {
-    console.log(`[Rank] Trying RPC: ${rpc}`);
+    logStartup(`[Rank] Trying RPC: ${rpc}`);
     try {
       const body = {
         jsonrpc: "2.0",
@@ -850,7 +1384,7 @@ async function fetchXenGlobalRank(){
         body: JSON.stringify(body)
       });
       const json = await res.json();
-      console.log(`[Rank] RPC ${rpc} response:`, json?.result ? `Success (${json.result})` : `Error: ${json?.error?.message || 'Unknown'}`);
+      logStartup(`[Rank] RPC ${rpc} response:`, json?.result ? `Success (${json.result})` : `Error: ${json?.error?.message || 'Unknown'}`);
 
       if (json?.result) {
         const num = parseInt(json.result, 16);
@@ -858,7 +1392,7 @@ async function fetchXenGlobalRank(){
           window.__xenGlobalRank = num;
           __crankLast = { ok:true, value:num, ts:Date.now(), err:null };
           updateCrankStatus();
-          console.log(`[Rank] Successfully fetched ${currentChain} rank: ${num.toLocaleString()} from ${rpc}`);
+          logStartup(`[Rank] Successfully fetched ${currentChain} rank: ${num.toLocaleString()} from ${rpc}`);
           // re-render table estimates
           try { window.cointoolTable?.redraw?.(true); } catch {}
           // DO NOT auto-update XEN badge - only manual filter clicks and auto-apply "All" should trigger updates
@@ -868,7 +1402,7 @@ async function fetchXenGlobalRank(){
       throw new Error(json?.error?.message || "Bad RPC response");
     } catch (e) {
       lastErr = e;
-      console.log(`[Rank] RPC ${rpc} failed:`, e.message);
+      logStartup(`[Rank] RPC ${rpc} failed:`, e.message);
       // try next RPC
     }
   }
@@ -959,7 +1493,7 @@ if (window.chainManager) {
       
       const apiKeyInput = document.getElementById('etherscanApiKey');
       if (apiKeyInput) {
-        apiKeyInput.placeholder = 'Your Etherscan API Key (works for all chains)';
+        apiKeyInput.placeholder = 'Your Etherscan Multichain API key';
       }
       
       // Update API help link to always point to Etherscan
@@ -1114,7 +1648,7 @@ async function fetchAllWalletBalances() {
     const addressInput = document.getElementById("ethAddress")?.value?.trim();
     if (!addressInput) return balances;
 
-    const addresses = addressInput.split("\n").map(s => s.trim()).filter(Boolean);
+    const addresses = splitMultiLineValue(addressInput, 'address');
     if (addresses.length === 0) return balances;
 
     // Set up Web3 provider with RPC rotation
@@ -1315,8 +1849,12 @@ let xenBadgeUpdateTimeout = null;
 // Throttle wallet balance updates to prevent spam
 let lastWalletBalanceUpdate = 0;
 const WALLET_BALANCE_THROTTLE_MS = 30000; // Only update every 30 seconds
+const XEN_BADGE_DEBUG = false;
+function logXenBadge(...args) {
+  if (XEN_BADGE_DEBUG || window.DEBUG_XEN_BADGE) console.log(...args);
+}
 
-async function updateXENTotalBadge(includeWalletBalances = true) {
+async function updateXENTotalBadge(includeWalletBalances = false) {
   // Debounce rapid calls
   if (xenBadgeUpdateTimeout) {
     clearTimeout(xenBadgeUpdateTimeout);
@@ -1326,7 +1864,44 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     const badge = document.getElementById("estXenTotal");
     if (!badge || typeof cointoolTable === 'undefined' || !cointoolTable) return;
 
-    const activeData = cointoolTable.getData("active");
+    const activeChip = document.querySelector('.filter-chips .chip.active');
+    const isAllFilterActive = activeChip && (activeChip.dataset.filter === '' || !activeChip.dataset.filter);
+
+    const normalizeFilterValue = value => String(value ?? '').trim();
+    const isMeaningfulFilterValue = value => {
+      const text = normalizeFilterValue(value);
+      return text !== '' && text !== 'All';
+    };
+
+    // Check if any filters are currently active (check both programmatic and header filters)
+    let hasActiveFilters = false;
+    let activeHeaderFilters = [];
+    if (cointoolTable) {
+      // Check programmatic filters
+      const programmaticFilters = cointoolTable.getFilters && cointoolTable.getFilters().length > 0;
+      const headerFilters = typeof cointoolTable.getHeaderFilters === 'function'
+        ? (cointoolTable.getHeaderFilters() || [])
+        : [];
+      activeHeaderFilters = headerFilters.filter(filter => isMeaningfulFilterValue(filter?.value));
+
+      // Check header filters by looking at DOM elements
+      const getHeaderFilterValue = (field) => {
+        const root = document.querySelector(`.tabulator-col[tabulator-field="${field}"] .tabulator-header-filter`);
+        const select = root?.querySelector('select');
+        const input = root?.querySelector('input');
+        return select?.value ?? input?.value ?? '';
+      };
+
+      const hasStatusFilter = isMeaningfulFilterValue(getHeaderFilterValue('Status'));
+      const hasMaturityFilter = isMeaningfulFilterValue(getHeaderFilterValue('Maturity_Date_Fmt'));
+      const hasTypeFilter = isMeaningfulFilterValue(getHeaderFilterValue('SourceType'));
+
+      hasActiveFilters = programmaticFilters || activeHeaderFilters.length > 0 || hasStatusFilter || hasMaturityFilter || hasTypeFilter;
+    }
+
+    const activeData = isAllFilterActive && !hasActiveFilters
+      ? (cointoolTable.getData() || [])
+      : (cointoolTable.getData("active") || []);
 
     // During initial load, wait for substantial data before updating
     // But allow updates immediately if filters are active (user interaction)
@@ -1336,27 +1911,9 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     // This ensures XEN total displays immediately on all chains, even with just a few rows
     const hasSubstantialData = activeData.length > 0;
 
-    // Check if any filters are currently active (check both programmatic and header filters)
-    let hasActiveFilters = false;
-    if (cointoolTable) {
-      // Check programmatic filters
-      const programmaticFilters = cointoolTable.getFilters && cointoolTable.getFilters().length > 0;
-
-      // Check header filters by looking at DOM elements
-      const statusFilter = document.querySelector('.tabulator-col[tabulator-field="Status"] .tabulator-header-filter input');
-      const maturityFilter = document.querySelector('.tabulator-col[tabulator-field="Maturity_Date_Fmt"] .tabulator-header-filter input');
-      const typeFilter = document.querySelector('.tabulator-col[tabulator-field="SourceType"] .tabulator-header-filter input');
-
-      const hasStatusFilter = statusFilter && statusFilter.value && statusFilter.value.trim() !== '' && statusFilter.value.trim() !== 'All';
-      const hasMaturityFilter = maturityFilter && maturityFilter.value && maturityFilter.value.trim() !== '' && maturityFilter.value.trim() !== 'All';
-      const hasTypeFilter = typeFilter && typeFilter.value && typeFilter.value.trim() !== '' && typeFilter.value.trim() !== 'All';
-
-      hasActiveFilters = programmaticFilters || hasStatusFilter || hasMaturityFilter || hasTypeFilter;
-    }
-
     // Only block if it's initial load period, has small data, AND no active filters
     if (isInitialLoadPeriod && !hasSubstantialData && !hasActiveFilters) {
-      console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Skipping update - only ${activeData.length} active rows (waiting for full load, no filters active)`);
+      logXenBadge(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Skipping update - only ${activeData.length} active rows (waiting for full load, no filters active)`);
       return;
     }
 
@@ -1367,31 +1924,25 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
       const programmaticCount = cointoolTable.getFilters ? cointoolTable.getFilters().length : 0;
       if (programmaticCount > 0) filterTypes.push(`${programmaticCount} programmatic`);
 
-      const statusFilter = document.querySelector('.tabulator-col[tabulator-field="Status"] .tabulator-header-filter input');
-      const maturityFilter = document.querySelector('.tabulator-col[tabulator-field="Maturity_Date_Fmt"] .tabulator-header-filter input');
-      const typeFilter = document.querySelector('.tabulator-col[tabulator-field="SourceType"] .tabulator-header-filter input');
-
-      if (statusFilter?.value?.trim() && statusFilter.value.trim() !== 'All') filterTypes.push(`Status: ${statusFilter.value}`);
-      if (maturityFilter?.value?.trim() && maturityFilter.value.trim() !== 'All') filterTypes.push(`Maturity: ${maturityFilter.value}`);
-      if (typeFilter?.value?.trim() && typeFilter.value.trim() !== 'All') filterTypes.push(`Type: ${typeFilter.value}`);
+      activeHeaderFilters.forEach(filter => {
+        filterTypes.push(`${filter.field}: ${filter.value}`);
+      });
 
       filterInfo = `(${filterTypes.join(', ')})`;
     }
-    console.log(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} active/filtered rows (all pages) ${filterInfo}, includeWalletBalances: ${typeof includeWalletBalances}`);
+    const badgeScope = isAllFilterActive && !hasActiveFilters ? 'all table rows' : 'active/filtered rows';
+    logXenBadge(`[XEN Badge - main_app.js] ${new Date().toISOString().slice(11,23)} Updating with ${activeData.length} ${badgeScope} (all pages) ${filterInfo}, includeWalletBalances: ${typeof includeWalletBalances}`);
   let total = 0n;
   const addressBreakdown = {};
 
-  // Process mint/stake data first - ONLY count Maturing rows
-  let maturingCount = 0;
+  // Process mint/stake data. The All chip represents all historical rows;
+  // date/maturing chips represent pending maturing rows within that filter.
+  let countedCount = 0;
   let skippedCount = 0;
   const statusBreakdown = {};
 
-  console.log(`[XEN Badge DEBUG] ========== Starting calculation with ${activeData.length} total filtered rows ==========`);
-
-  // Check if "All" filter is active - if so, count ALL visible rows regardless of status
-  const activeChip = document.querySelector('.chip.active');
-  const isAllFilterActive = activeChip && (activeChip.dataset.filter === '' || !activeChip.dataset.filter);
-  console.log(`[XEN Badge DEBUG] All filter active: ${isAllFilterActive}`);
+  logXenBadge(`[XEN Badge DEBUG] ========== Starting calculation with ${activeData.length} total filtered rows ==========`);
+  logXenBadge(`[XEN Badge DEBUG] All filter active: ${isAllFilterActive}`);
 
   activeData.forEach((rowData, index) => {
     const status = rowData.Status || rowData.status || '';
@@ -1399,12 +1950,12 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     // Track status distribution for debugging
     statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
 
-    // Always exclude closed positions (Claimed, Ended Early) from the Total —
-    // their value has already been realized and shouldn't show up as pending XEN.
-    if (status === 'Claimed' || status === 'Ended Early' || Number(rowData.redeemed || 0) === 1) {
+    // Closed rows are excluded only for pending/date filters. The All chip is
+    // historical and should include every mint/stake row the user has tracked.
+    if (!isAllFilterActive && (status === 'Claimed' || status === 'Ended Early' || Number(rowData.redeemed || 0) === 1)) {
       skippedCount++;
       if (index < 5) {
-        console.log(`[XEN Badge DEBUG] Row ${index}: SKIPPED (closed) - Status="${status}", ID=${rowData.ID}, Type=${rowData.SourceType}`);
+        logXenBadge(`[XEN Badge DEBUG] Row ${index}: SKIPPED (closed) - Status="${status}", ID=${rowData.ID}, Type=${rowData.SourceType}`);
       }
       return;
     }
@@ -1415,16 +1966,16 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     if (status !== 'Maturing' && !isAllFilterActive) {
       skippedCount++;
       if (index < 5) {
-        console.log(`[XEN Badge DEBUG] Row ${index}: SKIPPED - Status="${status}", ID=${rowData.ID}, Type=${rowData.SourceType}`);
+        logXenBadge(`[XEN Badge DEBUG] Row ${index}: SKIPPED - Status="${status}", ID=${rowData.ID}, Type=${rowData.SourceType}`);
       }
       return; // Skip non-maturing rows only when specific filter is active
     }
 
-    maturingCount++;
+    countedCount++;
     const xenValue = estimateXENForRow(rowData);
 
-    if (index < 5 || maturingCount <= 5) {
-      console.log(`[XEN Badge DEBUG] Row ${index}: COUNTED - Status="${status}", XEN=${xenValue}, ID=${rowData.ID}, Type=${rowData.SourceType}`);
+    if (index < 5 || countedCount <= 5) {
+      logXenBadge(`[XEN Badge DEBUG] Row ${index}: COUNTED - Status="${status}", XEN=${xenValue}, ID=${rowData.ID}, Type=${rowData.SourceType}`);
     }
 
     total += BigInt(xenValue);
@@ -1455,17 +2006,17 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     addressBreakdown[address].count++;
   });
 
-  console.log(`[XEN Badge DEBUG] Status breakdown:`, statusBreakdown);
-  console.log(`[XEN Badge DEBUG] FINAL TOTAL (maturing mints only): ${total.toString()} XEN`);
+  logXenBadge(`[XEN Badge DEBUG] Status breakdown:`, statusBreakdown);
+  logXenBadge(`[XEN Badge DEBUG] FINAL TOTAL (${isAllFilterActive ? 'all tracked rows' : 'maturing rows only'}): ${total.toString()} XEN`);
 
   // Store wallet balances in addressBreakdown for tooltip, but DON'T add to total
   // The XEN total should only show maturing mints, not current wallet balances
   if (window._cachedWalletBalances) {
-    console.log(`[XEN Badge DEBUG] Storing cached wallet balances (NOT adding to total)...`);
+    logXenBadge(`[XEN Badge DEBUG] Storing cached wallet balances (NOT adding to total)...`);
     Object.keys(addressBreakdown).forEach(address => {
       if (window._cachedWalletBalances[address]) {
         const balanceTokens = BigInt(window._cachedWalletBalances[address]) / BigInt('1000000000000000000');
-        console.log(`[XEN Badge DEBUG] Wallet balance for ${address}: ${balanceTokens.toString()} XEN (stored, not added)`);
+        logXenBadge(`[XEN Badge DEBUG] Wallet balance for ${address}: ${balanceTokens.toString()} XEN (stored, not added)`);
         addressBreakdown[address].walletBalance = balanceTokens;
         // REMOVED: total += balanceTokens;  // Don't add wallet balance to maturing total!
       }
@@ -1479,7 +2030,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
 
     if (shouldUpdateBalances) {
       try {
-        console.log(`[XEN Badge DEBUG] Fetching fresh wallet balances (NOT adding to total)...`);
+        logXenBadge(`[XEN Badge DEBUG] Fetching fresh wallet balances (NOT adding to total)...`);
         lastWalletBalanceUpdate = now;
         const walletBalances = await fetchAllWalletBalances();
 
@@ -1496,7 +2047,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
           // Convert from wei to tokens (divide by 10^18)
           const balanceWeiBI = BigInt(balanceWei || '0');
           const balanceTokens = balanceWeiBI / BigInt('1000000000000000000'); // 10^18
-          console.log(`[XEN Badge DEBUG] Wallet balance for ${address}: ${balanceTokens.toString()} XEN (stored, not added)`);
+          logXenBadge(`[XEN Badge DEBUG] Wallet balance for ${address}: ${balanceTokens.toString()} XEN (stored, not added)`);
           addressBreakdown[address].walletBalance = balanceTokens;
           // REMOVED: total += balanceTokens;  // Don't add wallet balance to maturing total!
         });
@@ -1509,7 +2060,7 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
     }
   }
 
-  console.log(`[XEN Badge - main_app.js] Calculated total: ${total.toString()} XEN from ${maturingCount} maturing mints (skipped ${skippedCount} non-maturing)`);
+  logXenBadge(`[XEN Badge - main_app.js] Calculated total: ${total.toString()} XEN from ${countedCount} ${isAllFilterActive ? 'tracked rows' : 'maturing rows'} (skipped ${skippedCount})`);
 
   badge.textContent = formatNumberForMobile(total);
   renderXenUsdEstimate(total);   // ← NEW: show "($226.45)" style USD next to the total
@@ -1906,7 +2457,7 @@ async function fetchXenUsdPrice(){
       const config = window.chainManager.getCurrentConfig();
       if (config && config.contracts && config.contracts.XEN_CRYPTO) {
         tokenAddress = config.contracts.XEN_CRYPTO;
-        console.log(`[XEN Price] Fetching price for ${currentChain} using token address: ${tokenAddress}`);
+        logStartup(`[XEN Price] Fetching price for ${currentChain} using token address: ${tokenAddress}`);
       } else {
         // Fallback to Ethereum XEN if config not available
         tokenAddress = XEN_ETH;
@@ -1921,13 +2472,13 @@ async function fetchXenUsdPrice(){
     const primary = await fetchFromDexscreener(tokenAddress);
     xenUsdPrice  = primary.price;
     xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: primary.source };
-    console.log(`[XEN Price] Successfully fetched ${currentChain} price: $${xenUsdPrice} from ${primary.source}`);
+    logStartup(`[XEN Price] Successfully fetched ${currentChain} price: $${xenUsdPrice} from ${primary.source}`);
 
     // Save to localStorage for wallet balance display
     try {
       localStorage.setItem('xenPrice', xenUsdPrice.toString());
       localStorage.setItem(currentChain + '_xenPrice', xenUsdPrice.toString());
-      console.log(`[XEN Price] Saved to localStorage: xenPrice=${xenUsdPrice}, ${currentChain}_xenPrice=${xenUsdPrice}`);
+      logStartup(`[XEN Price] Saved to localStorage: xenPrice=${xenUsdPrice}, ${currentChain}_xenPrice=${xenUsdPrice}`);
     } catch (e) {
       console.warn('[XEN Price] Failed to save to localStorage:', e);
     }
@@ -1937,14 +2488,14 @@ async function fetchXenUsdPrice(){
       const fb = await fetchFromCoinGecko();
       xenUsdPrice  = fb.price;
       xenPriceLast = { ok: true, price: xenUsdPrice, ts: Date.now(), source: fb.source };
-      console.log(`[XEN Price] Successfully fetched price from CoinGecko: $${xenUsdPrice}`);
+      logStartup(`[XEN Price] Successfully fetched price from CoinGecko: $${xenUsdPrice}`);
 
       // Save to localStorage for wallet balance display
       try {
         const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
         localStorage.setItem('xenPrice', xenUsdPrice.toString());
         localStorage.setItem(currentChain + '_xenPrice', xenUsdPrice.toString());
-        console.log(`[XEN Price] Saved to localStorage: xenPrice=${xenUsdPrice}, ${currentChain}_xenPrice=${xenUsdPrice}`);
+        logStartup(`[XEN Price] Saved to localStorage: xenPrice=${xenUsdPrice}, ${currentChain}_xenPrice=${xenUsdPrice}`);
       } catch (e) {
         console.warn('[XEN Price] Failed to save to localStorage:', e);
       }
@@ -1966,7 +2517,7 @@ async function fetchXenUsdPrice(){
   if (window.updateWalletBalanceDisplay && window.connectedAccount) {
     try {
       window.updateWalletBalanceDisplay();
-      console.log('[XEN Price] Triggered wallet balance display update');
+      logStartup('[XEN Price] Triggered wallet balance display update');
     } catch (e) {
       console.warn('[XEN Price] Failed to update wallet balance display:', e);
     }
@@ -2039,7 +2590,7 @@ async function updateNetworkBadge(){
           el.textContent = networkName;
           el.title = `Wallet: ${networkName}, App: ${window.chainManager?.getCurrentConfig()?.name}`;
         }
-        el.style.display = '';
+        el.style.display = 'inline-flex';
         el.style.color = '#ff9800'; // Orange to indicate mismatch
       } else {
         // Wallet and app are on same chain - hide badge
@@ -2139,9 +2690,19 @@ function refreshBulkUI(){
         ? getMaturedRecoveredIdsForRow(data).length > 0 : false;
       const rowHasStranded = !isLegacyCointoolRow(data) && (rowFailed || rowRecoveredMatured);
       const live = computeLiveStatus(data);
+      let actionable = [];
+      try {
+        const rawActionable = getActionableIdsForRow(data);
+        actionable = getUnsubmittedActionableIdsForRow(data, rawActionable);
+        if (rawActionable.length > 0 && actionable.length === 0) {
+          try { rowObj?.deselect?.(); } catch (_) {}
+          selectedRows.delete(id);
+          continue;
+        }
+      } catch {}
       // Stranded rows are always actionable (the stranded subset is
       // independently claimable regardless of the row's headline maturity).
-      if (live === 'Claimable' || rowHasStranded) {
+      if (actionable.length > 0 && (live === 'Claimable' || rowHasStranded)) {
         anyClaimable = true;
         if (String(data.SourceType) !== 'XENFT') anyCointoolClaimable = true;
       }
@@ -2149,7 +2710,6 @@ function refreshBulkUI(){
         ctMintCount += 1;
         try { ctVMUs += getIdsForRow(data).length; } catch {}
         try {
-          const actionable = getActionableIdsForRow(data);
           ctActionable += actionable.length;
           if (rowHasStranded) anyStranded = true;
           const mintable = getMintableIdsForRow(data);
@@ -2527,6 +3087,12 @@ async function handleBulkAction(mode){
             'XENFT bulk claim',
             tokenId
           );
+          markLocalClaimSubmittedForRows(r, {
+            ids: [tokenId],
+            action: 'claim',
+            tx,
+            txType: 'XENFT bulk claim'
+          });
         } catch (err) {
           console.error(err);
           alert(err?.message || `XENFT #${tokenId} claim failed.`);
@@ -2537,6 +3103,20 @@ async function handleBulkAction(mode){
 
   // --- CoinTool path (batched to MAX_VMU_PER_TX) ---
   if (ctRows.length) {
+    if (mode !== 'mint') {
+      let unsubmittedCount = 0;
+      for (const r of ctRows) {
+        const rawIds = Array.isArray(r.Indices) ? r.Indices : getActionableIdsForRow(r);
+        unsubmittedCount += getUnsubmittedActionableIdsForRow(r, rawIds).length;
+      }
+      if (unsubmittedCount === 0) {
+        alert("All selected claimable VMUs are already marked as submitted locally. Run a scan to confirm them on-chain.");
+        selectedRows.clear();
+        refreshBulkUI();
+        return;
+      }
+    }
+
     // optional: single prompt for remint/new-mint term
     let term;
     if (mode === 'remint' || mode === 'mint') {
@@ -2569,9 +3149,13 @@ async function handleBulkAction(mode){
       if (!saltHex) continue;
       const key = String(saltHex).toLowerCase();
       if (!bySalt.has(key)) {
-        bySalt.set(key, { saltHex, owner: (r.Owner || connectedAccount || '').toLowerCase(), indices: new Set() });
+        bySalt.set(key, { saltHex, owner: (r.Owner || connectedAccount || '').toLowerCase(), indices: new Set(), rows: [] });
       }
-      const ids = Array.isArray(r.Indices) ? r.Indices : getActionableIdsForRow(r);
+      bySalt.get(key).rows.push(r);
+      const rawIds = Array.isArray(r.Indices) ? r.Indices : getActionableIdsForRow(r);
+      const ids = mode === 'mint'
+        ? rawIds
+        : getUnsubmittedActionableIdsForRow(r, rawIds);
       for (const id of ids) {
         const n = Number(id);
         if (Number.isFinite(n)) bySalt.get(key).indices.add(n);
@@ -2580,9 +3164,15 @@ async function handleBulkAction(mode){
 
     let totalRequested = 0;
     for (const { indices } of bySalt.values()) totalRequested += indices.size;
+    if (mode !== 'mint' && totalRequested === 0) {
+      alert("All selected claimable VMUs are already marked as submitted locally. Run a scan to confirm them on-chain.");
+      selectedRows.clear();
+      refreshBulkUI();
+      return;
+    }
 
     // 2) Per salt, JIT-classify the combined indices and execute.
-    for (const { saltHex, owner, indices } of bySalt.values()) {
+    for (const { saltHex, owner, indices, rows: rowsForSalt } of bySalt.values()) {
       let combined = Array.from(indices).sort((a, b) => a - b);
       if (combined.length === 0) continue;
 
@@ -2652,10 +3242,18 @@ async function handleBulkAction(mode){
             const m = methodName === 't_'
               ? c.methods.t_(chunk, dataHex, saltHex)
               : c.methods.f(chunk, dataHex, saltHex);
-            await executeWithAutoRescan(
+            const tx = await executeWithAutoRescan(
               m.send({ from: connectedAccount }),
               `CoinTool ${label} (${chunk.length} VMUs)`
             );
+            if (mode !== 'mint') {
+              markLocalClaimSubmittedForRows(rowsForSalt, {
+                ids: chunk,
+                action: mode,
+                tx,
+                txType: `CoinTool ${label}`
+              });
+            }
           } catch (err) {
             console.error(err);
             alert(err?.message || `CoinTool ${label} failed for salt ${saltHex}`);
@@ -2676,7 +3274,7 @@ async function handleBulkAction(mode){
   // Finish up
   selectedRows.clear();
   refreshBulkUI();
-  if (typeof window.refreshUnified === 'function') { try { await window.refreshUnified(); } catch {} }
+  try { window.cointoolTable?.redraw?.(true); } catch (_) {}
 }
 
 
@@ -2712,18 +3310,17 @@ function buildRemintData(minter, manualDays /* integer 1..999 */) {
   return head;
 }
 
-// Cointool DB now uses the v4 schema defined in js/scanners/cointool_scanner.js.
+// Cointool DB now uses the v5 schema defined in js/scanners/cointool_scanner.js.
 // Delegate to the scanner module so version/schema stay consistent.
 function openDB() {
   if (window.cointool && typeof window.cointool.openDB === 'function') {
     return window.cointool.openDB();
   }
-  // Fallback: open the v4 DB inline if the scanner module hasn't loaded yet.
+  // Fallback: open the v5 DB inline if the scanner module hasn't loaded yet.
   return new Promise((resolve, reject) => {
     const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const chainPrefix = getChainPrefix(currentChain);
-    const dbName = `${chainPrefix}_DB_Cointool`;
-    const request = indexedDB.open(dbName, 4);
+    const dbName = window.chainManager?.getDatabaseName?.('cointool', currentChain) || `${getChainPrefix(currentChain)}_DB_Cointool`;
+    const request = indexedDB.open(dbName, 5);
     request.onupgradeneeded = event => {
       const db = event.target.result;
       for (const oldName of ['mints', 'mintProgress', 'actionsCache']) {
@@ -2741,11 +3338,37 @@ function openDB() {
       if (!db.objectStoreNames.contains("scanState")) {
         db.createObjectStore("scanState", { keyPath: "address" });
       }
+      ensureCointoolSummaryStores(db);
     };
     request.onsuccess = event => resolve(event.target.result);
     request.onerror = event => reject(event.target.error);
     request.onblocked = () => console.warn(`[Cointool] DB open blocked for ${dbName}`);
   });
+}
+
+function ensureCointoolSummaryStores(db) {
+  if (!db.objectStoreNames.contains("summaryByType")) {
+    const s = db.createObjectStore("summaryByType", { keyPath: "id" });
+    s.createIndex("byType", "type", { unique: false });
+  }
+  if (!db.objectStoreNames.contains("summaryByStatus")) {
+    const s = db.createObjectStore("summaryByStatus", { keyPath: "id" });
+    s.createIndex("byType", "type", { unique: false });
+    s.createIndex("byStatus", "status", { unique: false });
+  }
+  if (!db.objectStoreNames.contains("summaryByDay")) {
+    const s = db.createObjectStore("summaryByDay", { keyPath: "id" });
+    s.createIndex("byDate", "date", { unique: false });
+    s.createIndex("byType", "type", { unique: false });
+  }
+  if (!db.objectStoreNames.contains("summaryByOwner")) {
+    const s = db.createObjectStore("summaryByOwner", { keyPath: "id" });
+    s.createIndex("byOwner", "owner", { unique: false });
+    s.createIndex("byType", "type", { unique: false });
+  }
+  if (!db.objectStoreNames.contains("summaryMetadata")) {
+    db.createObjectStore("summaryMetadata", { keyPath: "id" });
+  }
 }
 
 async function getActionsCache(db, address) {
@@ -2812,12 +3435,7 @@ function getAllMints(db) {
       if (!db || !db.objectStoreNames || !db.objectStoreNames.contains('proxies')) {
         return resolve([]);
       }
-      const all = await new Promise((res, rej) => {
-        const tx = db.transaction('proxies', 'readonly');
-        const r = tx.objectStore('proxies').getAll();
-        r.onsuccess = () => res(r.result || []);
-        r.onerror = () => rej(r.error);
-      });
+      const all = await getAllFromStore(db, 'proxies');
       if (!all.length) return resolve([]);
 
       const maxPerBatch = (function(){
@@ -2989,18 +3607,13 @@ async function getMintByUniqueId(db, id) {
 async function findMintByTxHash(db, txHash, addr) {
   return new Promise((resolve) => {
     if (!db || !db.objectStoreNames?.contains?.('mints')) return resolve(null);
-    const tx = db.transaction("mints", "readonly");
-    const store = tx.objectStore("mints");
-    const request = store.getAll();
-    request.onsuccess = (event) => {
-      const mints = event.target.result || [];
+    getAllFromStore(db, "mints").then((mints) => {
       const match = mints.find(m =>
         m.TX_Hash && m.TX_Hash.toLowerCase() === txHash.toLowerCase() &&
         m.Owner && m.Owner.toLowerCase() === addr.toLowerCase()
       );
       resolve(match || null);
-    };
-    request.onerror = () => resolve(null);
+    }).catch(() => resolve(null));
   });
 }
 
@@ -3018,9 +3631,36 @@ let vmuChart = null;
 let _vmuChartReady = false;
 let _vmuChartMetric = 'vmus';
 let _vmuChartInitPending = false; // if true, (re)init when Dashboard becomes visible
+let _echartsLoadPromise = null;
 
 // Make globally accessible immediately
 window.vmuChart = vmuChart;
+
+function ensureEchartsLoaded() {
+  if (window.echarts && typeof window.echarts.init === 'function') {
+    return Promise.resolve(window.echarts);
+  }
+  if (_echartsLoadPromise) return _echartsLoadPromise;
+
+  _echartsLoadPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-wenxen-echarts]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.echarts), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load ECharts')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
+    script.async = true;
+    script.dataset.wenxenEcharts = 'true';
+    script.onload = () => resolve(window.echarts);
+    script.onerror = () => reject(new Error('Failed to load ECharts'));
+    document.head.appendChild(script);
+  });
+
+  return _echartsLoadPromise;
+}
 
 function _fmtAxisDateLabel(key){
   // Input key is 'YYYY-MM-DD'; output 'YYYY-Mon-DD'
@@ -3122,6 +3762,15 @@ function formatXenShort(num) {
   return value.toFixed(2) + suffixes[index];
 }
 
+window.wenFormatters = {
+  ...(window.wenFormatters || {}),
+  formatNumberForMobile,
+  formatTinyPrice,
+  formatXenShort
+};
+window.wenxen = window.wenxen || {};
+window.wenxen.formatters = window.wenFormatters;
+
 // Get aggregated data with both VMUs and XEN for tooltip
 function _getTooltipDataByDateAndType(rows, dateKey) {
   const types = (window.innerWidth <= 768) ? ['CT', 'XNFT', 'S.XNFT', 'Stk'] : ['Cointool', 'XENFT', 'Stake XENFT', 'Stake'];
@@ -3217,6 +3866,13 @@ function _groupVMUsByDateAndType(rows) {
   return { dates, seriesData };
 }
 
+function handleVmuChartToggleClick() {
+  const btn = document.getElementById('vmuChartToggle');
+  if (!btn) return;
+  const expanded = btn.getAttribute('aria-expanded') === 'true';
+  setVmuChartExpandedState(!expanded);
+}
+
 function initVmuChartSection() {
   if (_vmuChartReady) return;
   const wrap  = document.getElementById('vmu-chart-wrap');
@@ -3226,11 +3882,7 @@ function initVmuChartSection() {
   if (!wrap || !body || !btn || !node) return;
 
   // Toggle behavior
-  btn.addEventListener('click', () => {
-    const expanded = btn.getAttribute('aria-expanded') === 'true';
-    const next = !expanded;
-    setVmuChartExpandedState(next);
-  });
+  btn.onclick = handleVmuChartToggleClick;
 
   // Metric toggle wiring
   const vmusBtn = document.getElementById('vmuChartModeVMUs');
@@ -3589,6 +4241,20 @@ function setVmuChartExpandedState(open) {
 
   if (!open) return;
 
+  if (!window.echarts || typeof window.echarts.init !== 'function') {
+    try { node.textContent = 'Loading chart...'; } catch {}
+    ensureEchartsLoaded()
+      .then(() => {
+        try { node.textContent = ''; } catch {}
+        setVmuChartExpandedState(true);
+      })
+      .catch(error => {
+        console.warn('[VMU-CHART] ECharts load failed', error);
+        try { node.textContent = 'Chart library failed to load.'; } catch {}
+      });
+    return;
+  }
+
   console.debug('[VMU-CHART] setExpandedState -> open. node size before:', { w: node.offsetWidth, h: node.offsetHeight });
 
   if (!vmuChart && window.echarts && typeof window.echarts.init === 'function') {
@@ -3703,8 +4369,6 @@ function setVmuChartExpandedState(open) {
       series: [{ type: 'bar', data: [] }]
     };
     try { vmuChart && vmuChart.setOption(options); console.debug('[VMU-CHART] setOption(base) done'); } catch(e) { console.warn('[VMU-CHART] setOption(base) failed', e); }
-  } else if (!window.echarts) {
-    try { node.textContent = 'Chart library failed to load.'; } catch {}
   }
 
 requestAnimationFrame(() => {
@@ -3712,6 +4376,11 @@ requestAnimationFrame(() => {
     requestAnimationFrame(() => { try { if (vmuChart) { console.debug('[VMU-CHART] rAF resize pass2 (setter)'); vmuChart.resize(); } } catch(e) { console.warn('[VMU-CHART] rAF resize2 failed (setter)', e); } });
   });
 }
+window.setVmuChartExpandedState = setVmuChartExpandedState;
+try {
+  const vmuToggle = document.getElementById('vmuChartToggle');
+  if (vmuToggle) vmuToggle.onclick = handleVmuChartToggleClick;
+} catch {}
 
 function _groupXenUsdByDate(rows) {
   const price = (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) ? xenUsdPrice : null;
@@ -4638,38 +5307,9 @@ async function makeRpcRequest(requestFn, requestName) {
   throw new Error(`RPC request '${requestName}' failed after ${maxAttempts} attempts on all available RPCs.`);
 }
 
-// Helper: ensure Flatpickr header (month/year) isn't pushed down by vendor padding
-function __fixFlatpickrHeader(fpInstance){
-  try {
-    const root = fpInstance && fpInstance.calendarContainer;
-    if (!root) return;
-    const hdr = root.querySelector('.flatpickr-current-month');
-    if (hdr) {
-      hdr.style.paddingTop = '0px';
-      // Also clear full padding to override vendor shorthand
-      hdr.style.padding = '0px';
-    }
-  } catch {}
-}
-
-// Optional: keep an initial instance so the calendar is usable even before data loads
-window._calendar = flatpickr("#calendar", {
-  inline: true,
-  defaultDate: "today",
-  onReady: function(selectedDates, dateStr, instance){ __fixFlatpickrHeader(instance); }
-});
-
-// Helper to always grab the *current* calendar instance
+// Helper to always grab the controller-owned calendar instance
 function getActiveCalendar() {
-  // Prefer the instance created by unified_view.js
-  if (window.calendarPicker && typeof window.calendarPicker.setDate === "function") {
-    return window.calendarPicker;
-  }
-  // Fallback to the bootstrap instance
-  if (window._calendar && typeof window._calendar.setDate === "function") {
-    return window._calendar;
-  }
-  return null;
+  return window.calendarController?.get?.() || null;
 }
 
 // Wire up the "Center Calendar" button (appears on the Dashboard filter row)
@@ -4695,7 +5335,7 @@ function getActiveCalendar() {
     if (typeof setHeaderFilterTextDebounced === 'function') {
       setHeaderFilterTextDebounced("Maturity_Date_Fmt", filterText);
     }
-    try { cal.clear(); } catch {} // This removes the highlight from any selected day
+    try { cal.clear(false); } catch {} // Clear visual selection without clearing the filter
   });
 })();
 
@@ -4725,7 +5365,10 @@ function populateTable(mints) {
   const tableExists = !!document.getElementById("cointool-table").tabulator;
   if (tableExists) {
     window.cointoolTable = document.getElementById("cointool-table").tabulator; // ← add this
-    cointoolTable.replaceData(mints);
+    applyTableRows(cointoolTable, mints, { preferReplaceLarge: true }).catch(err => {
+      console.warn('[Table] Incremental update failed, falling back to replaceData:', err);
+      cointoolTable.replaceData(mints);
+    });
     // Ensure bulk bar and selection hooks remain wired
     ensureBulkBar();
     refreshBulkUI();
@@ -4744,20 +5387,29 @@ function populateTable(mints) {
     // Only allow selecting Cointool rows; disable others (XENFT, Stake, etc.)
     selectableCheck: function(row){
       try {
-        const t = String((row.getData() || {}).SourceType || 'Cointool');
+        const data = row.getData() || {};
+        const t = String(data.SourceType || 'Cointool');
+        if (isRowFullyLocallySubmitted(data)) return false;
         return t === 'Cointool';
       } catch (_) { return true; }
     },
     // Visually disable non-Cointool checkboxes on render
     rowFormatter: function(row){
       try {
-        const t = String((row.getData() || {}).SourceType || 'Cointool');
-        if (t !== 'Cointool') {
+        const data = row.getData() || {};
+        const t = String(data.SourceType || 'Cointool');
+        const locallySubmitted = isRowFullyLocallySubmitted(data);
+        const rowEl = row.getElement?.();
+        if (rowEl) rowEl.classList.toggle('local-claim-submitted-row', !!locallySubmitted);
+        if (t !== 'Cointool' || locallySubmitted) {
           const cells = row.getCells();
           const c0 = (cells && cells.length) ? cells[0] : null;
           const el = c0 ? c0.getElement() : null;
           const inp = el ? el.querySelector('input[type="checkbox"]') : null;
           if (inp) { inp.disabled = true; inp.checked = false; }
+          if (locallySubmitted) {
+            try { selectedRows.delete(row.getIndex()); } catch (_) {}
+          }
         }
       } catch (_) {}
     },
@@ -4836,6 +5488,7 @@ function populateTable(mints) {
           const data = cell.getRow().getData();
           const t = String((data || {}).SourceType || 'Cointool');
           if (t !== 'Cointool') return; // ignore clicks on non-Cointool rows
+          if (isRowFullyLocallySubmitted(data)) return;
           cell.getRow().toggleSelect();
         },
       },
@@ -4974,15 +5627,22 @@ function populateTable(mints) {
             ? getMaturedRecoveredIdsForRow(rowData) : [];
           const recoveredCount = maturedRecovered.length;
           const isStranded = failedCount > 0 || recoveredCount > 0;
+          const localSubmission = getLocalClaimSubmissionForRow(rowData, actionable);
 
           if (isLegacyCointoolRow(rowData) && live === 'Unknown') {
             return 'Needs Rescan';
           }
 
+          if (localSubmission) {
+            const badge = formatLocalClaimSubmissionStatus(localSubmission);
+            if (localSubmission.allSubmitted || !ownsRow) return badge;
+            return `${badge} <span class="claim-button" title="Claim the remaining unsubmitted VMUs in this row.">Claim Rest</span> ${formatManualClaimSubmissionButton()}`;
+          }
+
           if (String(rowData.SourceType || '') === 'XENFT') {
             if (actionableCount === 0) return live === 'Unknown' ? 'Needs Rescan' : live;
             if (!ownsRow) return 'Claimable';
-            return `<span class="claim-button" title="Click to claim XENFT #${rowData.Mint_id_Start}.">Claimable</span>`;
+            return `<span class="claim-button" title="Click to claim XENFT #${rowData.Mint_id_Start}.">Claimable</span> ${formatManualClaimSubmissionButton()}`;
           }
 
           // No click targets — show plain status text only.
@@ -5027,10 +5687,22 @@ function populateTable(mints) {
             label = `Claim (${actionableCount}/${total})`;
           }
 
-          return `<span class="claim-button" title="${tip}">${label}</span>`;
+          return `<span class="claim-button" title="${tip}">${label}</span> ${formatManualClaimSubmissionButton()}`;
         },
         cellClick: function(e, cell){
           const rowData = cell.getRow().getData();
+          if (e.target.classList.contains('mark-submitted-button')) {
+            manuallyMarkClaimSubmitted(rowData);
+            return;
+          }
+          const actionableIds = (typeof getActionableIdsForRow === 'function')
+            ? getActionableIdsForRow(rowData) : [];
+          if (isRowFullyLocallySubmitted(rowData, actionableIds)) {
+            if (typeof showToast === 'function') {
+              showToast('This claim was already submitted locally. Run a scan to confirm it on-chain.', 'info');
+            }
+            return;
+          }
           const liveStatus = computeLiveStatus(rowData);
           const failedCount = Array.isArray(rowData.FailedIds) ? rowData.FailedIds.length : 0;
           const recoveredCount = (typeof getMaturedRecoveredIdsForRow === 'function')
@@ -5433,19 +6105,29 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
     refreshBulkUI();
     syncMasterSelectCheckbox();
   });
-  cointoolTable.on("dataFiltered", () => syncMasterSelectCheckbox());
-  cointoolTable.on("renderComplete", refreshBulkUI);
-  cointoolTable.on("dataProcessed", refreshBulkUI);
-  // Existing handler
-  cointoolTable.on("dataProcessed", function(){
-    updateSummaryStats();
-    document.getElementById("downloadBtn").style.display = (cointoolTable.getDataCount("active") > 0) ? "inline-block" : "none";
-    
-    // Update mobile dropdown content when data changes
-    if (window.innerWidth <= 768 && document.querySelector('.filter-chips.expanded')) {
-      window.updateMobileDropdownContent();
-    }
+  let initialDataLoaded = false;
+  const scheduleNormalTableUpdates = (reason, opts = {}) => {
+    scheduleTableDerivedUpdates(reason, {
+      syncMaster: true,
+      badge: !!opts.badge,
+      summary: true,
+      chart: true,
+      download: true,
+      bulk: true,
+      mobileFilters: true
+    });
+  };
+
+  cointoolTable.on("dataFiltered", () => {
+    scheduleNormalTableUpdates('dataFiltered', { badge: initialDataLoaded });
   });
+  cointoolTable.on("renderComplete", () => scheduleNormalTableUpdates('renderComplete'));
+  cointoolTable.on("dataProcessed", () => scheduleNormalTableUpdates('dataProcessed'));
+  cointoolTable.on("dataLoaded", () => scheduleNormalTableUpdates('dataLoaded'));
+  cointoolTable.on("dataSorted", () => scheduleNormalTableUpdates('dataSorted'));
+  try { cointoolTable.on("headerFilterChanged", () => scheduleNormalTableUpdates('headerFilterChanged', { badge: initialDataLoaded })); } catch {}
+  try { cointoolTable.on("filterChanged", () => scheduleNormalTableUpdates('filterChanged', { badge: initialDataLoaded })); } catch {}
+  cointoolTable.on("pageLoaded", () => scheduleNormalTableUpdates('pageLoaded'));
 
   cointoolTable.on("tableBuilt", () => {
     // Signal that filter buttons are now ready to work
@@ -5455,7 +6137,6 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
 
   // Auto-apply "All" filter ONCE after initial data load to ensure correct totals
   // This is the ONLY automatic update - simulates single "All" button click
-  let initialDataLoaded = false;
   const applyAllFilterOnce = () => {
     if (!initialDataLoaded && window.tableReady && cointoolTable.getDataCount() > 0) {
       initialDataLoaded = true;
@@ -5465,8 +6146,7 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
           cointoolTable.clearHeaderFilter();
           cointoolTable.setHeaderFilterValue('Status', '');
           cointoolTable.setSort('Maturity_Date_Fmt', 'asc');
-          // This is the ONE AND ONLY automatic badge update on page load
-          updateXENTotalBadge();
+          scheduleTableDerivedUpdates('initial-all-filter', { badge: true, delayMs: 0 });
         } catch (e) {
           console.warn('[Filter] Failed to auto-apply "All" filter:', e);
         }
@@ -5475,34 +6155,18 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
   };
   cointoolTable.on("dataProcessed", applyAllFilterOnce);
 
-  // Update XEN badge when user manually changes filters in table header inputs
-  // This listener only runs AFTER initial page load is complete
-  cointoolTable.on("dataFiltered", () => {
-    // Only update if initial data load has completed (prevents duplicate updates during page load)
-    if (initialDataLoaded) {
-      console.log('[Filter] Manual filter change detected - updating XEN badge');
-      updateXENTotalBadge();
-    }
-  });
-
   // Badge updates happen from:
   // 1. Auto-apply "All" filter above (once on page load)
   // 2. Manual filter button clicks (handled in filter button event listeners)
   // 3. Manual header filter changes in table (dataFiltered event above)
   // 4. Calendar date/month/year changes (in unified_view.js)
 
-  // VMU Chart wiring
-  cointoolTable.on("tableBuilt",     initVmuChartSection);
-  const _chartUpdater = () => { try { updateVmuChart(); } catch (e) { /* noop */ } };
-  cointoolTable.on("dataLoaded",     _chartUpdater);
-  cointoolTable.on("dataProcessed",  _chartUpdater);
-  cointoolTable.on("dataFiltered",   _chartUpdater);
-  // Be extra explicit: update on header filter changes too (if supported)
-  try { cointoolTable.on("headerFilterChanged", _chartUpdater); } catch {}
-  try { cointoolTable.on("filterChanged", _chartUpdater); } catch {}
-  cointoolTable.on("dataSorted",     _chartUpdater);
-  cointoolTable.on("renderComplete", _chartUpdater);
-  cointoolTable.on("pageLoaded",     _chartUpdater);
+  // VMU Chart wiring. The explicit post-registration call covers cases where
+  // Tabulator fires tableBuilt before this listener is attached.
+  cointoolTable.on("tableBuilt", initVmuChartSection);
+  setTimeout(() => {
+    try { initVmuChartSection(); } catch (error) { console.warn('[VMU-CHART] init failed', error); }
+  }, 0);
 
 
   startStatusTicker();
@@ -5709,12 +6373,48 @@ function computeLiveStatus(row) {
 }
 
 let statusTickerId = null;
+let statusTickerStarted = false;
+let statusTickRunning = false;
+const STATUS_TICK_MIN_DELAY_MS = 1000;
+const STATUS_TICK_IDLE_DELAY_MS = 5 * 60 * 1000;
+
+function getNextStatusTickDelay(data, nowSec) {
+  let nextMaturitySec = Infinity;
+  for (const row of data || []) {
+    if (row.SourceType !== "Cointool" || row.Status !== "Maturing") continue;
+    const maturity = Number(row.Maturity_Timestamp || 0);
+    if (Number.isFinite(maturity) && maturity > 0) {
+      if (maturity <= nowSec) return STATUS_TICK_MIN_DELAY_MS;
+      nextMaturitySec = Math.min(nextMaturitySec, maturity);
+    }
+  }
+
+  if (!Number.isFinite(nextMaturitySec)) return STATUS_TICK_IDLE_DELAY_MS;
+  return Math.max(
+    STATUS_TICK_MIN_DELAY_MS,
+    Math.min(STATUS_TICK_IDLE_DELAY_MS, ((nextMaturitySec - nowSec) * 1000) + 1000)
+  );
+}
+
+function scheduleNextStatusTick(delayMs) {
+  if (!statusTickerStarted) return;
+  if (statusTickerId) clearTimeout(statusTickerId);
+  statusTickerId = setTimeout(() => {
+    statusTickerId = null;
+    performStatusTick();
+  }, delayMs);
+}
 
 async function performStatusTick() {
+  if (statusTickRunning) return;
+  statusTickRunning = true;
+  let data = [];
+
+  try {
   if (!window.cointoolTable) return;
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const data   = cointoolTable.getData();
+  data   = cointoolTable.getData();
   const updates = [];
 
   for (const r of data) {
@@ -5847,16 +6547,23 @@ async function performStatusTick() {
   if (typeof refreshBulkUI === "function") refreshBulkUI();
   if (typeof updateSummaryStats === "function") updateSummaryStats();
   if (typeof updateCalendar === "function") updateCalendar();
+  } finally {
+    statusTickRunning = false;
+    scheduleNextStatusTick(getNextStatusTickDelay(data, Math.floor(Date.now() / 1000)));
+  }
 }
 
 function startStatusTicker() {
-  if (statusTickerId) return;
-  performStatusTick();                 // run once immediately
-  statusTickerId = setInterval(performStatusTick, 30_000);
+  if (statusTickerStarted) return;
+  statusTickerStarted = true;
+  performStatusTick();
 }
 
 // --- USER PREFERENCES ---
 function saveUserPreferences(addresses, customRPC, apiKey) {
+  addresses = normalizeMultiLineValue(addresses, 'address');
+  customRPC = normalizeMultiLineValue(customRPC, 'rpc');
+
   // Save addresses with chain prefix
   if (window.chainStorage) {
     window.chainStorage.setItem("ethAddress", addresses);
@@ -5871,7 +6578,7 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
   
   // Save RPC with chain prefix
   if (window.chainManager) {
-    const rpcList = customRPC.split('\n').filter(Boolean);
+    const rpcList = splitMultiLineValue(customRPC, 'rpc');
     const currentChain = window.chainManager.getCurrentChain();
     window.chainManager.saveRPCEndpoints(rpcList, currentChain);
     window.__setRpcLastValueForChain?.(currentChain, customRPC);
@@ -5894,34 +6601,233 @@ function saveUserPreferences(addresses, customRPC, apiKey) {
 }
 
 // Helper to normalize addresses/RPCs that may have lost their newlines
-// Detects concatenated Ethereum addresses (0x...0x...) and splits them
+// Detects concatenated EVM addresses (0x...0x...) and URLs and splits them.
 function normalizeMultiLineValue(value, type = 'address') {
-  if (!value || typeof value !== 'string') return value;
-
-  // If value already contains newlines, it's probably fine
-  if (value.includes('\n')) return value;
+  if (!value || typeof value !== 'string') return '';
+  const raw = value.replace(/\r\n?/g, '\n').trim();
+  if (!raw) return '';
 
   if (type === 'address') {
-    // Split concatenated Ethereum addresses: look for 0x followed by 40 hex chars
-    // Pattern: 0x + 40 hex chars, possibly followed by another 0x
     const addressPattern = /0x[a-fA-F0-9]{40}/g;
-    const matches = value.match(addressPattern);
-    if (matches && matches.length > 1) {
-      console.log(`[Normalize] Found ${matches.length} concatenated addresses, splitting with newlines`);
+    const matches = raw.match(addressPattern);
+    const leftovers = raw.replace(addressPattern, '').replace(/[\s,;\n]+/g, '');
+    if (matches && matches.length > 0 && !leftovers) {
       return matches.join('\n');
     }
   } else if (type === 'rpc') {
-    // Split concatenated URLs: look for http(s)://
-    const urlPattern = /https?:\/\/[^\s]+/g;
-    const matches = value.match(urlPattern);
-    if (matches && matches.length > 1) {
-      console.log(`[Normalize] Found ${matches.length} concatenated URLs, splitting with newlines`);
+    const urlPattern = /https?:\/\/[^\s]+?(?=https?:\/\/|[\s,;]+|$)/g;
+    const matches = raw.match(urlPattern);
+    const leftovers = raw.replace(urlPattern, '').replace(/[\s,;\n]+/g, '');
+    if (matches && matches.length > 0 && !leftovers) {
       return matches.join('\n');
     }
   }
 
-  return value;
+  return raw
+    .split(/[\n,;]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join('\n');
 }
+
+function splitMultiLineValue(value, type = 'address') {
+  return normalizeMultiLineValue(value, type)
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+window.normalizeMultiLineValue = normalizeMultiLineValue;
+window.splitMultiLineValue = splitMultiLineValue;
+
+function getCurrentSettingsChain() {
+  return window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+}
+
+function normalizeStoredListKey(key, type) {
+  try {
+    const value = localStorage.getItem(key);
+    if (typeof value !== 'string' || !value) return '';
+    const normalized = normalizeMultiLineValue(value, type);
+    if (normalized && normalized !== value) {
+      localStorage.setItem(key, normalized);
+    }
+    return normalized;
+  } catch (_) {
+    return '';
+  }
+}
+
+function persistSettingsAddress(chain, value) {
+  const normalized = normalizeMultiLineValue(value || '', 'address');
+  if (!normalized) return '';
+
+  try {
+    localStorage.setItem(`${chain}_ethAddress`, normalized);
+    if (chain === 'ETHEREUM') localStorage.setItem('ethAddress', normalized);
+    if (window.chainStorage && chain === getCurrentSettingsChain()) {
+      window.chainStorage.setItem('ethAddress', normalized);
+    }
+  } catch (_) {}
+
+  return normalized;
+}
+
+function persistSettingsRPC(chain, value, options = {}) {
+  const normalized = normalizeMultiLineValue(value || '', 'rpc');
+  if (!normalized) return '';
+
+  try {
+    if (options.saveCustom) {
+      localStorage.setItem(`${chain}_customRPC`, normalized);
+      localStorage.setItem(`${chain}_customRPC_source`, chain);
+    }
+    localStorage.setItem(`${chain}_customRPC_lastKnown`, normalized);
+    window.__setRpcLastValueForChain?.(chain, normalized);
+  } catch (_) {}
+
+  return normalized;
+}
+
+function normalizePersistedSettingsLists(chain = getCurrentSettingsChain()) {
+  const chains = new Set(['ETHEREUM', chain, ...getSupportedChainKeys()]);
+
+  normalizeStoredListKey('ethAddress', 'address');
+  normalizeStoredListKey('customRPC', 'rpc');
+
+  chains.forEach(chainKey => {
+    if (!chainKey) return;
+    const addressValue = normalizeStoredListKey(`${chainKey}_ethAddress`, 'address');
+    const rpcValue = normalizeStoredListKey(`${chainKey}_customRPC`, 'rpc');
+    const rpcLastKnown = normalizeStoredListKey(`${chainKey}_customRPC_lastKnown`, 'rpc');
+
+    if (chainKey === getCurrentSettingsChain()) {
+      if (addressValue) persistSettingsAddress(chainKey, addressValue);
+      if (rpcValue) persistSettingsRPC(chainKey, rpcValue, { saveCustom: true });
+      else if (rpcLastKnown) persistSettingsRPC(chainKey, rpcLastKnown, { saveCustom: false });
+    }
+  });
+}
+
+function normalizeSettingsTextareas() {
+  if (typeof window.normalizeSettingsTextareasEarly === 'function') {
+    window.normalizeSettingsTextareasEarly();
+  }
+
+  const chain = getCurrentSettingsChain();
+  normalizePersistedSettingsLists(chain);
+
+  const addressEl = document.getElementById('ethAddress');
+  const storedAddress = localStorage.getItem(`${chain}_ethAddress`) || localStorage.getItem('ethAddress') || '';
+  const addressValue = normalizeMultiLineValue((addressEl?.value || storedAddress), 'address');
+  if (addressValue) {
+    if (addressEl && addressEl.value !== addressValue) addressEl.value = addressValue;
+    persistSettingsAddress(chain, addressValue);
+  }
+
+  const rpcEl = document.getElementById('customRPC');
+  const customRpcKey = `${chain}_customRPC`;
+  const hasCustomRPC = localStorage.getItem(customRpcKey) !== null;
+  const storedRPC = localStorage.getItem(customRpcKey) || localStorage.getItem(`${chain}_customRPC_lastKnown`) || '';
+  const chainRPC = !storedRPC && window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : '';
+  const rpcValue = normalizeMultiLineValue((rpcEl?.value || storedRPC || chainRPC), 'rpc');
+  if (rpcValue) {
+    if (rpcEl && rpcEl.value !== rpcValue) rpcEl.value = rpcValue;
+    persistSettingsRPC(chain, rpcValue, { saveCustom: hasCustomRPC });
+  }
+}
+
+function isSettingsTabVisible() {
+  const settingsPanel = document.getElementById('tab-settings');
+  if (!settingsPanel) return false;
+  return settingsPanel.classList.contains('active') ||
+    settingsPanel.getAttribute('aria-hidden') === 'false' ||
+    getComputedStyle(settingsPanel).display !== 'none';
+}
+
+function normalizeSettingsTextareasNow() {
+  normalizeSettingsTextareas();
+  const addressEl = document.getElementById('ethAddress');
+  const rpcEl = document.getElementById('customRPC');
+
+  if (addressEl) {
+    const nextValue = normalizeMultiLineValue(addressEl.value || '', 'address');
+    if (nextValue && nextValue !== addressEl.value) {
+      addressEl.value = nextValue;
+      persistSettingsAddress(getCurrentSettingsChain(), nextValue);
+    }
+  }
+
+  if (rpcEl) {
+    const nextValue = normalizeMultiLineValue(rpcEl.value || '', 'rpc');
+    if (nextValue && nextValue !== rpcEl.value) {
+      rpcEl.value = nextValue;
+      persistSettingsRPC(getCurrentSettingsChain(), nextValue, {
+        saveCustom: localStorage.getItem(`${getCurrentSettingsChain()}_customRPC`) !== null
+      });
+    }
+  }
+}
+
+function installSettingsTextareaVisibilityNormalizer() {
+  if (window.__settingsTextareaVisibilityNormalizerInstalled) return;
+  window.__settingsTextareaVisibilityNormalizerInstalled = true;
+
+  const runSoon = () => {
+    normalizeSettingsTextareasNow();
+    requestAnimationFrame(normalizeSettingsTextareasNow);
+    setTimeout(normalizeSettingsTextareasNow, 0);
+    setTimeout(normalizeSettingsTextareasNow, 50);
+    setTimeout(normalizeSettingsTextareasNow, 150);
+    setTimeout(normalizeSettingsTextareasNow, 500);
+  };
+
+  const settingsPanel = document.getElementById('tab-settings');
+  if (settingsPanel && typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(() => {
+      if (isSettingsTabVisible()) runSoon();
+    });
+    observer.observe(settingsPanel, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'aria-hidden']
+    });
+  }
+
+  document.addEventListener('tabChanged', event => {
+    if (event?.detail?.tabId === 'tab-settings') runSoon();
+  });
+
+  document.addEventListener('click', event => {
+    if (event.target?.closest?.('[data-target="tab-settings"]')) runSoon();
+  }, true);
+
+  ['ethAddress', 'customRPC'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('focus', runSoon);
+    el.addEventListener('input', () => {
+      if (isSettingsTabVisible()) requestAnimationFrame(normalizeSettingsTextareasNow);
+    });
+  });
+
+  setInterval(() => {
+    if (isSettingsTabVisible()) normalizeSettingsTextareasNow();
+  }, 250);
+}
+
+window.normalizePersistedSettingsLists = normalizePersistedSettingsLists;
+window.normalizeSettingsTextareas = normalizeSettingsTextareas;
+window.normalizeSettingsTextareasNow = normalizeSettingsTextareasNow;
+normalizePersistedSettingsLists();
+installSettingsTextareaVisibilityNormalizer();
+
+document.addEventListener('click', event => {
+  if (!event.target?.closest?.('[data-target="tab-settings"]')) return;
+  normalizeSettingsTextareasNow();
+  requestAnimationFrame(normalizeSettingsTextareasNow);
+  setTimeout(normalizeSettingsTextareasNow, 0);
+  setTimeout(normalizeSettingsTextareasNow, 100);
+}, true);
 
 function loadUserPreferences() {
   // Load addresses - chain-specific (migration should have already run)
@@ -5949,16 +6855,12 @@ function loadUserPreferences() {
       }
     }
     
-    // If no addresses found and we're on Base, try Ethereum addresses as fallback
-    if (!addresses && currentChain === 'BASE') {
-      // Check if this is first time loading Base (no saved preference)
-      const baseLoadedKey = 'BASE_addresses_loaded';
-      if (!localStorage.getItem(baseLoadedKey)) {
-        // First time on Base - load Ethereum addresses
+    // If no addresses found on a non-Ethereum chain, seed from Ethereum once.
+    if (!addresses && currentChain !== 'ETHEREUM') {
+      const chainLoadedKey = `${currentChain}_addresses_loaded`;
+      if (!localStorage.getItem(chainLoadedKey)) {
         addresses = localStorage.getItem("ETHEREUM_ethAddress") || "";
-        // Mark that we've loaded Base once
-        localStorage.setItem(baseLoadedKey, '1');
-        // Save Ethereum addresses as Base addresses for user to modify
+        localStorage.setItem(chainLoadedKey, '1');
         if (addresses) {
           window.chainStorage.setItem("ethAddress", addresses);
         }
@@ -5971,21 +6873,27 @@ function loadUserPreferences() {
 
   // Normalize addresses in case newlines were lost (defensive fix)
   addresses = normalizeMultiLineValue(addresses, 'address');
+  if (addresses) {
+    persistSettingsAddress(getCurrentSettingsChain(), addresses);
+  }
   document.getElementById("ethAddress").value = addresses;
   
   // Load chain-specific RPC
   let rpcValue = "";
   if (window.chainManager) {
     const rpcs = window.chainManager.getRPCEndpoints();
-    rpcValue = rpcs.join('\n');
+    rpcValue = normalizeMultiLineValue(rpcs.join('\n'), 'rpc');
     console.log(`[Load User Prefs] Loaded ${rpcs.length} RPCs for ${window.chainManager.getCurrentChain()}`);
   } else {
     // No fallback to global customRPC - use DEFAULT_RPC only
-    rpcValue = DEFAULT_RPC;
+    rpcValue = normalizeMultiLineValue(DEFAULT_RPC, 'rpc');
     console.log(`[Load User Prefs] Chain manager not available, using DEFAULT_RPC`);
   }
   document.getElementById("customRPC").value = rpcValue;
   if (window.chainManager) {
+    persistSettingsRPC(window.chainManager.getCurrentChain(), rpcValue, {
+      saveCustom: localStorage.getItem(`${window.chainManager.getCurrentChain()}_customRPC`) !== null
+    });
     window.__setRpcLastValueForChain?.(window.chainManager.getCurrentChain(), rpcValue);
     try {
       localStorage.setItem(`${window.chainManager.getCurrentChain()}_customRPC_lastKnown`, rpcValue);
@@ -6091,7 +6999,7 @@ function validateInputs() {
   
   // RPC is optional - we have defaults for each chain
   // Only validate if user has entered something
-  const hasValidRpc = !rpcText || rpcText.split("\n").some(s => s.trim().startsWith("http"));
+  const hasValidRpc = !rpcText || splitMultiLineValue(rpcText, 'rpc').some(s => s.startsWith("http"));
   scanBtn.disabled = !hasValidRpc || !apiKey;
 }
 
@@ -6100,6 +7008,16 @@ function validateInputs() {
 
 function updateSummaryStats() {
   if (!window.cointoolTable) return;
+  const option2SummaryEnabled = document.getElementById('summaryContainer')?.classList.contains('option2');
+  const summaryCache = {
+    updatedAt: Date.now(),
+    byType: {
+      Cointool: { totalCount: 0, totalVMUs: 0, remints: 0, maturing: 0, claimable: 0, mintable: 0, xenRewards: 0 },
+      XENFT: { totalCount: 0, totalVMUs: 0, apex: 0, collector: 0, limited: 0, maturing: 0, claimable: 0, xenRewards: 0 },
+      Stake: { totalCount: 0, maturing: 0, claimable: 0, xenRewards: 0 },
+      'Stake XENFT': { totalCount: 0, maturing: 0, claimable: 0, xenRewards: 0 }
+    }
+  };
 
   // 1) Prefer an unfiltered snapshot of all data
   const overall =
@@ -6108,9 +7026,45 @@ function updateSummaryStats() {
     || cointoolTable.getData("active");
 
   // --- A) COINTOOL summary (header + per-address) ---
-  const onlyCT = overall.filter(r => r.SourceType === "Cointool");
   const summaryByAddress = {};
-  for (const row of onlyCT) {
+  const summaryIndexesByType = window._summaryIndexByType || {};
+  const cointoolSummaryIndex = window._cointoolSummaryIndex || null;
+  const cointoolTypeSummary = cointoolSummaryIndex?.byType?.Cointool || null;
+  const cointoolHandledBySummary = !!cointoolTypeSummary;
+  let cointoolXenRewardsFromRows = 0;
+
+  if (cointoolHandledBySummary) {
+    const typeCache = summaryCache.byType.Cointool;
+    typeCache.totalCount = Number(cointoolTypeSummary.totalCount || 0);
+    typeCache.totalVMUs = Number(cointoolTypeSummary.totalVMUs || 0);
+    typeCache.remints = Number(cointoolTypeSummary.remints || 0);
+    typeCache.maturing = Number(cointoolTypeSummary.maturing || 0);
+    typeCache.claimable = Number(cointoolTypeSummary.claimable || 0);
+    typeCache.mintable = Number(cointoolTypeSummary.mintable || 0);
+    typeCache.xenRewards = Number(cointoolTypeSummary.xenRewards || 0);
+
+    for (const ownerRow of Object.values(cointoolSummaryIndex.byOwner || {})) {
+      const owner = ownerRow.owner || '';
+      if (!owner) continue;
+      summaryByAddress[owner] = {
+        mintCount: Number(ownerRow.totalCount || 0),
+        totalCranks: Number(ownerRow.totalVMUs || 0),
+        remintCranks: Number(ownerRow.remints || 0),
+        maturingVMUs: Number(ownerRow.maturing || 0),
+        claimableVMUs: Number(ownerRow.claimable || 0),
+        mintableVMUs: Number(ownerRow.mintable || 0)
+      };
+    }
+  }
+
+  for (const row of overall) {
+    if (row.SourceType !== "Cointool") continue;
+    if (cointoolHandledBySummary) {
+      if (computeLiveStatus(row) === "Maturing" && typeof window.estimateXENForRow === "function") {
+        cointoolXenRewardsFromRows += window.estimateXENForRow(row) || 0;
+      }
+      continue;
+    }
     const owner = row.Owner;
     if (!summaryByAddress[owner]) {
       summaryByAddress[owner] = { mintCount: 0, totalCranks: 0, remintCranks: 0, maturingVMUs: 0, claimableVMUs: 0, mintableVMUs: 0 };
@@ -6120,6 +7074,11 @@ function updateSummaryStats() {
       : null;
     const vmus = proxySummary ? proxySummary.total : (Number(row.VMUs) || 0);
     const remintCount = proxySummary ? proxySummary.reminted : (row.Actions || []).length;
+    const typeCache = summaryCache.byType.Cointool;
+    let liveStatus = null;
+    typeCache.totalCount++;
+    typeCache.totalVMUs += vmus;
+    if (remintCount > 0) typeCache.remints += proxySummary ? remintCount : vmus;
     summaryByAddress[owner].mintCount++;
     summaryByAddress[owner].totalCranks += vmus;
     if (remintCount > 0) summaryByAddress[owner].remintCranks += proxySummary ? remintCount : vmus;
@@ -6129,15 +7088,36 @@ function updateSummaryStats() {
       summaryByAddress[owner].maturingVMUs += proxySummary.maturing;
       summaryByAddress[owner].claimableVMUs += proxySummary.claimable;
       summaryByAddress[owner].mintableVMUs += proxySummary.mintable;
+      typeCache.maturing += proxySummary.maturing;
+      typeCache.claimable += proxySummary.claimable;
+      typeCache.mintable += proxySummary.mintable;
+      liveStatus = proxySummary.claimable > 0
+        ? "Claimable"
+        : proxySummary.maturing > 0
+          ? "Maturing"
+          : proxySummary.mintable > 0
+            ? "Mintable"
+            : "Claimed";
     } else {
-      const liveStatus = computeLiveStatus(row);
+      liveStatus = computeLiveStatus(row);
       if (liveStatus === "Maturing") {
         summaryByAddress[owner].maturingVMUs += vmus;
+        typeCache.maturing += vmus;
       }
       if (liveStatus === "Claimable") {
         summaryByAddress[owner].claimableVMUs += vmus;
+        typeCache.claimable += vmus;
+      }
+      if (liveStatus === "Mintable") {
+        typeCache.mintable += vmus;
       }
     }
+    if (liveStatus === "Maturing" && typeof window.estimateXENForRow === "function") {
+      typeCache.xenRewards += window.estimateXENForRow(row) || 0;
+    }
+  }
+  if (cointoolHandledBySummary && cointoolXenRewardsFromRows > 0) {
+    summaryCache.byType.Cointool.xenRewards = cointoolXenRewardsFromRows;
   }
 
   // Build and inject the main Cointool summary line
@@ -6156,52 +7136,103 @@ function updateSummaryStats() {
 
   // Render per-address blocks for Cointool
   const perAddressContainer = document.getElementById('perAddressSummary');
-  perAddressContainer.innerHTML = ''; // Clear previous entries
+  if (perAddressContainer) perAddressContainer.textContent = ''; // Clear previous entries
 
-  const ctAddresses = Object.keys(summaryByAddress);
-  if (ctAddresses.length > 0) {
-    for (const address of ctAddresses) {
-      const s = summaryByAddress[address];
-      const short = `${address.slice(0, 6)}...${address.slice(-4)}`;
-      const line = document.createElement('div');
-      line.innerHTML = `
-      <strong>${short}:</strong>
-      Mints: ${s.mintCount.toLocaleString()} |
-      Total VMUs: ${s.totalCranks.toLocaleString()} |
-      Remints: ${s.remintCranks.toLocaleString()} |
-      Maturing: ${s.maturingVMUs.toLocaleString()} |
-      Claimable: ${s.claimableVMUs.toLocaleString()} |
-      Mintable: ${s.mintableVMUs.toLocaleString()}
-    `;
-      perAddressContainer.appendChild(line);
+  if (!option2SummaryEnabled && perAddressContainer) {
+    const ctAddresses = Object.keys(summaryByAddress);
+    if (ctAddresses.length > 0) {
+      for (const address of ctAddresses) {
+        const s = summaryByAddress[address];
+        const short = `${address.slice(0, 6)}...${address.slice(-4)}`;
+        const line = document.createElement('div');
+        line.innerHTML = `
+        <strong>${short}:</strong>
+        Mints: ${s.mintCount.toLocaleString()} |
+        Total VMUs: ${s.totalCranks.toLocaleString()} |
+        Remints: ${s.remintCranks.toLocaleString()} |
+        Maturing: ${s.maturingVMUs.toLocaleString()} |
+        Claimable: ${s.claimableVMUs.toLocaleString()} |
+        Mintable: ${s.mintableVMUs.toLocaleString()}
+      `;
+        perAddressContainer.appendChild(line);
+      }
     }
   }
 
   // --- The rest of the function handles other types (XENFT, Stakes), which is correct ---
   // --- B) XENFTs (by address) ---
   const xfMap = {};
-  for (const row of overall.filter(r => r.SourceType === "XENFT")) {
+  const xenftSummaryIndex = summaryIndexesByType.XENFT || null;
+  const xenftTypeSummary = xenftSummaryIndex?.byType?.XENFT || null;
+  const xenftHandledBySummary = !!xenftTypeSummary;
+  let xenftXenRewardsFromRows = 0;
+
+  if (xenftHandledBySummary) {
+    const typeCache = summaryCache.byType.XENFT;
+    typeCache.totalCount = Number(xenftTypeSummary.totalCount || 0);
+    typeCache.totalVMUs = Number(xenftTypeSummary.totalVMUs || 0);
+    typeCache.apex = Number(xenftTypeSummary.apex || 0);
+    typeCache.collector = Number(xenftTypeSummary.collector || 0);
+    typeCache.limited = Number(xenftTypeSummary.limited || 0);
+    typeCache.maturing = Number(xenftTypeSummary.maturing || 0);
+    typeCache.claimable = Number(xenftTypeSummary.claimable || 0);
+    typeCache.xenRewards = Number(xenftTypeSummary.xenRewards || 0);
+
+    for (const ownerRow of Object.values(xenftSummaryIndex.byOwner || {})) {
+      const owner = ownerRow.owner || '';
+      if (!owner) continue;
+      xfMap[owner] = {
+        mintCount: Number(ownerRow.totalCount || 0),
+        totalCranks: Number(ownerRow.totalVMUs || 0),
+        maturingVMUs: Number(ownerRow.maturing || 0),
+        claimableCount: Number(ownerRow.claimable || 0)
+      };
+    }
+  }
+
+  for (const row of overall) {
+    if (row.SourceType !== "XENFT") continue;
+    if (xenftHandledBySummary) {
+      if (computeLiveStatus(row) === "Maturing" && typeof window.estimateXENForRow === "function") {
+        xenftXenRewardsFromRows += window.estimateXENForRow(row) || 0;
+      }
+      continue;
+    }
     const owner = row.Owner || '';
     if (!xfMap[owner]) {
       xfMap[owner] = { mintCount: 0, totalCranks: 0, maturingVMUs: 0, claimableCount: 0 };
     }
     const vmus = Number(row.VMUs) || 0;
+    const typeCache = summaryCache.byType.XENFT;
+    typeCache.totalCount++;
+    typeCache.totalVMUs += vmus;
+    const category = String(row.Category || "").toLowerCase();
+    const klass = String(row.Class || "").toLowerCase();
+    if (category === "apex") typeCache.apex++;
+    if (category === "collector") typeCache.collector++;
+    if (klass === "limited") typeCache.limited++;
     xfMap[owner].mintCount++;
     xfMap[owner].totalCranks += vmus;
     const liveStatus = computeLiveStatus(row);
     if (liveStatus === "Maturing") {
       xfMap[owner].maturingVMUs += vmus;
+      typeCache.maturing += vmus;
+      if (typeof window.estimateXENForRow === "function") typeCache.xenRewards += window.estimateXENForRow(row) || 0;
     }
     if (liveStatus === "Claimable") {
       xfMap[owner].claimableCount++;
+      typeCache.claimable++;
     }
+  }
+  if (xenftHandledBySummary && xenftXenRewardsFromRows > 0) {
+    summaryCache.byType.XENFT.xenRewards = xenftXenRewardsFromRows;
   }
 
   const oldXfBlock = document.getElementById('xenftPerAddressSummary');
   if (oldXfBlock) oldXfBlock.remove();
 
   const xfAddrs = Object.keys(xfMap);
-  if (xfAddrs.length > 0) {
+  if (!option2SummaryEnabled && xfAddrs.length > 0) {
     const anchor = document.getElementById('xenftItemCount');
     const container = document.getElementById('summaryContainer');
     const block = document.createElement('div');
@@ -6229,24 +7260,63 @@ function updateSummaryStats() {
 
   // --- C) STAKE XENFTs (by address) ---
   const stakeMap = {};
-  for (const row of overall.filter(r => r.SourceType === "Stake XENFT")) {
+  const stakeXenftSummaryIndex = summaryIndexesByType['Stake XENFT'] || null;
+  const stakeXenftTypeSummary = stakeXenftSummaryIndex?.byType?.['Stake XENFT'] || null;
+  const stakeXenftHandledBySummary = !!stakeXenftTypeSummary;
+  let stakeXenftXenRewardsFromRows = 0;
+
+  if (stakeXenftHandledBySummary) {
+    const typeCache = summaryCache.byType['Stake XENFT'];
+    typeCache.totalCount = Number(stakeXenftTypeSummary.totalCount || 0);
+    typeCache.maturing = Number(stakeXenftTypeSummary.maturing || 0);
+    typeCache.claimable = Number(stakeXenftTypeSummary.claimable || 0);
+    typeCache.xenRewards = Number(stakeXenftTypeSummary.xenRewards || 0);
+
+    for (const ownerRow of Object.values(stakeXenftSummaryIndex.byOwner || {})) {
+      const owner = ownerRow.owner || '';
+      if (!owner) continue;
+      stakeMap[owner] = {
+        mintCount: Number(ownerRow.totalCount || 0),
+        maturingCount: Number(ownerRow.maturing || 0),
+        claimableCount: Number(ownerRow.claimable || 0)
+      };
+    }
+  }
+
+  for (const row of overall) {
+    if (row.SourceType !== "Stake XENFT") continue;
+    if (stakeXenftHandledBySummary) {
+      if (computeLiveStatus(row) === "Maturing" && typeof window.estimateXENForRow === "function") {
+        stakeXenftXenRewardsFromRows += window.estimateXENForRow(row) || 0;
+      }
+      continue;
+    }
     const owner = row.Owner || '';
     if (!stakeMap[owner]) {
       stakeMap[owner] = { mintCount: 0, maturingCount: 0, claimableCount: 0 };
     }
+    const typeCache = summaryCache.byType['Stake XENFT'];
     stakeMap[owner].mintCount++;
-    if (computeLiveStatus(row) === "Maturing") {
+    typeCache.totalCount++;
+    const liveStatus = computeLiveStatus(row);
+    if (liveStatus === "Maturing") {
       stakeMap[owner].maturingCount++;
+      typeCache.maturing++;
+      if (typeof window.estimateXENForRow === "function") typeCache.xenRewards += window.estimateXENForRow(row) || 0;
     }
-    if (computeLiveStatus(row) === "Claimable") {
+    if (liveStatus === "Claimable") {
       stakeMap[owner].claimableCount++;
+      typeCache.claimable++;
     }
+  }
+  if (stakeXenftHandledBySummary && stakeXenftXenRewardsFromRows > 0) {
+    summaryCache.byType['Stake XENFT'].xenRewards = stakeXenftXenRewardsFromRows;
   }
 
   const oldStakeBlock = document.getElementById('stakePerAddressSummary');
   if (oldStakeBlock) oldStakeBlock.remove();
   const stakeAddrs = Object.keys(stakeMap);
-  if (stakeAddrs.length > 0) {
+  if (!option2SummaryEnabled && stakeAddrs.length > 0) {
     const anchor = document.getElementById('stakeXenftItemCount');
     const container = document.getElementById('summaryContainer');
     const block = document.createElement('div');
@@ -6267,24 +7337,63 @@ function updateSummaryStats() {
 
   // --- D) STAKES (by address) ---
   const stakeRegularMap = {};
-  for (const row of overall.filter(r => r.SourceType === "Stake")) {
+  const stakeSummaryIndex = summaryIndexesByType.Stake || null;
+  const stakeTypeSummary = stakeSummaryIndex?.byType?.Stake || null;
+  const stakeHandledBySummary = !!stakeTypeSummary;
+  let stakeXenRewardsFromRows = 0;
+
+  if (stakeHandledBySummary) {
+    const typeCache = summaryCache.byType.Stake;
+    typeCache.totalCount = Number(stakeTypeSummary.totalCount || 0);
+    typeCache.maturing = Number(stakeTypeSummary.maturing || 0);
+    typeCache.claimable = Number(stakeTypeSummary.claimable || 0);
+    typeCache.xenRewards = Number(stakeTypeSummary.xenRewards || 0);
+
+    for (const ownerRow of Object.values(stakeSummaryIndex.byOwner || {})) {
+      const owner = ownerRow.owner || '';
+      if (!owner) continue;
+      stakeRegularMap[owner] = {
+        mintCount: Number(ownerRow.totalCount || 0),
+        maturingCount: Number(ownerRow.maturing || 0),
+        claimableCount: Number(ownerRow.claimable || 0)
+      };
+    }
+  }
+
+  for (const row of overall) {
+    if (row.SourceType !== "Stake") continue;
+    if (stakeHandledBySummary) {
+      if (computeLiveStatus(row) === "Maturing" && typeof window.estimateXENForRow === "function") {
+        stakeXenRewardsFromRows += window.estimateXENForRow(row) || 0;
+      }
+      continue;
+    }
     const owner = row.Owner || '';
     if (!stakeRegularMap[owner]) {
       stakeRegularMap[owner] = { mintCount: 0, maturingCount: 0, claimableCount: 0 };
     }
+    const typeCache = summaryCache.byType.Stake;
     stakeRegularMap[owner].mintCount++;
-    if (computeLiveStatus(row) === "Maturing") {
+    typeCache.totalCount++;
+    const liveStatus = computeLiveStatus(row);
+    if (liveStatus === "Maturing") {
       stakeRegularMap[owner].maturingCount++;
+      typeCache.maturing++;
+      if (typeof window.estimateXENForRow === "function") typeCache.xenRewards += window.estimateXENForRow(row) || 0;
     }
-    if (computeLiveStatus(row) === "Claimable") {
+    if (liveStatus === "Claimable") {
       stakeRegularMap[owner].claimableCount++;
+      typeCache.claimable++;
     }
+  }
+  if (stakeHandledBySummary && stakeXenRewardsFromRows > 0) {
+    summaryCache.byType.Stake.xenRewards = stakeXenRewardsFromRows;
   }
 
   const oldStakeRegularBlock = document.getElementById('stakeRegularPerAddressSummary');
   if (oldStakeRegularBlock) oldStakeRegularBlock.remove();
   const stakeRegularAddrs = Object.keys(stakeRegularMap);
-  if (stakeRegularAddrs.length > 0) {
+  if (!option2SummaryEnabled && stakeRegularAddrs.length > 0) {
     const anchor = document.getElementById('stakeItemCount');
     const container = document.getElementById('summaryContainer');
     const block = document.createElement('div');
@@ -6302,6 +7411,7 @@ function updateSummaryStats() {
       container.appendChild(block);
     }
   }
+  window._summaryStatsCache = summaryCache;
 }
 
 /**
@@ -6881,12 +7991,12 @@ async function fetchPostMintActions(address, etherscanApiKey) {
         }
       }
       
-      // For Base, use Ethereum addresses as initial default if first time
-      if (!saved && currentChain === 'BASE') {
-        const baseLoadedKey = 'BASE_addresses_loaded';
-        if (!localStorage.getItem(baseLoadedKey)) {
+      // For non-Ethereum chains, use Ethereum addresses as an initial editable default once.
+      if (!saved && currentChain !== 'ETHEREUM') {
+        const chainLoadedKey = `${currentChain}_addresses_loaded`;
+        if (!localStorage.getItem(chainLoadedKey)) {
           saved = localStorage.getItem("ETHEREUM_ethAddress") || "";
-          localStorage.setItem(baseLoadedKey, '1');
+          localStorage.setItem(chainLoadedKey, '1');
           if (saved) {
             window.chainStorage.setItem("ethAddress", saved);
           }
@@ -6901,7 +8011,10 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     if (saved && typeof normalizeMultiLineValue === 'function') {
       saved = normalizeMultiLineValue(saved, 'address');
     }
-    if (saved) addrInput.value = saved;
+    if (saved) {
+      addrInput.value = saved;
+      persistSettingsAddress(window.chainManager?.getCurrentChain?.() || 'ETHEREUM', saved);
+    }
   }
 
   // Load custom RPCs
@@ -6912,8 +8025,11 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     if (window.chainManager) {
       const rpcs = window.chainManager.getRPCEndpoints();
       if (rpcs.length > 0) {
-        const saved = rpcs.join('\n');
+        const saved = normalizeMultiLineValue(rpcs.join('\n'), 'rpc');
         rpcInput.value = saved;
+        persistSettingsRPC(currentChain, saved, {
+          saveCustom: localStorage.getItem(`${currentChain}_customRPC`) !== null
+        });
         console.log(`[Initial Load] Loaded ${rpcs.length} RPCs for ${currentChain}:`, rpcs.slice(0, 2));
       }
     } else {
@@ -7096,9 +8212,15 @@ async function fetchPostMintActions(address, etherscanApiKey) {
     const persistCointoolMaxVmuPerTx = (val) => {
       const v = parseInt(val, 10);
       if (Number.isFinite(v) && v >= 1 && v <= MAX_VMU_PER_TX) {
+        const previous = localStorage.getItem("cointoolMaxVmuPerTx");
         localStorage.setItem("cointoolMaxVmuPerTx", String(v));
         if (typeof showToast === "function") showToast(`Cointool chunk size saved (${v} VMUs/tx)`, "success");
         markValidity("field-cointoolMaxVmuPerTx", true);
+        if (previous !== String(v)) {
+          try {
+            window.dispatchEvent(new CustomEvent("cointoolMaxVmuPerTxChanged", { detail: { value: v } }));
+          } catch (_) {}
+        }
       } else {
         if (typeof showToast === "function") showToast(`Chunk size must be between 1 and ${MAX_VMU_PER_TX}.`, "error");
         cointoolMaxVmuPerTxInput.value = String(getCointoolMaxVmuPerTx());
@@ -7248,7 +8370,7 @@ function isNonEmptyInput(id) {
   return !!el && el.value.trim().length > 0;
 }
 
-// --- Ethereum address validation helpers ---
+// --- EVM wallet address validation helpers ---
 function isValidEthAddress(addr){
   if (!addr || typeof addr !== 'string') return false;
   const s = addr.trim();
@@ -7265,12 +8387,13 @@ function validateEthAddressesField(){
   const fieldId = 'field-ethAddress';
   const el = document.getElementById('ethAddress');
   if (!el) return true;
-  const raw = (el.value || '').trim();
+  const raw = normalizeMultiLineValue(el.value || '', 'address');
+  el.value = raw;
   if (!raw) {
-    markValidity(fieldId, false, 'At least one Ethereum address is required.');
+    markValidity(fieldId, false, 'At least one wallet address is required.');
     return false;
   }
-  const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  const lines = splitMultiLineValue(raw, 'address');
   const invalid = [];
   for (let i = 0; i < lines.length; i++) {
     const a = lines[i];
@@ -7278,7 +8401,7 @@ function validateEthAddressesField(){
   }
   if (invalid.length) {
     const first = invalid[0];
-    const msg = `Invalid Ethereum address on line ${first.line}: ${first.value}`;
+    const msg = `Invalid EVM address on line ${first.line}: ${first.value}`;
     markValidity(fieldId, false, msg);
     return false;
   }
@@ -7289,12 +8412,12 @@ function validateEthAddressesField(){
 // Validate all required settings; returns boolean
 function validateSettings() {
   const okAddr  = isNonEmptyTextarea("ethAddress");
-  markValidity("field-ethAddress", okAddr, "At least one Ethereum address is required.");
+  markValidity("field-ethAddress", okAddr, "At least one wallet address is required.");
 
   // Custom RPC is optional - we have defaults for each chain
   // Only validate format if user has entered something
   const rpcText = document.getElementById("customRPC")?.value.trim() || "";
-  const okRPC = !rpcText || rpcText.split("\n").some(s => s.trim().startsWith("http"));
+  const okRPC = !rpcText || splitMultiLineValue(rpcText, 'rpc').some(s => s.startsWith("http"));
   markValidity("field-customRPC", okRPC, "Invalid RPC format. URLs must start with http or https.");
 
   const okKey   = isNonEmptyInput("etherscanApiKey");
@@ -7321,7 +8444,7 @@ window.addEventListener("DOMContentLoaded", validateSettings);
   el.addEventListener("blur", validateSettings);
 });
 
-// Validate Ethereum addresses on blur specifically for Address textarea
+// Validate wallet addresses on blur specifically for Address textarea
 (() => {
   const el = document.getElementById('ethAddress');
   if (!el) return;
@@ -7334,17 +8457,19 @@ window.addEventListener("DOMContentLoaded", validateSettings);
 
 async function scanMints() {
   console.log('[COINTOOL] scanMints() called. window.cointool=', !!window.cointool, 'window.cointool.scan=', typeof window.cointool?.scan);
-  const addressInput = document.getElementById("ethAddress").value.trim();
+  const addressInput = normalizeMultiLineValue(document.getElementById("ethAddress").value.trim(), 'address');
+  document.getElementById("ethAddress").value = addressInput;
   if (!addressInput) {
-    alert("Please enter at least one Ethereum address.");
+    alert("Please enter at least one wallet address.");
     return;
   }
-  const rpcInput = document.getElementById("customRPC").value.trim();
-  rpcEndpoints = rpcInput.split("\n").map(s => s.trim()).filter(Boolean);
+  const rpcInput = normalizeMultiLineValue(document.getElementById("customRPC").value.trim(), 'rpc');
+  document.getElementById("customRPC").value = rpcInput;
+  rpcEndpoints = splitMultiLineValue(rpcInput, 'rpc');
 
   const etherscanApiKey = document.getElementById("etherscanApiKey").value.trim();
   if (!etherscanApiKey) {
-    alert("Please enter an Etherscan API Key (works for all chains).");
+    alert("Please enter an Etherscan Multichain API key.");
     return;
   }
   saveUserPreferences(addressInput, rpcInput, etherscanApiKey);
@@ -7372,8 +8497,10 @@ async function scanMints() {
   dbInstance = window.cointoolDb || window.dbInstance || dbInstance;
   window.dbInstance = dbInstance;
 
-  // Refresh unified view: it groups proxies into batch rows of size up to
-  // cointoolMaxVmuPerTx for display.
+  if (window.__scanUnifiedActive) return;
+
+  // Standalone Cointool scans refresh here. Unified scans do one coordinated
+  // refresh after all selected scanner modules and optional dedupe complete.
   try { await window.refreshUnified?.(); } catch {}
   try { updateCalendar(); } catch {}
   try { updateSummaryStats(); } catch {}
@@ -7386,7 +8513,6 @@ async function scanMints() {
 // --- SCAN FUNCTION ---
 
 // --- INITIALIZATION & CALENDAR ---
-let calendarPicker;
 function setMaturityHeaderFilter(dateObj) {
   const formattedDate = luxon.DateTime.fromJSDate(dateObj).toFormat('yyyy LLL dd');
 
@@ -7427,6 +8553,10 @@ function setMaturityHeaderFilter(dateObj) {
   } catch {}
 }
 function updateCalendar() {
+  if (window._unifyWrappedCalendar && typeof window.updateUnifiedCalendar === "function" && window.updateCalendar !== updateCalendar) {
+    return window.updateUnifiedCalendar();
+  }
+
   getAllMints(dbInstance).then(allTokens => {
     const nowSec  = Math.floor(Date.now() / 1000);
     const dateMap = {};
@@ -7453,56 +8583,14 @@ function updateCalendar() {
       }
     }
 
-    // Preserve the current month/year view before destroying
-    let preservedYear = null;
-    let preservedMonth = null;
-    if (calendarPicker && calendarPicker.currentYear !== undefined && calendarPicker.currentMonth !== undefined) {
-      // Store the currently displayed month/year
-      preservedYear = calendarPicker.currentYear;
-      preservedMonth = calendarPicker.currentMonth;
-    }
-
-    if (calendarPicker) calendarPicker.destroy();
-    document.getElementById("calendar").style.display = 'block';
-
-    const calendarOptions = {
-      inline: true,
-      onDayCreate: function(dObj, dStr, fp, dayElem) {
-        const dateStr = dayElem.dateObj ? getLocalDateString(dayElem.dateObj) : "";
-        if (dateMap[dateStr]) {
-          const badge = document.createElement("span");
-          badge.textContent = dateMap[dateStr];
-          badge.style.cssText = "position:absolute;top:-2px;right:-2px;height:16px;line-height:16px;padding:0 4px;text-align:center;font-size:9px;background-color:#063d85;color:yellow;border-radius:4px;cursor:pointer;";
-          badge.addEventListener("click", function(e) {
-            e.stopPropagation();
-            setMaturityHeaderFilter(dayElem.dateObj);
-          });
-          dayElem.style.position = "relative";
-          dayElem.appendChild(badge);
-        }
-      },
-      onChange: function(selectedDates) {
-        if (selectedDates.length) {
-          setMaturityHeaderFilter(selectedDates[0]);
-        }
-      }
-      ,
-      onReady: function(selectedDates, dateStr, instance){
-        __fixFlatpickrHeader(instance);
-        // Restore preserved month/year after initialization
-        if (preservedYear !== null && preservedMonth !== null) {
-          instance.changeMonth(preservedMonth, false);
-          instance.changeYear(preservedYear);
-        }
-      },
-      onMonthChange: function(selectedDates, dateStr, instance){ __fixFlatpickrHeader(instance); },
-      onYearChange: function(selectedDates, dateStr, instance){ __fixFlatpickrHeader(instance); }
-    };
-
-    calendarPicker = flatpickr("#calendar", calendarOptions);
-
-    // keep the global pointer fresh
-    window._calendar = calendarPicker;
+    window.calendarController?.update?.(dateMap, {
+      hideOtherMonthDays: true,
+      onDateClick: setMaturityHeaderFilter,
+      onDateChange: setMaturityHeaderFilter,
+      onClear: null,
+      onMonthYearChange: null,
+      afterInteraction: null
+    });
   }).catch(err => {
     console.error("Error fetching mints for calendar update:", err);
   });
@@ -7529,7 +8617,8 @@ async function connectWallet() {
     
     if (!walletChainKey) {
       // Wallet is on unsupported chain
-      alert(`Your wallet is connected to an unsupported network (chain ID ${chainId}). Please switch to Ethereum or Base.`);
+      const supported = window.chainManager?.getChainList?.().map(chain => chain.name).join(', ') || 'a supported network';
+      alert(`Your wallet is connected to an unsupported network (chain ID ${chainId}). Please switch to ${supported}.`);
       // Ensure UI remains in disconnected state
       connectedAccount = null;
       window.connectedAccount = null;
@@ -7563,7 +8652,7 @@ async function connectWallet() {
     __updateWalletEyeSize();
 
     // keep UI in sync
-    // Note: chainChanged is now handled by networkSelector.js which will sync the app to match wallet's chain
+    // Note: chainChanged is now handled by networkSelectorWorking.js which will sync the app to match wallet's chain
     // We only need to listen for account changes here
     window.ethereum.removeAllListeners?.('accountsChanged');
     
@@ -7653,8 +8742,11 @@ async function connectWallet() {
         alert(`Stake withdraw submitted: ${tx.transactionHash}`);
       }
 
-      // Refresh the UI immediately
-      if (typeof window.refreshUnified === 'function') { try { await window.refreshUnified(); } catch {} }
+      markLocalClaimSubmittedForRows(row, {
+        action: 'stake-withdraw',
+        tx,
+        txType: 'XEN Stake withdraw'
+      });
     } catch (err) {
       console.error(err);
       alert(err?.message || "Stake withdraw failed.");
@@ -7740,8 +8832,12 @@ async function connectWallet() {
         alert(`Stake XENFT #${tokenId} end submitted: ${tx.transactionHash}`);
       }
 
-      // Refresh the merged view; the scan will later pick up the on-chain end action.
-      if (typeof window.refreshUnified === 'function') { try { await window.refreshUnified(); } catch {} }
+      markLocalClaimSubmittedForRows(row, {
+        ids: [tokenId],
+        action: 'stake-xenft-end',
+        tx,
+        txType: 'Stake XENFT end'
+      });
     } catch (err) {
       console.error(err);
       alert(err?.message || "Stake XENFT end failed.");
@@ -7776,7 +8872,12 @@ async function connectWallet() {
       } else {
         alert(`XENFT #${tokenId} claim submitted: ${tx.transactionHash}`);
       }
-      if (typeof window.refreshUnified === 'function') { try { await window.refreshUnified(); } catch {} }
+      markLocalClaimSubmittedForRows(row, {
+        ids: [tokenId],
+        action: 'claim',
+        tx,
+        txType: 'XENFT claim'
+      });
     } catch (err) {
       console.error(err);
       alert(err?.message || "XENFT claim failed.");
@@ -7800,13 +8901,20 @@ async function connectWallet() {
   //   - never-deployed proxies (FailedIds_Lost)
   // Includes FailedIds (claimable now) + matured recovered + headline-term ids
   // when the headline has matured.
-  const actionable = (typeof getActionableIdsForRow === 'function')
+  const allActionable = (typeof getActionableIdsForRow === 'function')
     ? getActionableIdsForRow(row) : [];
+  const actionable = action === 'mint'
+    ? allActionable
+    : getUnsubmittedActionableIdsForRow(row, allActionable);
   const mintableTransport = (typeof getMintableTransportForRow === 'function')
     ? getMintableTransportForRow(row) : { fIds: [], tIds: [] };
   const mintable = Array.from(new Set([...(mintableTransport.fIds || []), ...(mintableTransport.tIds || [])])).sort((a, b) => a - b);
 
   if (action !== 'mint' && actionable.length === 0) {
+    if (allActionable.length > 0) {
+      alert(`This row is already marked as submitted locally.\n\nRun a scan to confirm it on-chain, or call clearLocalClaimSubmissions() from the console if you need to retry before scanning.`);
+      return;
+    }
     alert(`Nothing claimable on this row right now.\n\n` +
       `Reasons VMUs may be excluded: not yet matured, proxy never deployed (mint-time revert), ` +
       `or already claimed/reminted. Check the Maturity Date cell tooltip for details.`);
@@ -7825,7 +8933,8 @@ async function connectWallet() {
   const reminted = Array.isArray(row.RecoveredMaturities)
     ? row.RecoveredMaturities.reduce((sum, g) => sum + ((g && Array.isArray(g.ids)) ? g.ids.length : 0), 0)
     : 0;
-  const onHeadline = actionable.length - failedIds.length - maturedRecovered.length;
+  const localSubmission = getLocalClaimSubmissionForRow(row, allActionable);
+  const onHeadline = Math.max(0, actionable.length - failedIds.length - maturedRecovered.length);
 
   let ids;
   // For new batch rows in mint mode: JIT-probe XEN.userMints + eth_getCode
@@ -7878,6 +8987,7 @@ async function connectWallet() {
     if (pendCount > 0)  excluded.push(`${pendCount} pending future maturity`);
     if (reminted > 0 && (reminted - maturedRecovered.length) > 0) excluded.push(`${reminted - maturedRecovered.length} reminted to a future date`);
     if (lostCount > 0)  excluded.push(`${lostCount} unrecoverable (proxy never deployed)`);
+    if (localSubmission?.submittedCount > 0) excluded.push(`${localSubmission.submittedCount} already submitted locally`);
     const exclNote = excluded.length > 0 ? `\n\nExcluded: ${excluded.join(', ')}.` : '';
     const proceed = confirm(
       `Of this batch's ${vmuCount} VMUs, ${actionable.length} ${actionable.length === 1 ? 'is' : 'are'} actionable now:\n\n` +
@@ -7918,7 +9028,15 @@ async function connectWallet() {
       w3
     });
   } else {
-    await sendCointoolTx({ ids, dataHex, salt, w3, action });
+    const submitted = await sendCointoolTx({ ids, dataHex, salt, w3, action });
+    for (const item of submitted) {
+      markLocalClaimSubmittedForRows(row, {
+        ids: item.ids,
+        action,
+        tx: item.tx,
+        txType: `CoinTool ${action}`
+      });
+    }
   }
 }
 
@@ -7961,14 +9079,29 @@ window.onload = async () => {
   try {
     dbInstance = await openDB();
     window.dbInstance = dbInstance;
-    const storedMints = await getAllMints(dbInstance);
-    populateTable(storedMints);
+
+    // The v4 Cointool schema stores raw per-proxy records. Unified view is
+    // responsible for grouping those into table rows. Building them here and
+    // then again inside refreshUnified() doubled hard-reload startup work for
+    // large wallets, so initialize the table shell and let unified_view do the
+    // single real load.
+    const usesProxyStore = !!dbInstance?.objectStoreNames?.contains?.('proxies');
+    window.__wenxenInitialDataLoading = usesProxyStore;
+    window.__wenxenUnifiedDataReady = !usesProxyStore;
+    if (usesProxyStore) {
+      populateTable([]);
+    } else {
+      const storedMints = await getAllMints(dbInstance);
+      populateTable(storedMints);
+      if (storedMints.length > 0) {
+        updateCalendar();
+      }
+    }
     ensureBulkBar();
     refreshBulkUI();
-    if (storedMints.length > 0) {
-      updateCalendar();
-    }
   } catch (err) {
+    window.__wenxenInitialDataLoading = false;
+    window.__wenxenUnifiedDataReady = true;
     console.error("Failed to initialize database:", err);
   }
 };
@@ -7988,19 +9121,19 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   if (window.chainManager) {
     const initChain = window.chainManager.getCurrentChain();
     if (initChain && !(initChain in rpcLastValuesByChain)) {
-      rpcLastValuesByChain[initChain] = window.chainManager.getRPCEndpoints().join('\n');
+      rpcLastValuesByChain[initChain] = normalizeMultiLineValue(window.chainManager.getRPCEndpoints().join('\n'), 'rpc');
     }
   }
 
   const fieldState = {
     customRPC: {
-      lastValue: (window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : "") || "",
+      lastValue: normalizeMultiLineValue((window.chainManager ? window.chainManager.getRPCEndpoints().join('\n') : "") || "", 'rpc'),
       lastValueByChain: rpcLastValuesByChain,
       lastBlurTime: 0,
       saveTimer: null
     },
     ethAddress: {
-      lastValue: (window.chainStorage ? window.chainStorage.getItem("ethAddress") : localStorage.getItem("ethAddress")) || "",
+      lastValue: normalizeMultiLineValue((window.chainStorage ? window.chainStorage.getItem("ethAddress") : localStorage.getItem("ethAddress")) || "", 'address'),
       lastBlurTime: 0,
       saveTimer: null
     },
@@ -8023,6 +9156,9 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   
   // Helper function to save field with duplicate prevention
   function saveField(fieldName, value, displayName) {
+    if (fieldName === 'customRPC') value = normalizeMultiLineValue(value, 'rpc');
+    if (fieldName === 'ethAddress') value = normalizeMultiLineValue(value, 'address');
+
     const now = Date.now();
     const state = fieldState[fieldName];
     
@@ -8095,10 +9231,11 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
       const focusChain = this.dataset.focusChain || currentChain;
       const lastManualValue = this.dataset.lastManualValue ?? this.value;
 
-      let valueToPersist = lastManualValue;
+      let valueToPersist = normalizeMultiLineValue(lastManualValue, 'rpc');
       if (!valueToPersist && this.value) {
-        valueToPersist = this.value;
+        valueToPersist = normalizeMultiLineValue(this.value, 'rpc');
       }
+      this.value = valueToPersist;
 
       delete this.dataset.focusChain;
       delete this.dataset.lastManualValue;
@@ -8111,7 +9248,7 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
       }
 
       if (window.chainManager) {
-        const rpcList = valueToPersist.split('\n').map(s => s.trim()).filter(Boolean);
+        const rpcList = splitMultiLineValue(valueToPersist, 'rpc');
         window.chainManager.saveRPCEndpoints(rpcList, targetChain);
         window.__setRpcLastValueForChain?.(targetChain, valueToPersist);
         showSaveStatus("Custom RPCs saved", true);
@@ -8125,6 +9262,7 @@ document.getElementById("connectWalletBtn").addEventListener("click", handleWall
   const ethAddressField = document.getElementById("ethAddress");
   if (ethAddressField) {
     ethAddressField.addEventListener("blur", function() {
+      this.value = normalizeMultiLineValue(this.value, 'address');
       // Save chain-specific addresses
       if (window.chainStorage) {
         window.chainStorage.setItem("ethAddress", this.value);
@@ -8217,9 +9355,8 @@ async function clearAllAppData() {
   const allDatabases = [
     // Legacy databases
     "DB_Cointool", "DB_Xenft", "DB_XenftStake", "DB_XenStake",
-    // New chain-specific databases
-    "ETH_DB_Cointool", "ETH_DB_Xenft", "ETH_DB_XenStake", "ETH_DB_XenftStake",
-    "BASE_DB_Cointool", "BASE_DB_Xenft", "BASE_DB_XenStake", "BASE_DB_XenftStake"
+    // Chain-specific databases
+    ...getAllChainDatabaseNames()
   ];
 
   // Delete all databases with proper error tracking
@@ -8306,14 +9443,45 @@ async function clearAllAppData() {
 
 
 // read all from a store
-function getAllFromStore(db, storeName) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const req = store.getAll();
-    req.onsuccess = e => resolve(e.target.result || []);
-    req.onerror = e => reject(e);
-  });
+async function getAllFromStore(db, storeName, batchSize = 500) {
+  const out = [];
+  let range = null;
+
+  while (true) {
+    const { rows, keys } = await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, "readonly");
+      const store = tx.objectStore(storeName);
+      const rowsReq = store.getAll(range, batchSize);
+      const keysReq = store.getAllKeys(range, batchSize);
+
+      let rows = null;
+      let keys = null;
+
+      const finish = () => {
+        if (rows && keys) resolve({ rows, keys });
+      };
+
+      rowsReq.onsuccess = e => {
+        rows = e.target.result || [];
+        finish();
+      };
+      keysReq.onsuccess = e => {
+        keys = e.target.result || [];
+        finish();
+      };
+      rowsReq.onerror = () => reject(rowsReq.error);
+      keysReq.onerror = () => reject(keysReq.error);
+      tx.onerror = () => reject(tx.error);
+    });
+
+    if (!rows.length) break;
+    out.push(...rows);
+    if (rows.length < batchSize || !keys.length) break;
+    range = IDBKeyRange.lowerBound(keys[keys.length - 1], true);
+    await yieldToUi();
+  }
+
+  return out;
 }
 
 // clear a store
@@ -8322,36 +9490,187 @@ function clearStore(db, storeName) {
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
     const req = store.clear();
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      if (storeName === "proxies") {
+        try {
+          if (typeof window.invalidateCointoolRenderCache === "function") {
+            window.invalidateCointoolRenderCache();
+          } else {
+            const chainKey = window.chainManager?.getCurrentChain?.() || "ETHEREUM";
+            localStorage.setItem(`${chainKey}_cointoolRenderCacheInvalidatedAt`, String(Date.now()));
+          }
+        } catch (_) {}
+      }
+      resolve();
+    };
     req.onerror = e => reject(e);
   });
 }
 
-// Fast bulk put - simple and efficient
-function bulkPut(db, storeName, items) {
-  return new Promise((resolve, reject) => {
-    if (!Array.isArray(items) || items.length === 0) return resolve();
+async function bulkPut(db, storeName, items, batchSize = 500) {
+  if (!Array.isArray(items) || items.length === 0) return;
 
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
+  let imported = 0;
+  for (let start = 0; start < items.length; start += batchSize) {
+    const batch = items.slice(start, start + batchSize);
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
 
-    // Process all items in a single transaction (much faster)
-    for (const item of items) {
-      // Quick fix for XENFT keyPath if needed
-      if (storeName === "xenfts" && !item.Xenft_id) {
-        if (item.tokenId) item.Xenft_id = item.tokenId;
-        else if (item.ID) item.Xenft_id = item.ID;
+      for (const item of batch) {
+        if (storeName === "xenfts") {
+          if (!item.tokenId && item.Xenft_id) item.tokenId = String(item.Xenft_id);
+          if (!item.Xenft_id) {
+            if (item.tokenId) item.Xenft_id = String(item.tokenId);
+            else if (item.ID) item.Xenft_id = String(item.ID).replace(/^xenft_/, '');
+          }
+        }
+
+        store.put(item);
       }
 
-      store.put(item);
+      tx.oncomplete = resolve;
+      tx.onerror = e => reject(e.target.error || e);
+    });
+    imported += batch.length;
+    await yieldToUi();
+  }
+
+  console.log(`[Import] ${storeName}: imported ${imported} items`);
+  if (storeName === "proxies") {
+    try {
+      if (typeof window.invalidateCointoolRenderCache === "function") {
+        window.invalidateCointoolRenderCache();
+      } else {
+        const chainKey = window.chainManager?.getCurrentChain?.() || "ETHEREUM";
+        localStorage.setItem(`${chainKey}_cointoolRenderCacheInvalidatedAt`, String(Date.now()));
+      }
+    } catch (_) {}
+  }
+}
+
+function parseJsonOffMainThread(text) {
+  if (window.wenxen?.workerClient?.isAvailable?.()) {
+    return window.wenxen.workerClient.run('parseJson', { text }, {
+      jobName: 'backup:parse',
+      meta: { bytes: text.length }
+    }).catch(error => {
+      if (/cancel|backup-import/i.test(error?.message || '')) throw error;
+      return JSON.parse(text);
+    });
+  }
+  return Promise.resolve(JSON.parse(text));
+}
+
+function formatBackupBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function updateBackupExportProgress(percent, message, detail = '') {
+  const wrap = document.getElementById('backupExportProgress');
+  const bar = document.getElementById('backupExportProgressBar');
+  const text = document.getElementById('backupExportProgressText');
+  const detailEl = document.getElementById('backupExportProgressDetail');
+  if (!wrap || !bar || !text) return;
+
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  wrap.hidden = false;
+  bar.style.width = `${safePercent}%`;
+  text.textContent = message || 'Preparing backup...';
+  if (detailEl) detailEl.textContent = detail || '';
+}
+
+function hideBackupExportProgress(delayMs = 0) {
+  const hide = () => {
+    const wrap = document.getElementById('backupExportProgress');
+    const bar = document.getElementById('backupExportProgressBar');
+    const detailEl = document.getElementById('backupExportProgressDetail');
+    if (wrap) wrap.hidden = true;
+    if (bar) bar.style.width = '0%';
+    if (detailEl) detailEl.textContent = '';
+  };
+  if (delayMs > 0) setTimeout(hide, delayMs);
+  else hide();
+}
+
+function isGzipBackupFile(file) {
+  const name = String(file?.name || '').toLowerCase();
+  const type = String(file?.type || '').toLowerCase();
+  if (name.endsWith('.gz') || name.endsWith('.gzip') || type.includes('gzip')) return true;
+  return false;
+}
+
+async function hasGzipMagicHeader(file) {
+  if (!file || typeof file.slice !== 'function') return false;
+  try {
+    const header = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+    return header.length >= 2 && header[0] === 0x1f && header[1] === 0x8b;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function readBackupFileText(file) {
+  const maybeGzip = isGzipBackupFile(file) || await hasGzipMagicHeader(file);
+  if (!maybeGzip) {
+    return file.text();
+  }
+
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('Compressed backup import is not supported by this browser. Use Chrome/Edge, or import an uncompressed .json backup.');
+  }
+
+  window.importProgress?.updateProgress?.(8, 'Decompressing compressed backup...');
+  const stream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+  const text = await new Response(stream).text();
+  window.wenxen?.perf?.set?.('lastBackupCompressedBytes', file.size || 0);
+  window.wenxen?.perf?.set?.('lastBackupDecompressedBytes', text.length || 0);
+  return text;
+}
+
+async function prepareBackupDownloadBlob(jsonBlob) {
+  const plain = {
+    blob: jsonBlob,
+    compressed: false,
+    compression: 'none',
+    extension: '.json',
+    pickerExtensions: ['.json'],
+    mimeType: 'application/json',
+    pickerDescription: 'JSON',
+    rawBytes: jsonBlob.size || 0,
+    downloadBytes: jsonBlob.size || 0
+  };
+
+  if (typeof CompressionStream !== 'function') {
+    console.warn('[Export] CompressionStream is not available; exporting uncompressed JSON backup.');
+    return plain;
+  }
+
+  try {
+    const stream = jsonBlob.stream().pipeThrough(new CompressionStream('gzip'));
+    const compressedBlob = await new Response(stream).blob();
+    if (!compressedBlob || !compressedBlob.size || compressedBlob.size >= jsonBlob.size) {
+      return plain;
     }
 
-    tx.oncomplete = () => {
-      console.log(`[Import] ${storeName}: imported ${items.length} items`);
-      resolve();
+    return {
+      blob: new Blob([compressedBlob], { type: 'application/gzip' }),
+      compressed: true,
+      compression: 'gzip',
+      extension: '.json.gz',
+      pickerExtensions: ['.gz'],
+      mimeType: 'application/gzip',
+      pickerDescription: 'Compressed JSON backup',
+      rawBytes: jsonBlob.size || 0,
+      downloadBytes: compressedBlob.size || 0
     };
-    tx.onerror = e => reject(e);
-  });
+  } catch (error) {
+    console.warn('[Export] Backup compression failed; exporting uncompressed JSON backup.', error);
+    return plain;
+  }
 }
 
 function getGasRefreshMs() {
@@ -8363,19 +9682,44 @@ function getGasRefreshMs() {
 // collect all settings on the Settings tab (+ optional throttle)
 function collectSettingsSnapshot() {
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
+  const chainKeys = getSupportedChainKeys();
+
+  const chainSettings = [];
+  const detectChainSetting = (key) => {
+    for (const chainKey of chainKeys) {
+      const prefix = window.chainManager?.getDatabasePrefix?.(chainKey) || getChainPrefix(chainKey);
+      if (key.startsWith(`${chainKey}_`)) {
+        return { chainKey, baseKey: key.slice(chainKey.length + 1) };
+      }
+      if (key.startsWith(`${prefix}_`)) {
+        return { chainKey, baseKey: key.slice(prefix.length + 1) };
+      }
+    }
+    return null;
+  };
 
   // Collect ALL localStorage data for complete backup
   const allLocalStorage = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key) {
-      allLocalStorage[key] = localStorage.getItem(key);
+      const value = localStorage.getItem(key);
+      allLocalStorage[key] = value;
+      const chainSetting = detectChainSetting(key);
+      if (chainSetting) {
+        chainSettings.push({
+          chainKey: chainSetting.chainKey,
+          baseKey: chainSetting.baseKey,
+          key,
+          value
+        });
+      }
     }
   }
 
   // Collect current form values with chain-aware RPC handling
   const formSettings = {
-    ethAddress: (document.getElementById("ethAddress")?.value ?? "").trim(),
+    ethAddress: normalizeMultiLineValue((document.getElementById("ethAddress")?.value ?? "").trim(), 'address'),
     // Don't export current RPC form value - let chain-specific localStorage handle it
     // customRPC: (document.getElementById("customRPC")?.value ?? "").trim(),
     etherscanApiKey: (document.getElementById("etherscanApiKey")?.value ?? "").trim(),
@@ -8393,6 +9737,7 @@ function collectSettingsSnapshot() {
   const settings = {
     // Complete localStorage backup
     localStorage: allLocalStorage,
+    chainSettings,
 
     // Current form values (might differ from localStorage)
     formValues: formSettings,
@@ -8434,12 +9779,19 @@ function applySettingsSnapshot(settings) {
 
   console.log('[Settings] Applying settings snapshot...');
 
+  const normalizeBackupSettingValue = (baseKey, value) => {
+    if (typeof value !== 'string') return value;
+    if (baseKey === 'ethAddress') return normalizeMultiLineValue(value, 'address');
+    if (baseKey === 'customRPC' || baseKey === 'customRPC_lastKnown') return normalizeMultiLineValue(value, 'rpc');
+    return value;
+  };
+
   // Handle new comprehensive format (v6+)
   if (settings.localStorage && typeof settings.localStorage === 'object') {
     console.log('[Settings] Restoring complete localStorage data...');
 
-    // Restore localStorage data, but preserve ALL existing chain-specific RPC data (ALL 7 CHAINS)
-    const allChains = ['ETHEREUM', 'BASE', 'AVALANCHE', 'BSC', 'MOONBEAM', 'POLYGON', 'OPTIMISM'];
+    // Restore localStorage data, but preserve existing chain-specific RPC data.
+    const allChains = getSupportedChainKeys();
     const preservedRPCs = {};
 
     // Preserve ALL chain-specific RPC data before restore
@@ -8454,16 +9806,32 @@ function applySettingsSnapshot(settings) {
 
     Object.entries(settings.localStorage).forEach(([key, value]) => {
       try {
+        const chainSetting = detectChainSetting(key);
         // Skip restoring ANY chain-specific RPC data to prevent cross-contamination
-        if (key.endsWith('_customRPC')) {
+        if (chainSetting?.baseKey === 'customRPC') {
           console.log(`[Settings] Skipping restore of ${key} to prevent cross-contamination`);
           return;
         }
-        localStorage.setItem(key, value);
+        localStorage.setItem(key, chainSetting ? normalizeBackupSettingValue(chainSetting.baseKey, value) : value);
       } catch (e) {
         console.warn(`[Settings] Failed to restore localStorage key: ${key}`, e);
       }
     });
+
+    if (Array.isArray(settings.chainSettings)) {
+      for (const item of settings.chainSettings) {
+        if (!item || !item.chainKey || !item.baseKey) continue;
+        if (!allChains.includes(item.chainKey)) continue;
+        const targetKey = `${item.chainKey}_${item.baseKey}`;
+        if (item.baseKey === 'customRPC' && preservedRPCs[targetKey]) continue;
+        const value = normalizeBackupSettingValue(item.baseKey, item.value ?? '');
+        try {
+          localStorage.setItem(targetKey, value);
+        } catch (e) {
+          console.warn(`[Settings] Failed to restore chain setting: ${targetKey}`, e);
+        }
+      }
+    }
 
     // Restore all preserved RPC data
     Object.entries(preservedRPCs).forEach(([rpcKey, rpcData]) => {
@@ -8473,27 +9841,53 @@ function applySettingsSnapshot(settings) {
 
     // Apply form values if available
     if (settings.formValues) {
+      const formChain = settings.selectedChain || settings.exportedChain || window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
       const setVal = (id, v) => {
         const el = document.getElementById(id);
+        if (id === 'ethAddress') v = normalizeMultiLineValue(v || '', 'address');
+        if (id === 'customRPC') v = normalizeMultiLineValue(v || '', 'rpc');
         if (el && v !== undefined && v !== null) el.value = v;
+        return v ?? "";
       };
-      setVal("ethAddress", settings.formValues.ethAddress);
+      const restoredFormAddress = setVal("ethAddress", settings.formValues.ethAddress);
+      if (restoredFormAddress) {
+        try {
+          localStorage.setItem(`${formChain}_ethAddress`, restoredFormAddress);
+          if (formChain === 'ETHEREUM') localStorage.setItem('ethAddress', restoredFormAddress);
+        } catch (_) {}
+      }
       // Don't restore customRPC form field - let chain manager load chain-specific RPCs
       // setVal("customRPC", settings.formValues.customRPC);
-      setVal("etherscanApiKey", settings.formValues.etherscanApiKey);
-      setVal("chunkSize", settings.formValues.chunkSize);
-      setVal("cointoolBatchSize", settings.formValues.cointoolBatchSize);
-      setVal("cointoolBatchDelay", settings.formValues.cointoolBatchDelay);
-      setVal("cointoolMaxVmuPerTx", settings.formValues.cointoolMaxVmuPerTx);
-      setVal("autoRescanDelay", settings.formValues.autoRescanDelay);
-      setVal("rescanBlockDepth", settings.formValues.rescanBlockDepth);
-      setVal("gasRefreshSeconds", settings.formValues.gasRefreshSeconds);
-      setVal("mintTermDays", settings.formValues.mintTermDays);
+      const restoredApiKey = setVal("etherscanApiKey", settings.formValues.etherscanApiKey);
+      if (restoredApiKey) localStorage.setItem("etherscanApiKey", restoredApiKey);
+
+      const persistFormSetting = (id, fallback = "") => {
+        const restored = setVal(id, settings.formValues[id]);
+        if (restored !== undefined && restored !== null && String(restored).length) {
+          localStorage.setItem(id, String(restored));
+          return restored;
+        }
+        if (fallback !== "") {
+          localStorage.setItem(id, String(fallback));
+        }
+        return restored;
+      };
+
+      persistFormSetting("chunkSize");
+      persistFormSetting("cointoolBatchSize");
+      persistFormSetting("cointoolBatchDelay");
+      persistFormSetting("cointoolMaxVmuPerTx");
+      persistFormSetting("autoRescanDelay", "120");
+      persistFormSetting("rescanBlockDepth", "1000");
+      persistFormSetting("gasRefreshSeconds");
+      const restoredMintTerm = setVal("mintTermDays", settings.formValues.mintTermDays);
+      if (restoredMintTerm) localStorage.setItem(`${formChain}_mintTermDays`, String(restoredMintTerm));
 
       // Restore auto-rescan checkbox
       const autoRescanCheckbox = document.getElementById("autoRescanEnabled");
       if (autoRescanCheckbox && settings.formValues.autoRescanEnabled !== undefined) {
         autoRescanCheckbox.checked = settings.formValues.autoRescanEnabled;
+        localStorage.setItem("autoRescanEnabled", String(settings.formValues.autoRescanEnabled));
       }
     }
 
@@ -8515,7 +9909,7 @@ function applySettingsSnapshot(settings) {
         const rpcTextarea = document.getElementById('customRPC');
         if (rpcTextarea) {
           const chainRPCs = window.chainManager.getRPCEndpoints();
-          const rpcString = chainRPCs.join('\n');
+          const rpcString = normalizeMultiLineValue(chainRPCs.join('\n'), 'rpc');
           rpcTextarea.value = rpcString;
           window.__setRpcLastValueForChain?.(window.chainManager.getCurrentChain(), rpcString);
           console.log(`[Import] Loaded ${chainRPCs.length} ${currentChainName} RPCs into textarea after import`);
@@ -8535,9 +9929,15 @@ function applySettingsSnapshot(settings) {
   // Handle legacy format (backward compatibility)
   console.log('[Settings] Applying legacy settings format...');
   const targetChain = settings.selectedChain || window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainPrefix = targetChain === 'BASE' ? 'BASE_' : (targetChain === 'AVALANCHE' ? 'AVALANCHE_' : 'ETHEREUM_');
+  const chainPrefix = `${targetChain}_`;
 
-  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'ethAddress') v = normalizeMultiLineValue(v || '', 'address');
+    if (id === 'customRPC') v = normalizeMultiLineValue(v || '', 'rpc');
+    el.value = v ?? "";
+  };
   setVal("ethAddress", settings.ethAddress);
   // Don't restore customRPC form field for legacy format either
   // setVal("customRPC", settings.customRPC);
@@ -8551,24 +9951,26 @@ function applySettingsSnapshot(settings) {
 
   // Save addresses with chain prefix
   if (typeof settings.ethAddress === "string") {
+    const addresses = normalizeMultiLineValue(settings.ethAddress, 'address');
     if (window.chainStorage) {
-      window.chainStorage.setItem("ethAddress", settings.ethAddress);
+      window.chainStorage.setItem("ethAddress", addresses);
     } else {
-      localStorage.setItem("ethAddress", settings.ethAddress);
+      localStorage.setItem("ethAddress", addresses);
     }
   }
   if (typeof settings.customRPC === "string") {
+    const customRPC = normalizeMultiLineValue(settings.customRPC, 'rpc');
     // Save chain-specific customRPC
     if (window.chainManager) {
-      const rpcList = settings.customRPC.split('\n').filter(Boolean);
+      const rpcList = splitMultiLineValue(customRPC, 'rpc');
       window.chainManager.saveRPCEndpoints(rpcList, targetChain);
-      window.__setRpcLastValueForChain?.(targetChain, settings.customRPC);
+      window.__setRpcLastValueForChain?.(targetChain, customRPC);
     } else {
       const customKey = chainPrefix + "customRPC";
-      localStorage.setItem(customKey, settings.customRPC);
+      localStorage.setItem(customKey, customRPC);
       localStorage.setItem(`${targetChain}_customRPC_source`, targetChain);
-      localStorage.setItem(`${targetChain}_customRPC_lastKnown`, settings.customRPC);
-      window.__setRpcLastValueForChain?.(targetChain, settings.customRPC);
+      localStorage.setItem(`${targetChain}_customRPC_lastKnown`, customRPC);
+      window.__setRpcLastValueForChain?.(targetChain, customRPC);
     }
   }
   if (typeof settings.etherscanApiKey === "string") localStorage.setItem("etherscanApiKey", settings.etherscanApiKey);
@@ -8687,7 +10089,9 @@ function applySettingsSnapshot(settings) {
       const rpcTextarea = document.getElementById('customRPC');
       if (rpcTextarea) {
         const chainRPCs = window.chainManager.getRPCEndpoints();
-        rpcTextarea.value = chainRPCs.join('\n');
+        const rpcString = normalizeMultiLineValue(chainRPCs.join('\n'), 'rpc');
+        rpcTextarea.value = rpcString;
+        window.__setRpcLastValueForChain?.(window.chainManager.getCurrentChain(), rpcString);
         console.log(`[Import Legacy] Loaded ${chainRPCs.length} ${currentChainName} RPCs into textarea after legacy import`);
       }
 
@@ -8701,7 +10105,7 @@ function applySettingsSnapshot(settings) {
 }
 
 // Export: bundles CointoolDB + DB_Xenft + Settings
-function formatBackupFileName(now = new Date()){
+function formatBackupFileName(now = new Date(), extension = ".json"){
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sept","Oct","Nov","Dec"]; // NOTE: "Sept" per request
   const y = now.getFullYear();
   const m = months[now.getMonth()];
@@ -8712,161 +10116,93 @@ function formatBackupFileName(now = new Date()){
   const mm = String(now.getMinutes()).padStart(2, "0");
   const ss = String(now.getSeconds()).padStart(2, "0");
   const suffix = am ? "AM" : "PM";
-  return `wenxen-backup-${y}-${m}-${d}_${h}-${mm}-${ss}_${suffix}.json`;
+  const ext = String(extension || ".json").startsWith(".") ? extension : `.${extension}`;
+  return `wenxen-backup-${y}-${m}-${d}_${h}-${mm}-${ss}_${suffix}${ext}`;
 }
-async function exportBackup() {
+async function exportBackup(options = {}) {
+  const backupExportStarted = performance?.now?.() || Date.now();
+  const finishBackupExportMetric = () => {
+    window.wenxen?.perf?.set?.('lastBackupExportMs', Math.round((performance?.now?.() || Date.now()) - backupExportStarted));
+  };
+  const reportProgress = (percent, message, detail = '') => {
+    if (typeof options.onProgress === 'function') {
+      options.onProgress(percent, message, detail);
+    }
+  };
   console.log(`Exporting backup for ALL chains`);
+  reportProgress(1, 'Preparing backup...', 'Checking available databases');
 
   const allDatabases = [];
+  let existingDatabaseNames = null;
+  if (typeof indexedDB.databases === 'function') {
+    for (let attempt = 0; attempt < 3 && !existingDatabaseNames; attempt++) {
+      try {
+        existingDatabaseNames = new Set((await indexedDB.databases()).map(db => db.name).filter(Boolean));
+      } catch (error) {
+        console.warn(`[Export] Could not enumerate existing databases (attempt ${attempt + 1}); retrying:`, error);
+        await yieldToUi();
+      }
+    }
+  }
+  if (!existingDatabaseNames) {
+    existingDatabaseNames = new Set();
+    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    const currentDbNames = getDatabaseNamesForChain(currentChain);
+    if (window.cointoolDb || window.dbInstance) existingDatabaseNames.add(currentDbNames.cointool);
+    console.warn('[Export] Database enumeration unavailable; exporting only currently open databases to avoid creating empty chain databases.');
+  }
 
   // Define all database names for all chains (ALL 7 CHAINS)
-  const chains = ['ETHEREUM', 'BASE', 'AVALANCHE', 'BSC', 'MOONBEAM', 'POLYGON', 'OPTIMISM'];
-  const dbTypes = [
-    { suffix: 'DB_Cointool', version: 4, stores: ['proxies', 'scanState'] },
-    { suffix: 'DB_Xenft', version: 3, stores: ['xenfts', 'scanState', 'processProgress'] },
-    { suffix: 'DB_XenftStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] },
-    { suffix: 'DB_XenStake', version: 2, stores: ['stakes', 'scanState', 'processProgress'] }
+  const chains = getSupportedChainKeys();
+  const dbTypes = window.databaseSchemaRegistry?.getExportDbTypes?.() || [
+    { key: 'cointool', version: 5, stores: ['proxies', 'scanState', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+    { key: 'xenft', version: 5, stores: ['xenfts', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+    { key: 'xenft_stake', version: 3, stores: ['stakes', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] },
+    { key: 'xen_stake', version: 3, stores: ['stakes', 'scanState', 'processProgress', 'summaryByType', 'summaryByStatus', 'summaryByDay', 'summaryByOwner', 'summaryMetadata'] }
   ];
 
   // Export data from all chains
+  const totalDbCandidates = Math.max(1, chains.length * dbTypes.length);
+  let processedDbCandidates = 0;
   for (const chain of chains) {
-    // Get proper chain prefix for each chain
-    let chainPrefix;
-    switch (chain) {
-      case 'ETHEREUM': chainPrefix = 'ETH_'; break;
-      case 'BASE': chainPrefix = 'BASE_'; break;
-      case 'AVALANCHE': chainPrefix = 'AVAX_'; break;
-      case 'BSC': chainPrefix = 'BSC_'; break;
-      case 'MOONBEAM': chainPrefix = 'GLMR_'; break;
-      case 'POLYGON': chainPrefix = 'POL_'; break;
-      case 'OPTIMISM': chainPrefix = 'OPT_'; break;
-      default: chainPrefix = 'ETH_';
-    }
+    const chainDbNames = getDatabaseNamesForChain(chain);
     
     for (const dbType of dbTypes) {
-      const dbName = chainPrefix + dbType.suffix;
+      const dbName = chainDbNames[dbType.key];
+      const dbProgress = 5 + (processedDbCandidates / totalDbCandidates) * 40;
+      reportProgress(dbProgress, 'Reading backup data...', dbName);
+      if (existingDatabaseNames && !existingDatabaseNames.has(dbName)) {
+        processedDbCandidates++;
+        continue;
+      }
       
       try {
         console.log(`Attempting to export ${dbName}...`);
         
-        // Special handling for different database modules
         let db;
         let storeData = {};
-        
-        if (dbType.suffix === 'DB_Cointool') {
-          // Cointool database
-          try {
-            db = await openDatabaseByName(dbName);
-          } catch {
-            // Skip if doesn't exist
-            console.log(`${dbName} does not exist, skipping`);
-            continue;
-          }
-          
+
+        try {
+          db = await openExistingDatabaseByName(dbName);
+        } catch {
+          console.log(`${dbName} does not exist, skipping`);
+          continue;
+        }
+
+        try {
           for (const storeName of dbType.stores) {
+            if (!db.objectStoreNames.contains(storeName)) {
+              storeData[storeName] = [];
+              continue;
+            }
             try {
               storeData[storeName] = await getAllFromStore(db, storeName);
             } catch {
               storeData[storeName] = [];
             }
           }
-        } else if (dbType.suffix === 'DB_Xenft') {
-          // XENFT database uses different API
-          if (window.xenft?.openDB && window.xenft?.getAll) {
-            // Need to temporarily switch chain for xenft module
-            const originalChain = window.chainManager?.getCurrentChain();
-            if (window.chainManager?.setChain) {
-              window.chainManager.setChain(chain, false);
-            }
-
-            try {
-              db = await window.xenft.openDB();
-
-              // Export all stores for XENFT database
-              storeData.xenfts = await window.xenft.getAll(db);
-
-              // Also export scanState and processProgress
-              for (const storeName of ['scanState', 'processProgress']) {
-                try {
-                  storeData[storeName] = await getAllFromStore(db, storeName);
-                } catch {
-                  storeData[storeName] = [];
-                }
-              }
-            } catch {
-              // Initialize with empty data if database doesn't exist
-              storeData.xenfts = [];
-              storeData.scanState = [];
-              storeData.processProgress = [];
-            }
-
-            // Restore original chain
-            if (originalChain && window.chainManager?.setChain) {
-              window.chainManager.setChain(originalChain, false);
-            }
-          } else {
-            continue;
-          }
-        } else if (dbType.suffix === 'DB_XenftStake') {
-          // XENFT Stake database
-          if (window.xenftStake?.openDB) {
-            // Need to temporarily switch chain
-            const originalChain = window.chainManager?.getCurrentChain();
-            if (window.chainManager?.setChain) {
-              window.chainManager.setChain(chain, false);
-            }
-            
-            try {
-              db = await window.xenftStake.openDB();
-              for (const storeName of dbType.stores) {
-                try {
-                  storeData[storeName] = await getAllFromStore(db, storeName);
-                } catch {
-                  storeData[storeName] = [];
-                }
-              }
-            } catch {
-              console.log(`Could not open ${dbName}`);
-              continue;
-            }
-            
-            // Restore original chain
-            if (originalChain && window.chainManager?.setChain) {
-              window.chainManager.setChain(originalChain, false);
-            }
-          } else {
-            continue;
-          }
-        } else if (dbType.suffix === 'DB_XenStake') {
-          // XEN Stake database
-          if (window.xenStake?.openDB) {
-            // Need to temporarily switch chain
-            const originalChain = window.chainManager?.getCurrentChain();
-            if (window.chainManager?.setChain) {
-              window.chainManager.setChain(chain, false);
-            }
-            
-            try {
-              db = await window.xenStake.openDB();
-              for (const storeName of dbType.stores) {
-                try {
-                  storeData[storeName] = await getAllFromStore(db, storeName);
-                } catch {
-                  storeData[storeName] = [];
-                }
-              }
-            } catch {
-              console.log(`Could not open ${dbName}`);
-              continue;
-            }
-            
-            // Restore original chain
-            if (originalChain && window.chainManager?.setChain) {
-              window.chainManager.setChain(originalChain, false);
-            }
-          } else {
-            continue;
-          }
+        } finally {
+          try { db.close(); } catch {}
         }
         
         // Only add if we have some data
@@ -8883,8 +10219,11 @@ async function exportBackup() {
           });
           console.log(`Successfully exported ${dbName}`);
         }
+        await yieldToUi();
       } catch (e) {
         console.log(`Error exporting ${dbName}:`, e);
+      } finally {
+        processedDbCandidates++;
       }
     }
   }
@@ -8893,6 +10232,10 @@ async function exportBackup() {
   // before chain prefixes (pre-2025 schema). We open it without specifying
   // a version so we don't trigger a schema upgrade on a DB we don't own.
   try {
+    reportProgress(47, 'Checking legacy backup data...', 'DB_Cointool');
+    if (existingDatabaseNames && !existingDatabaseNames.has("DB_Cointool")) {
+      throw new Error("Legacy DB_Cointool not present");
+    }
     const legacyDb = await new Promise((resolve, reject) => {
       const req = indexedDB.open("DB_Cointool");
       req.onsuccess = e => resolve(e.target.result);
@@ -8923,6 +10266,13 @@ async function exportBackup() {
   // the dataset crosses V8's max string length (~512MB). Stream item-by-item
   // so the largest individual string is one IDB record.
   const blobParts = [];
+  const totalRecordItems = Math.max(1, allDatabases.reduce((sum, dbDef) => {
+    return sum + Object.values(dbDef.stores || {}).reduce((storeSum, items) => {
+      return storeSum + (Array.isArray(items) ? items.length : 1);
+    }, 0);
+  }, 0));
+  let writtenRecordItems = 0;
+  reportProgress(52, 'Building backup file...', `${allDatabases.length} database(s)`);
   blobParts.push(`{"fileType":"wenxen-backup","version":6`);
   blobParts.push(`,"exportedAt":${JSON.stringify(new Date().toISOString())}`);
   blobParts.push(`,"exportedChain":"ALL"`);
@@ -8948,9 +10298,16 @@ async function exportBackup() {
         for (let i = 0; i < items.length; i++) {
           if (i > 0) blobParts.push(",");
           blobParts.push(JSON.stringify(items[i]));
+          writtenRecordItems++;
+          if (i > 0 && i % 500 === 0) {
+            const buildProgress = 52 + (writtenRecordItems / totalRecordItems) * 33;
+            reportProgress(buildProgress, 'Building backup file...', `${dbDef.name} / ${storeName}: ${writtenRecordItems.toLocaleString()} record(s)`);
+            await yieldToUi();
+          }
         }
         blobParts.push("]");
       } else {
+        writtenRecordItems++;
         blobParts.push(JSON.stringify(items ?? null));
       }
     }
@@ -8958,29 +10315,48 @@ async function exportBackup() {
   }
   blobParts.push("]}");
 
-  const blob = new Blob(blobParts, { type: "application/json" });
-  const fileName = formatBackupFileName(new Date());
+  const jsonBlob = new Blob(blobParts, { type: "application/json" });
+  reportProgress(88, 'Compressing backup...', `${formatBackupBytes(jsonBlob.size)} before compression`);
+  await waitForNextPaint();
+  const backupFile = await prepareBackupDownloadBlob(jsonBlob);
+  const blob = backupFile.blob;
+  const fileName = formatBackupFileName(new Date(), backupFile.extension);
+  const compressionNote = backupFile.compressed
+    ? `Compressed backup from ${formatBackupBytes(backupFile.rawBytes)} to ${formatBackupBytes(backupFile.downloadBytes)}`
+    : `Exporting uncompressed backup (${formatBackupBytes(backupFile.rawBytes)})`;
+  console.log(`[Export] ${compressionNote}`);
+  reportProgress(94, 'Preparing download...', compressionNote);
+  window.wenxen?.perf?.set?.('lastBackupCompression', backupFile.compression);
+  window.wenxen?.perf?.set?.('lastBackupRawBytes', backupFile.rawBytes);
+  window.wenxen?.perf?.set?.('lastBackupDownloadBytes', backupFile.downloadBytes);
 
   // save picker → web share → anchor fallback
   // Note: File System Access API (showSaveFilePicker) saves directly to user's chosen location
   // and won't appear in Chrome's Downloads list - this is correct behavior
   if (typeof window.showSaveFilePicker === "function") {
     try {
+      reportProgress(96, 'Waiting for save location...', fileName);
       const handle = await window.showSaveFilePicker({
         suggestedName: fileName,
-        types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+        types: [{ description: backupFile.pickerDescription, accept: { [backupFile.mimeType]: backupFile.pickerExtensions } }]
       });
       const writable = await handle.createWritable();
+      reportProgress(98, 'Saving backup...', `${fileName} (${formatBackupBytes(blob.size)})`);
       await writable.write(blob);
       await writable.close();
+      reportProgress(100, 'Backup export complete', `${fileName} (${formatBackupBytes(blob.size)})`);
+      finishBackupExportMetric();
       return;
     } catch (_) {}
   }
   if (typeof navigator.canShare === "function" && typeof navigator.share === "function") {
     try {
-      const file = new File([blob], fileName, { type: "application/json" });
+      const file = new File([blob], fileName, { type: backupFile.mimeType });
       if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Mint Scanner Backup", text: "Mint Scanner backup file" });
+        reportProgress(98, 'Opening share sheet...', `${fileName} (${formatBackupBytes(blob.size)})`);
+        await navigator.share({ files: [file], title: "WenXen Backup", text: "WenXen backup file" });
+        reportProgress(100, 'Backup export complete', `${fileName} (${formatBackupBytes(blob.size)})`);
+        finishBackupExportMetric();
         return;
       }
     } catch (_) {}
@@ -8994,6 +10370,8 @@ async function exportBackup() {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+  reportProgress(100, 'Backup export complete', `${fileName} (${formatBackupBytes(blob.size)})`);
+  finishBackupExportMetric();
 }
 
 // Cleanup incorrectly named databases (with hyphens)
@@ -9066,14 +10444,19 @@ async function checkIfMigrationNeeded() {
 async function importBackupFromFile(file) {
   console.log('[Import] Function called with file:', file?.name);
   if (!file) return;
+  const backupImportStarted = performance?.now?.() || Date.now();
+  const finishBackupImportMetric = () => {
+    window.wenxen?.perf?.set?.('lastBackupImportMs', Math.round((performance?.now?.() || Date.now()) - backupImportStarted));
+  };
 
   // Show progress splash immediately
   window.importProgress.show();
   window.importProgress.updateProgress(5, 'Reading backup file...');
+  window.wenxen?.workerClient?.cancelAll?.('backup-import');
 
   try {
-    console.log('[Import] Reading file text...');
-    const text = await file.text();
+    console.log('[Import] Reading backup file...');
+    const text = await readBackupFileText(file);
     console.log('[Import] File text read, length:', text.length);
 
     window.importProgress.updateProgress(10, 'Parsing backup data...');
@@ -9081,7 +10464,7 @@ async function importBackupFromFile(file) {
     let data;
     try {
       console.log('[Import] Parsing JSON...');
-      data = JSON.parse(text);
+      data = await parseJsonOffMainThread(text);
       console.log('[Import] JSON parsed successfully, version:', data?.version, 'fileType:', data?.fileType);
       window.importProgress.updateProgress(15, 'Backup file validated successfully');
     }
@@ -9112,20 +10495,7 @@ async function importBackupFromFile(file) {
       // Delete all chain-specific databases for complete restore (ALL 7 CHAINS)
       window.importProgress.updateProgress(30, 'Clearing existing databases...');
       const allDatabases = [
-        // Ethereum
-        'ETH_DB_Cointool', 'ETH_DB_Xenft', 'ETH_DB_XenftStake', 'ETH_DB_XenStake',
-        // Base
-        'BASE_DB_Cointool', 'BASE_DB_Xenft', 'BASE_DB_XenftStake', 'BASE_DB_XenStake',
-        // Avalanche
-        'AVAX_DB_Cointool', 'AVAX_DB_Xenft', 'AVAX_DB_XenftStake', 'AVAX_DB_XenStake',
-        // BSC (BNB Smart Chain)
-        'BSC_DB_Cointool', 'BSC_DB_Xenft', 'BSC_DB_XenftStake', 'BSC_DB_XenStake',
-        // Moonbeam
-        'GLMR_DB_Cointool', 'GLMR_DB_Xenft', 'GLMR_DB_XenftStake', 'GLMR_DB_XenStake',
-        // Polygon
-        'POL_DB_Cointool', 'POL_DB_Xenft', 'POL_DB_XenftStake', 'POL_DB_XenStake',
-        // Optimism
-        'OPT_DB_Cointool', 'OPT_DB_Xenft', 'OPT_DB_XenftStake', 'OPT_DB_XenStake',
+        ...getAllChainDatabaseNames(),
         // Legacy names that might exist
         'DB_Cointool', 'DB_Xenft', 'DB_XenftStake', 'DB_XenStake'
       ];
@@ -9211,6 +10581,7 @@ async function importBackupFromFile(file) {
       const name = dbDef?.name;
       const stores = dbDef?.stores || {};
       const chain = dbDef?.chain;
+      const summaryStores = ["summaryByType", "summaryByStatus", "summaryByDay", "summaryByOwner", "summaryMetadata"];
 
       // Check if this is an old database name or legacy chain
       const isOldDatabase = name === "DB_Cointool" || name === "DB_Xenft" ||
@@ -9231,7 +10602,10 @@ async function importBackupFromFile(file) {
           const db = await openDatabaseByName(name);
           await clearStore(db, "proxies").catch(()=>{});
           await clearStore(db, "scanState").catch(()=>{});
-          // The Cointool DB schema migrated from `mints` (v3) to `proxies` (v4).
+          for (const summaryStore of summaryStores) {
+            await clearStore(db, summaryStore).catch(() => {});
+          }
+          // The Cointool DB schema migrated from `mints` (v3) to `proxies` (v4+).
           // Restore whichever is present in the backup; legacy `mints` data is
           // shape-incompatible with the new schema, so warn the user that a
           // rescan is needed instead of writing junk into the proxies store.
@@ -9242,6 +10616,9 @@ async function importBackupFromFile(file) {
             console.warn(`[Import] ${name}: backup contains legacy 'mints' data (${stores.mints.length} rows). The Cointool schema changed - rescan is required to repopulate the proxies store.`);
           }
           await bulkPut(db, "scanState", stores.scanState || []);
+          for (const summaryStore of summaryStores) {
+            await bulkPut(db, summaryStore, stores[summaryStore] || []);
+          }
           console.log(`[Import] Imported ${name} with ${proxies.length} proxies`);
         }
 
@@ -9250,6 +10627,9 @@ async function importBackupFromFile(file) {
           await clearStore(db, "xenfts").catch(()=>{});
           await clearStore(db, "scanState").catch(()=>{});
           await clearStore(db, "processProgress").catch(()=>{});
+          for (const summaryStore of summaryStores) {
+            await clearStore(db, summaryStore).catch(() => {});
+          }
 
           const xenftData = stores.xenfts || stores.mints || stores.xenft || [];
           // Ensure each item has Xenft_id field (the correct keyPath)
@@ -9268,6 +10648,9 @@ async function importBackupFromFile(file) {
           }
           await bulkPut(db, "scanState", stores.scanState || []);
           await bulkPut(db, "processProgress", stores.processProgress || []);
+          for (const summaryStore of summaryStores) {
+            await bulkPut(db, summaryStore, stores[summaryStore] || []);
+          }
           console.log(`[Import] Imported ${processedData.length} XENFTs to ${name} with scan state`);
         }
         else if (name.endsWith("DB_XenftStake")) {
@@ -9275,9 +10658,15 @@ async function importBackupFromFile(file) {
           await clearStore(db, "stakes").catch(() => {});
           await clearStore(db, "scanState").catch(() => {});
           await clearStore(db, "processProgress").catch(() => {});
+          for (const summaryStore of summaryStores) {
+            await clearStore(db, summaryStore).catch(() => {});
+          }
           await bulkPut(db, "stakes", stores.stakes || []);
           await bulkPut(db, "scanState", stores.scanState || []);
           await bulkPut(db, "processProgress", stores.processProgress || []);
+          for (const summaryStore of summaryStores) {
+            await bulkPut(db, summaryStore, stores[summaryStore] || []);
+          }
           console.log(`[Import] Imported ${(stores.stakes || []).length} XENFT stakes to ${name} with scan state`);
         }
         else if (name.endsWith("DB_XenStake")) {
@@ -9285,9 +10674,15 @@ async function importBackupFromFile(file) {
           await clearStore(db, "stakes").catch(() => {});
           await clearStore(db, "scanState").catch(() => {});
           await clearStore(db, "processProgress").catch(() => {});
+          for (const summaryStore of summaryStores) {
+            await clearStore(db, summaryStore).catch(() => {});
+          }
           await bulkPut(db, "stakes", stores.stakes || []);
           await bulkPut(db, "scanState", stores.scanState || []);
           await bulkPut(db, "processProgress", stores.processProgress || []);
+          for (const summaryStore of summaryStores) {
+            await bulkPut(db, summaryStore, stores[summaryStore] || []);
+          }
           console.log(`[Import] Imported ${(stores.stakes || []).length} XEN stakes to ${name}`);
         }
         } catch (dbError) {
@@ -9310,7 +10705,7 @@ async function importBackupFromFile(file) {
           if (proxies.length > 0) {
             await bulkPut(legacyDb, "proxies", proxies);
           } else if (Array.isArray(stores.mints) && stores.mints.length > 0) {
-            console.warn(`[Import] Legacy DB_Cointool: backup contains legacy 'mints' data (${stores.mints.length} rows). Cointool schema changed to 'proxies' (v4) - rescan is required to repopulate.`);
+            console.warn(`[Import] Legacy DB_Cointool: backup contains legacy 'mints' data (${stores.mints.length} rows). Cointool schema changed to 'proxies' (v4+) - rescan is required to repopulate.`);
           }
           await bulkPut(legacyDb, "scanState", stores.scanState || []);
         }
@@ -9379,6 +10774,12 @@ async function importBackupFromFile(file) {
 
       window.importProgress.updateProgress(100, 'Import completed! Reloading application...');
 
+      if (window.__wenxenDisableImportReload) {
+        window.importProgress.hide();
+        try { window.dispatchEvent(new CustomEvent('backupImportComplete')); } catch (_) {}
+        return;
+      }
+
       // Navigate to dashboard after a brief delay to show completion
       setTimeout(() => {
         window.importProgress.hide();
@@ -9417,6 +10818,12 @@ async function importBackupFromFile(file) {
   localStorage.removeItem('BASE_localStorageMigrated');
   
   // Navigate to dashboard
+  if (window.__wenxenDisableImportReload) {
+    window.importProgress.hide();
+    try { window.dispatchEvent(new CustomEvent('backupImportComplete')); } catch (_) {}
+    return;
+  }
+
   setTimeout(() => {
     window.importProgress.hide();
     // Use URL with hash to go directly to dashboard
@@ -9429,6 +10836,8 @@ async function importBackupFromFile(file) {
     window.importProgress.hide();
     alert(`Import failed: ${error.message || 'Unknown error'}`);
     throw error; // Re-throw for the outer handler
+  } finally {
+    finishBackupImportMetric();
   }
 }
 
@@ -9474,11 +10883,14 @@ function openDatabaseByName(name) {
     // match (or exceed) the per-scanner DB_VERSION; opening at a lower
     // version than the existing DB triggers VersionError and the export
     // would silently skip that database.
-    let version = 1;
-    if (name.includes("Cointool")) version = 4; // proxies store (scanner DB_VERSION=4)
-    else if (name.includes("XenftStake")) version = 2;
-    else if (name.includes("Xenft")) version = 3; // Updated for scanState and processProgress stores
-    else if (name.includes("XenStake")) version = 2; // Adds processProgress store
+    const schema = window.databaseSchemaRegistry?.getSchemaForDatabaseName?.(name);
+    let version = schema?.version || 1;
+    if (!schema) {
+      if (name.includes("Cointool")) version = 5; // proxies + summary stores (scanner DB_VERSION=5)
+      else if (name.includes("XenftStake")) version = 3; // adds summary stores
+      else if (name.includes("Xenft")) version = 5; // includes scanState, byTokenId, processProgress, and summary stores
+      else if (name.includes("XenStake")) version = 3; // adds summary stores
+    }
 
     const request = indexedDB.open(name, version);
 
@@ -9495,6 +10907,11 @@ function openDatabaseByName(name) {
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
+
+      if (schema && window.databaseSchemaRegistry?.applySchema) {
+        window.databaseSchemaRegistry.applySchema(db, schema, event.target.transaction);
+        return;
+      }
       
       // Create stores based on database type
       if (name.includes("Cointool")) {
@@ -9515,6 +10932,7 @@ function openDatabaseByName(name) {
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
+        ensureCointoolSummaryStores(db);
       } else if (name.includes("XenftStake")) {
         if (!db.objectStoreNames.contains("stakes")) {
           db.createObjectStore("stakes", { keyPath: "tokenId" });
@@ -9523,18 +10941,21 @@ function openDatabaseByName(name) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
         if (!db.objectStoreNames.contains("processProgress")) {
-          db.createObjectStore("processProgress", { keyPath: "id" });
+          db.createObjectStore("processProgress", { keyPath: "address" });
         }
+        ensureCointoolSummaryStores(db);
       } else if (name.includes("Xenft")) {
         if (!db.objectStoreNames.contains("xenfts")) {
-          db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+          const store = db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+          store.createIndex("byTokenId", "tokenId", { unique: false });
         }
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
         if (!db.objectStoreNames.contains("processProgress")) {
-          db.createObjectStore("processProgress", { keyPath: "id" });
+          db.createObjectStore("processProgress", { keyPath: "address" });
         }
+        ensureCointoolSummaryStores(db);
       } else if (name.includes("XenStake")) {
         if (!db.objectStoreNames.contains("stakes")) {
           const store = db.createObjectStore("stakes", { keyPath: "id" });
@@ -9543,6 +10964,10 @@ function openDatabaseByName(name) {
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
+        if (!db.objectStoreNames.contains("processProgress")) {
+          db.createObjectStore("processProgress", { keyPath: "address" });
+        }
+        ensureCointoolSummaryStores(db);
       }
     };
     
@@ -9554,6 +10979,49 @@ function openDatabaseByName(name) {
       clearTimeout(timeout);
       reject(new Error(`Failed to open database: ${name}`));
     };
+  });
+}
+
+function openExistingDatabaseByName(name) {
+  return new Promise((resolve, reject) => {
+    let createdMissingDb = false;
+    const rejectAfterMissingDbCleanup = () => {
+      const finish = () => reject(new Error(`Database ${name} does not exist`));
+      try {
+        const del = indexedDB.deleteDatabase(name);
+        del.onsuccess = finish;
+        del.onerror = finish;
+        del.onblocked = finish;
+      } catch (_) {
+        finish();
+      }
+    };
+    const request = indexedDB.open(name);
+
+    request.onupgradeneeded = (event) => {
+      createdMissingDb = true;
+      try { event.target.transaction.abort(); } catch (_) {}
+    };
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      if (createdMissingDb) {
+        try { db.close(); } catch (_) {}
+        rejectAfterMissingDbCleanup();
+        return;
+      }
+      resolve(db);
+    };
+
+    request.onerror = (event) => {
+      if (createdMissingDb) {
+        rejectAfterMissingDbCleanup();
+      } else {
+        reject(event.target.error || request.error || new Error(`Failed to open database: ${name}`));
+      }
+    };
+
+    request.onblocked = () => reject(new Error(`Database ${name} is blocked`));
   });
 }
 
@@ -9801,11 +11269,23 @@ function setStatusHeaderFilter(statusText) {
     exportBtn.addEventListener("click", async () => {
       const ok = confirm("Export backup of your data?");
       if (!ok) return;
+      const originalText = exportBtn.textContent;
       try {
-        await exportBackup();
+        exportBtn.disabled = true;
+        exportBtn.textContent = "Exporting...";
+        updateBackupExportProgress(1, 'Preparing backup...', 'Please keep this tab open.');
+        await waitForNextPaint();
+        await exportBackup({
+          onProgress: (percent, message, detail) => updateBackupExportProgress(percent, message, detail)
+        });
+        hideBackupExportProgress(8000);
       } catch (err) {
         console.error("[Export] Backup failed:", err);
+        updateBackupExportProgress(100, 'Backup export failed', err?.message || String(err || 'Unknown error'));
         alert(`Backup failed: ${err?.message || err}`);
+      } finally {
+        exportBtn.disabled = false;
+        exportBtn.textContent = originalText;
       }
     });
   }
@@ -9841,9 +11321,9 @@ function setStatusHeaderFilter(statusText) {
         try {
           console.log('[Import] Starting import process...');
 
-          // Add timeout protection to prevent hanging (increased for large datasets)
+          // Add timeout protection to prevent hanging while still allowing large restores.
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Import timeout after 120 seconds')), 120000);
+            setTimeout(() => reject(new Error('Import timeout after 10 minutes')), 600000);
           });
 
           // Race between import and timeout
@@ -9868,6 +11348,43 @@ function setStatusHeaderFilter(statusText) {
 (function wireRemoveDuplicates() {
   const removeDuplicatesBtn = document.getElementById("removeDuplicatesBtn");
   const autoDedupeCheckbox = document.getElementById("autoDedupeAfterScan");
+  const scopeSelect = document.getElementById("dedupeScope");
+  const selectedChainsBox = document.getElementById("dedupeSelectedChains");
+  const dryRunCheckbox = document.getElementById("dedupeDryRun");
+
+  const getSelectedChainsFromUI = () => {
+    const checked = Array.from(selectedChainsBox?.querySelectorAll('input[type="checkbox"]:checked') || [])
+      .map(input => input.value)
+      .filter(Boolean);
+    return checked.length ? checked : [window.chainManager?.getCurrentChain?.() || 'ETHEREUM'];
+  };
+
+  const updateScopeUI = () => {
+    const scope = scopeSelect?.value || localStorage.getItem("dedupeScope") || "current";
+    if (scopeSelect) scopeSelect.value = scope;
+    selectedChainsBox?.classList.toggle("active", scope === "selected");
+  };
+
+  if (scopeSelect) {
+    const savedScope = localStorage.getItem("dedupeScope") || "current";
+    scopeSelect.value = savedScope;
+    scopeSelect.addEventListener("change", () => {
+      localStorage.setItem("dedupeScope", scopeSelect.value || "current");
+      updateScopeUI();
+    });
+  }
+
+  if (selectedChainsBox) {
+    const savedSelected = (localStorage.getItem("dedupeSelectedChains") || "").split(",").filter(Boolean);
+    const current = window.chainManager?.getCurrentChain?.() || "ETHEREUM";
+    selectedChainsBox.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.checked = savedSelected.length ? savedSelected.includes(input.value) : input.value === current;
+      input.addEventListener("change", () => {
+        localStorage.setItem("dedupeSelectedChains", getSelectedChainsFromUI().join(","));
+      });
+    });
+  }
+  updateScopeUI();
 
   // Function to update the last cleanup time display
   const updateLastCleanupDisplay = () => {
@@ -9878,7 +11395,8 @@ function setStatusHeaderFilter(statusText) {
     if (lastCleanup) {
       const date = new Date(parseInt(lastCleanup, 10));
       const formatted = date.toLocaleString();
-      lastCleanupEl.textContent = `Last cleanup: ${formatted}`;
+      const scope = localStorage.getItem("duplicatesLastScope") || "current";
+      lastCleanupEl.textContent = `Last cleanup: ${formatted} (${scope})`;
     } else {
       lastCleanupEl.textContent = "Never cleaned up";
     }
@@ -9888,8 +11406,9 @@ function setStatusHeaderFilter(statusText) {
   window.updateLastCleanupDisplay = updateLastCleanupDisplay;
 
   // Function to record cleanup time
-  const recordCleanupTime = () => {
+  const recordCleanupTime = (scope = "current") => {
     localStorage.setItem("duplicatesLastCleanup", String(Date.now()));
+    localStorage.setItem("duplicatesLastScope", scope);
     updateLastCleanupDisplay();
   };
 
@@ -9911,26 +11430,51 @@ function setStatusHeaderFilter(statusText) {
 
   if (removeDuplicatesBtn) {
     removeDuplicatesBtn.addEventListener("click", async () => {
+      const scope = scopeSelect?.value || "current";
+      const selectedChains = getSelectedChainsFromUI();
+      const dryRun = !!dryRunCheckbox?.checked;
+      localStorage.setItem("dedupeScope", scope);
+      localStorage.setItem("dedupeSelectedChains", selectedChains.join(","));
+
+      const preflight = await removeDuplicatesFromAllDatabases(false, {
+        scope,
+        selectedChains,
+        dryRun: true,
+        refresh: false,
+        returnDetails: true
+      });
+
+      if (dryRun || preflight.totalDuplicatesRemoved <= 0) {
+        if (dryRun) localStorage.setItem("duplicatesLastScope", scope);
+        return;
+      }
+
       const ok = confirm(
-        "This will scan all databases and remove duplicate entries based on transaction hash.\n\n" +
-        "Duplicates are kept by keeping the first entry and removing subsequent ones.\n\n" +
-        "Continue?"
+        `Preflight found ${preflight.totalDuplicatesRemoved.toLocaleString()} duplicate record(s) across ` +
+        `${preflight.results.filter(r => r.status === 'ok').length} database(s).\n\n` +
+        "Remove those duplicates now?"
       );
       if (!ok) return;
 
-      await removeDuplicatesFromAllDatabases(false); // false = show UI
-      recordCleanupTime();
+      const result = await removeDuplicatesFromAllDatabases(false, {
+        scope,
+        selectedChains,
+        dryRun: false,
+        returnDetails: true
+      });
+      if (result.totalDuplicatesRemoved > 0) recordCleanupTime(scope);
     });
   }
 
-  // Auto-run duplicate cleanup on first visit (one-time)
-  if (!localStorage.getItem("duplicatesCleanupDone")) {
+  // Auto-running dedupe can scan very large IndexedDB stores and should only
+  // happen when explicitly enabled. Manual dedupe remains available.
+  if (localStorage.getItem("autoDedupeFirstVisit") === "true" && !localStorage.getItem("duplicatesCleanupDone")) {
     // Delay to let page fully load
     setTimeout(async () => {
       console.log("[Dedup] Running automatic first-time duplicate cleanup...");
-      const removed = await removeDuplicatesFromAllDatabases(true); // true = silent mode
+      const removed = await removeDuplicatesFromAllDatabases(true, { scope: 'current' }); // true = silent mode
       localStorage.setItem("duplicatesCleanupDone", "1");
-      recordCleanupTime();
+      recordCleanupTime('current');
       if (removed > 0) {
         console.log(`[Dedup] Automatic cleanup completed: removed ${removed} duplicate(s)`);
         if (typeof showToast === "function") {
@@ -9946,7 +11490,8 @@ function setStatusHeaderFilter(statusText) {
 // Remove duplicates from all databases (Cointool, XENFT, XENFT Stakes, XEN Stakes)
 // silent = true: run without UI updates (for automatic cleanup)
 // Returns total number of duplicates removed
-async function removeDuplicatesFromAllDatabases(silent = false) {
+async function removeDuplicatesFromAllDatabases(silent = false, options = {}) {
+  const dedupeStarted = performance?.now?.() || Date.now();
   const progressContainer = document.getElementById("duplicatesProgress");
   const progressBar = document.getElementById("duplicatesProgressBar");
   const progressText = document.getElementById("duplicatesProgressText");
@@ -9979,35 +11524,75 @@ async function removeDuplicatesFromAllDatabases(silent = false) {
   let totalDuplicatesRemoved = 0;
   let totalRecordsScanned = 0;
   const results = []; // Array to preserve order
+  const dryRun = !!options.dryRun;
+  const returnDetails = !!options.returnDetails;
+
+  const resolveChainKeys = () => {
+    const supported = getSupportedChainKeys();
+    const current = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+    const scope = options.scope || localStorage.getItem("dedupeScope") || "current";
+    if (scope === "all") return supported;
+    if (scope === "selected") {
+      const selected = Array.isArray(options.selectedChains)
+        ? options.selectedChains
+        : String(localStorage.getItem("dedupeSelectedChains") || "").split(",").filter(Boolean);
+      const valid = selected.filter(chain => supported.includes(chain));
+      return valid.length ? valid : [current];
+    }
+    return [current];
+  };
 
   try {
-    // Get all chain prefixes to scan
-    const chainPrefixes = ['ETH', 'BASE', 'AVAX', 'BSC', 'GLMR', 'POL', 'OPT'];
+    const chainKeys = resolveChainKeys();
     const dbTypes = [
-      { name: 'Cointool', dbSuffix: '_DB_Cointool', storeName: 'mints', keyField: 'TX_Hash', ownerField: 'Owner' },
-      { name: 'XENFT', dbSuffix: '_DB_Xenft', storeName: 'xenfts', keyField: 'mintTxHash', ownerField: 'owner' },
-      { name: 'XENFT Stakes', dbSuffix: '_DB_XenftStake', storeName: 'stakes', keyField: 'txHash', ownerField: 'owner' },
-      { name: 'XEN Stakes', dbSuffix: '_DB_XenStake', storeName: 'stakes', keyField: 'txHash', ownerField: 'owner' }
+      { name: 'Cointool', key: 'cointool', storeName: 'proxies', keyField: 'id', ownerField: 'Owner' },
+      { name: 'XENFT', key: 'xenft', storeName: 'xenfts', keyField: 'tokenId', ownerField: 'owner' },
+      { name: 'XENFT Stakes', key: 'xenft_stake', storeName: 'stakes', keyField: 'tokenId', ownerField: 'owner' },
+      { name: 'XEN Stakes', key: 'xen_stake', storeName: 'stakes', keyField: 'id', ownerField: 'owner' }
     ];
 
-    const totalDbs = chainPrefixes.length * dbTypes.length;
+    const totalDbs = chainKeys.length * dbTypes.length;
     let processedDbs = 0;
+    let existingDatabaseNames = null;
+    if (typeof indexedDB.databases === 'function') {
+      try {
+        existingDatabaseNames = new Set((await indexedDB.databases()).map(db => db.name).filter(Boolean));
+      } catch (_) {
+        existingDatabaseNames = null;
+      }
+    }
 
-    for (const prefix of chainPrefixes) {
+    for (const chain of chainKeys) {
+      const dbNames = getDatabaseNamesForChain(chain);
       for (const dbType of dbTypes) {
-        const dbName = `${prefix}${dbType.dbSuffix}`;
+        const dbName = dbNames[dbType.key];
         updateProgress((processedDbs / totalDbs) * 100, `Scanning ${dbName}...`);
 
         try {
+          if (existingDatabaseNames && !existingDatabaseNames.has(dbName)) {
+            results.push({
+              dbName,
+              chain,
+              duplicates: 0,
+              records: 0,
+              status: 'missing'
+            });
+            processedDbs++;
+            updateProgress((processedDbs / totalDbs) * 100, `Skipped ${dbName}`);
+            continue;
+          }
+
           const { duplicates, records } = await findAndRemoveDuplicatesInDB(
             dbName,
             dbType.storeName,
             dbType.keyField,
-            dbType.ownerField
+            dbType.ownerField,
+            { dryRun }
           );
 
           results.push({
             dbName,
+            chain,
             duplicates,
             records,
             status: 'ok'
@@ -10019,6 +11604,7 @@ async function removeDuplicatesFromAllDatabases(silent = false) {
           // Database might not exist or have no store - track it
           results.push({
             dbName,
+            chain,
             duplicates: 0,
             records: 0,
             status: err.message?.includes("No objectStore") ? 'empty' : 'error',
@@ -10036,35 +11622,36 @@ async function removeDuplicatesFromAllDatabases(silent = false) {
 
     // Build result message - show all databases
     let msg = totalDuplicatesRemoved > 0
-      ? `<span style="color:orange;font-weight:bold;">🧹 Removed ${totalDuplicatesRemoved} duplicate(s)</span><br>`
-      : `<span style="color:green;font-weight:bold;">✓ No duplicates found</span><br>`;
+      ? `<span class="dedupe-result-warning">${dryRun ? 'Would remove' : 'Removed'} ${totalDuplicatesRemoved} duplicate(s)</span><br>`
+      : `<span class="dedupe-result-success">No duplicates found</span><br>`;
 
-    msg += `<small style="color:#888;">Scanned ${totalRecordsScanned.toLocaleString()} records across ${results.length} databases</small><br><br>`;
+    msg += `<small class="dedupe-result-muted">Scanned ${totalRecordsScanned.toLocaleString()} records across ${results.length} database(s), scope: ${(options.scope || 'current')}</small><br><br>`;
 
     // Group by chain for cleaner display
-    for (const prefix of chainPrefixes) {
-      const chainResults = results.filter(r => r.dbName.startsWith(prefix));
+    for (const chain of chainKeys) {
+      const prefix = getChainPrefix(chain);
+      const chainResults = results.filter(r => r.dbName.startsWith(`${prefix}_`));
       const chainHasData = chainResults.some(r => r.records > 0);
 
       if (chainHasData) {
         msg += `<strong>${prefix}:</strong><br>`;
         for (const r of chainResults) {
           if (r.records > 0) {
-            const icon = r.duplicates > 0 ? '🧹' : '✓';
-            const color = r.duplicates > 0 ? 'orange' : 'green';
+            const statusClass = r.duplicates > 0 ? 'dedupe-chain-warning' : 'dedupe-chain-ok';
             const dbShort = r.dbName.replace(`${prefix}_DB_`, '');
-            msg += `<span style="color:${color};">&nbsp;&nbsp;${icon} ${dbShort}: ${r.records} records, ${r.duplicates} duplicates</span><br>`;
+            msg += `<span class="${statusClass}">&nbsp;&nbsp;${dbShort}: ${r.records} records, ${r.duplicates} duplicate(s)</span><br>`;
           }
         }
       }
     }
 
     // Show empty chains summary
-    const emptyChains = chainPrefixes.filter(prefix =>
-      results.filter(r => r.dbName.startsWith(prefix)).every(r => r.records === 0)
-    );
+    const emptyChains = chainKeys.filter(chain => {
+      const prefix = getChainPrefix(chain);
+      return results.filter(r => r.dbName.startsWith(`${prefix}_`)).every(r => r.records === 0);
+    });
     if (emptyChains.length > 0) {
-      msg += `<br><small style="color:#666;">No data: ${emptyChains.join(', ')}</small>`;
+      msg += `<br><small class="dedupe-result-empty">No data: ${emptyChains.join(', ')}</small>`;
     }
 
     // Update UI (only in non-silent mode)
@@ -10073,16 +11660,18 @@ async function removeDuplicatesFromAllDatabases(silent = false) {
     }
 
     // Refresh the table if available (and duplicates were removed)
-    if (totalDuplicatesRemoved > 0 && typeof window.refreshUnified === 'function') {
+    const shouldRefresh = options.refresh !== false;
+    if (!dryRun && totalDuplicatesRemoved > 0 && shouldRefresh && typeof window.refreshUnified === 'function') {
       setTimeout(() => window.refreshUnified().catch(() => {}), 500);
     }
 
   } catch (err) {
     console.error("[Dedup] Error:", err);
     if (!silent && hasUI) {
-      resultText.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+      resultText.innerHTML = `<span class="dedupe-result-error">Error: ${err.message}</span>`;
     }
   } finally {
+    window.wenxen?.perf?.set?.('lastDedupeMs', Math.round((performance?.now?.() || Date.now()) - dedupeStarted));
     if (!silent && hasUI) {
       if (btn) btn.disabled = false;
       // Hide progress after 3 seconds
@@ -10092,94 +11681,163 @@ async function removeDuplicatesFromAllDatabases(silent = false) {
     }
   }
 
-  return totalDuplicatesRemoved;
+  const detail = {
+    totalDuplicatesRemoved,
+    totalRecordsScanned,
+    dryRun,
+    scope: options.scope || localStorage.getItem("dedupeScope") || "current",
+    chains: results.length ? Array.from(new Set(results.map(r => r.chain).filter(Boolean))) : [],
+    results
+  };
+  return returnDetails ? detail : totalDuplicatesRemoved;
 }
 
 // Find and remove duplicates in a single database
 // Returns { duplicates: number, records: number }
-async function findAndRemoveDuplicatesInDB(dbName, storeName, keyField, ownerField) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName);
+async function findAndRemoveDuplicatesInDB(dbName, storeName, keyField, ownerField, options = {}) {
+  const db = await openExistingDatabaseByName(dbName);
+  const dryRun = !!options.dryRun;
+  const planId = `${dbName}:${storeName}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  const fallbackSeen = new Set();
+  let workerPlanStarted = false;
 
-    request.onerror = () => reject(request.error);
+  const planBatch = async (rows, keys) => {
+    if (window.wenxen?.workerClient?.isAvailable?.()) {
+      try {
+        if (!workerPlanStarted) {
+          await window.wenxen.workerClient.run('dedupeStart', { planId }, {
+            jobName: 'dedupe:plan',
+            meta: { dbName, storeName }
+          });
+          workerPlanStarted = true;
+        }
+        return await window.wenxen.workerClient.run('dedupeBatch', {
+          planId,
+          rows,
+          keys,
+          keyField,
+          ownerField
+        }, {
+          jobName: 'dedupe:batch',
+          meta: { dbName, storeName, records: rows.length }
+        });
+      } catch (error) {
+        if (/cancel|chain-change|backup-import/i.test(error?.message || '')) throw error;
+        window.wenxen?.perf?.event?.({ type: 'worker-fallback', task: 'dedupeBatch', message: error?.message || String(error) });
+      }
+    }
 
-    request.onsuccess = () => {
-      const db = request.result;
+    const duplicatesToRemove = [];
+    for (let i = 0; i < rows.length; i++) {
+      const record = rows[i] || {};
+      const primaryKey = keys[i];
+      const identity =
+        record[keyField] ??
+        record.TX_Hash ??
+        record.hash ??
+        record.mintTxHash ??
+        record.txHash ??
+        record.tokenId ??
+        record.Xenft_id ??
+        record.id ??
+        primaryKey;
+      const owner = record[ownerField] ?? record.Owner ?? record.owner ?? record.Address ?? '';
 
-      // Check if store exists
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.close();
-        resolve({ duplicates: 0, records: 0 });
-        return;
+      if (identity == null || identity === '') continue;
+
+      const compositeKey = `${String(identity).toLowerCase()}-${String(owner || '').toLowerCase()}`;
+      if (fallbackSeen.has(compositeKey)) duplicatesToRemove.push(primaryKey);
+      else fallbackSeen.add(compositeKey);
+    }
+    return { records: rows.length, duplicatesToRemove, seenCount: fallbackSeen.size };
+  };
+
+  try {
+    if (!db.objectStoreNames.contains(storeName)) {
+      return { duplicates: 0, records: 0 };
+    }
+
+    const batchSize = 500;
+    let range = null;
+    let totalRecords = 0;
+    let duplicatesRemoved = 0;
+
+    while (true) {
+      const { rows, keys } = await new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const rowsReq = store.getAll(range, batchSize);
+        const keysReq = store.getAllKeys(range, batchSize);
+        let rows = null;
+        let keys = null;
+
+        const finish = () => {
+          if (rows && keys) resolve({ rows, keys });
+        };
+
+        rowsReq.onsuccess = e => {
+          rows = e.target.result || [];
+          finish();
+        };
+        keysReq.onsuccess = e => {
+          keys = e.target.result || [];
+          finish();
+        };
+        rowsReq.onerror = () => reject(rowsReq.error);
+        keysReq.onerror = () => reject(keysReq.error);
+        tx.onerror = () => reject(tx.error);
+      });
+
+      if (!rows.length) break;
+      totalRecords += rows.length;
+
+      const { duplicatesToRemove } = await planBatch(rows, keys);
+
+      if (duplicatesToRemove.length) {
+        if (dryRun) {
+          duplicatesRemoved += duplicatesToRemove.length;
+        } else {
+          console.log(`[Dedup] Removing ${duplicatesToRemove.length} duplicates from ${dbName}/${storeName}`);
+          const removed = await deleteKeysFromStore(db, storeName, duplicatesToRemove);
+          duplicatesRemoved += removed;
+        }
       }
 
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      const getAllReq = store.getAll();
+      if (rows.length < batchSize || !keys.length) break;
+      range = IDBKeyRange.lowerBound(keys[keys.length - 1], true);
+      await yieldToUi();
+    }
 
-      getAllReq.onsuccess = () => {
-        const records = getAllReq.result || [];
-        const totalRecords = records.length;
-        const seen = new Map(); // key -> first record ID
-        const duplicatesToRemove = [];
+    return { duplicates: duplicatesRemoved, records: totalRecords };
+  } finally {
+    if (workerPlanStarted) {
+      window.wenxen?.workerClient?.run?.('dedupeFinish', { planId }, {
+        jobName: 'dedupe:finish',
+        meta: { dbName, storeName }
+      }).catch(() => {});
+    }
+    try { db.close(); } catch {}
+  }
+}
 
-        for (const record of records) {
-          const txHash = record[keyField];
-          const owner = record[ownerField];
+function deleteKeysFromStore(db, storeName, keys) {
+  return new Promise((resolve, reject) => {
+    if (!keys.length) {
+      resolve(0);
+      return;
+    }
 
-          // Skip records without transaction hash
-          if (!txHash) continue;
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    let removed = 0;
 
-          // Create composite key from tx hash and owner
-          const compositeKey = `${(txHash || '').toLowerCase()}-${(owner || '').toLowerCase()}`;
+    for (const key of keys) {
+      const req = store.delete(key);
+      req.onsuccess = () => { removed++; };
+    }
 
-          if (seen.has(compositeKey)) {
-            // This is a duplicate - mark for removal
-            const primaryKey = record.ID || record.Xenft_id || record.id;
-            if (primaryKey) {
-              duplicatesToRemove.push(primaryKey);
-            }
-          } else {
-            seen.set(compositeKey, record.ID || record.Xenft_id || record.id);
-          }
-        }
-
-        // Remove duplicates
-        if (duplicatesToRemove.length === 0) {
-          db.close();
-          resolve({ duplicates: 0, records: totalRecords });
-          return;
-        }
-
-        console.log(`[Dedup] Removing ${duplicatesToRemove.length} duplicates from ${dbName}/${storeName}`);
-
-        let removed = 0;
-        let errors = 0;
-
-        for (const key of duplicatesToRemove) {
-          const deleteReq = store.delete(key);
-          deleteReq.onsuccess = () => {
-            removed++;
-            if (removed + errors === duplicatesToRemove.length) {
-              db.close();
-              resolve({ duplicates: removed, records: totalRecords });
-            }
-          };
-          deleteReq.onerror = () => {
-            errors++;
-            if (removed + errors === duplicatesToRemove.length) {
-              db.close();
-              resolve({ duplicates: removed, records: totalRecords });
-            }
-          };
-        }
-      };
-
-      getAllReq.onerror = () => {
-        db.close();
-        reject(getAllReq.error);
-      };
-    };
+    tx.oncomplete = () => resolve(removed);
+    tx.onerror = e => reject(e.target.error || e);
   });
 }
 
@@ -10322,14 +11980,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // initial fetch + periodic refresh (optional)
-  fetchXenUsdPrice();
-  setInterval(fetchXenUsdPrice, 60_000);
+  if (window.wenxen?.backgroundJobs) {
+    window.wenxen.backgroundJobs.start('xenPrice', fetchXenUsdPrice, 60_000, {
+      immediate: true,
+      lowPriority: true,
+      skipWhenHidden: true
+    });
+  } else {
+    fetchXenUsdPrice();
+    setInterval(fetchXenUsdPrice, 60_000);
+  }
   
   // Refresh XEN price when chain changes
   if (window.chainManager) {
     window.chainManager.onChainChange(() => {
       console.log('Chain changed, refreshing XEN/CBXEN price');
-      fetchXenUsdPrice();
+      if (window.wenxen?.backgroundJobs) window.wenxen.backgroundJobs.runSoon('xenPrice', 0);
+      else fetchXenUsdPrice();
     });
   }
 });
@@ -10342,7 +12009,7 @@ function updateDownloadButtonsVisibility(){
     ? window.cointoolTable.getDataCount() > 0
     : (window.cointoolTable?.getData?.()?.length || 0) > 0);
 
-  const display = hasRows ? '' : 'none';
+  const display = hasRows ? 'inline-block' : 'none';
   if (csvBtn)  csvBtn.style.display  = display;
   if (jsonBtn) jsonBtn.style.display = display;
 }
@@ -10495,6 +12162,15 @@ updateDownloadButtonsVisibility();
   function startWatcher() {
     if (gasIntervalId) {
       clearInterval(gasIntervalId);
+      gasIntervalId = null;
+    }
+    if (window.wenxen?.backgroundJobs) {
+      window.wenxen.backgroundJobs.start('gasPrice', fetchGasPrice, getGasRefreshMs, {
+        immediate: true,
+        lowPriority: true,
+        skipWhenHidden: true
+      });
+      return;
     }
     fetchGasPrice(); // Initial fetch
     gasIntervalId = setInterval(fetchGasPrice, getGasRefreshMs());

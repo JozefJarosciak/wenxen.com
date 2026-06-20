@@ -2,17 +2,22 @@
 export class DangerZoneHandler {
   constructor() {
     this.chainManager = null;
+    this.initialized = false;
+    this.handleResetClick = () => this.handleReset();
   }
 
   initialize() {
     this.chainManager = window.chainManager;
+    if (this.initialized) return;
     this.setupEventListener();
   }
 
   setupEventListener() {
     const resetBtn = document.getElementById("resetBtn");
     if (resetBtn) {
-      resetBtn.addEventListener("click", () => this.handleReset());
+      resetBtn.removeEventListener("click", this.handleResetClick);
+      resetBtn.addEventListener("click", this.handleResetClick);
+      this.initialized = true;
     }
   }
 
@@ -22,8 +27,8 @@ export class DangerZoneHandler {
     
     // Get current chain info
     const currentChain = this.chainManager?.getCurrentChain() || 'ETHEREUM';
-    const chainPrefix = currentChain === 'BASE' ? 'BASE_' : 'ETH_';
-    const chainName = currentChain === 'BASE' ? 'Base' : 'Ethereum';
+    const chainPrefix = `${this.chainManager?.getDatabasePrefix?.(currentChain) || 'ETH'}_`;
+    const chainName = this.chainManager?.getCurrentConfig?.()?.name || currentChain;
     
     console.log(`Danger Zone: Processing ${choice} for chain ${currentChain}`);
     
@@ -153,13 +158,11 @@ export class DangerZoneHandler {
     let displayName = dbName;
     let description = '';
     
-    if (dbName.startsWith('ETH_')) {
-      const baseName = dbName.replace('ETH_', '');
-      displayName = `Ethereum ${this.getFriendlyName(baseName)}`;
-      description = this.getDbDescription(baseName);
-    } else if (dbName.startsWith('BASE_')) {
-      const baseName = dbName.replace('BASE_', '');
-      displayName = `Base ${this.getFriendlyName(baseName)}`;
+    const match = String(dbName).match(/^([A-Z0-9]+)_(DB_.+)$/);
+    if (match) {
+      const [, dbPrefix, baseName] = match;
+      const chainName = this.getChainNameForDatabasePrefix(dbPrefix);
+      displayName = `${chainName} ${this.getFriendlyName(baseName)}`;
       description = this.getDbDescription(baseName);
     } else {
       displayName = this.getFriendlyName(dbName);
@@ -208,8 +211,21 @@ export class DangerZoneHandler {
     }
   }
 
+  getChainNameForDatabasePrefix(dbPrefix) {
+    try {
+      const chains = this.chainManager?.getChainList?.() || [];
+      for (const chain of chains) {
+        if (this.chainManager.getDatabasePrefix(chain.key) === dbPrefix) {
+          return chain.name;
+        }
+      }
+    } catch (_) {}
+    return dbPrefix;
+  }
+
   clearChainLocalStorage(chainPrefix) {
     console.log(`Clearing localStorage for prefix: ${chainPrefix}`);
+    const currentChain = this.chainManager?.getCurrentChain?.() || 'ETHEREUM';
     
     // List of keys to remove
     const keysToRemove = [];
@@ -217,7 +233,7 @@ export class DangerZoneHandler {
     // Find all keys with the chain prefix
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(chainPrefix)) {
+      if (key && (key.startsWith(chainPrefix) || key.startsWith(`${currentChain}_`))) {
         keysToRemove.push(key);
       }
     }
@@ -225,6 +241,14 @@ export class DangerZoneHandler {
     // Also include chain-specific keys without database prefix
     const baseChainPrefix = chainPrefix.replace('_', '');
     const chainSpecificKeys = [
+      `${currentChain}_ethAddress`,
+      `${currentChain}_customRPC`,
+      `${currentChain}_customRPC_source`,
+      `${currentChain}_customRPC_lastKnown`,
+      `${currentChain}_chunkSize`,
+      `${currentChain}_mintTermDays`,
+      `${currentChain}_scanMode`,
+      `${currentChain}_vmuChartExpanded`,
       `${baseChainPrefix}_ethAddress`,
       `${baseChainPrefix}_customRPC`,
       `${baseChainPrefix}_customRPC_source`,
@@ -234,31 +258,6 @@ export class DangerZoneHandler {
       `${baseChainPrefix}_scanMode`,
       `${baseChainPrefix}_vmuChartExpanded`
     ];
-    
-    // Add alternative format keys
-    if (chainPrefix === 'ETH_') {
-      chainSpecificKeys.push(
-        'ETHEREUM_ethAddress',
-        'ETHEREUM_customRPC',
-        'ETHEREUM_customRPC_source',
-        'ETHEREUM_customRPC_lastKnown',
-        'ETHEREUM_chunkSize',
-        'ETHEREUM_mintTermDays',
-        'ETHEREUM_scanMode',
-        'ETHEREUM_vmuChartExpanded'
-      );
-    } else if (chainPrefix === 'BASE_') {
-      chainSpecificKeys.push(
-        'BASE_ethAddress',
-        'BASE_customRPC',
-        'BASE_customRPC_source',
-        'BASE_customRPC_lastKnown',
-        'BASE_chunkSize',
-        'BASE_mintTermDays',
-        'BASE_scanMode',
-        'BASE_vmuChartExpanded'
-      );
-    }
     
     // Combine all keys
     const allKeys = [...new Set([...keysToRemove, ...chainSpecificKeys])];
@@ -340,15 +339,3 @@ export class DangerZoneHandler {
 
 // Create and export singleton
 export const dangerZoneHandler = new DangerZoneHandler();
-
-// Initialize when DOM is ready
-if (typeof window !== 'undefined') {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      dangerZoneHandler.initialize();
-    });
-  } else {
-    // DOM already loaded
-    setTimeout(() => dangerZoneHandler.initialize(), 100);
-  }
-}

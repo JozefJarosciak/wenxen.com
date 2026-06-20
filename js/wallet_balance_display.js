@@ -1,6 +1,13 @@
 // Wallet Balance Display for Mint/Stake Page
 // Shows native token (ETH/AVAX/etc) and XEN balances with USD values
 
+const WALLET_BALANCE_DEBUG = false;
+function walletBalanceLog(...args) {
+  if (WALLET_BALANCE_DEBUG || window.DEBUG_WALLET_BALANCE) {
+    console.log(...args);
+  }
+}
+
 // Currency symbols for each chain
 const CHAIN_CURRENCY_SYMBOLS = {
   ETHEREUM: 'ETH',
@@ -27,13 +34,13 @@ const nativePriceCache = {
 // Fetch price from CryptoCompare (fallback #1)
 async function fetchPriceFromCryptoCompare(symbol) {
   const url = `https://min-api.cryptocompare.com/data/price?fsym=${symbol}&tsyms=USD`;
-  console.log('[WALLET-BALANCE] Trying CryptoCompare:', url);
+  walletBalanceLog('[WALLET-BALANCE] Trying CryptoCompare:', url);
 
   const response = await fetch(url);
   if (!response.ok) throw new Error(`CryptoCompare HTTP ${response.status}`);
 
   const data = await response.json();
-  console.log('[WALLET-BALANCE] CryptoCompare response:', data);
+  walletBalanceLog('[WALLET-BALANCE] CryptoCompare response:', data);
 
   if (data.Response === 'Error') throw new Error(data.Message || 'CryptoCompare error');
 
@@ -46,13 +53,13 @@ async function fetchPriceFromCryptoCompare(symbol) {
 // Fetch price from Binance (fallback #2)
 async function fetchPriceFromBinance(symbol) {
   const url = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`;
-  console.log('[WALLET-BALANCE] Trying Binance:', url);
+  walletBalanceLog('[WALLET-BALANCE] Trying Binance:', url);
 
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Binance HTTP ${response.status}`);
 
   const data = await response.json();
-  console.log('[WALLET-BALANCE] Binance response:', data);
+  walletBalanceLog('[WALLET-BALANCE] Binance response:', data);
 
   const price = parseFloat(data.price);
   if (!Number.isFinite(price) || price <= 0) throw new Error('Invalid price from Binance');
@@ -63,15 +70,15 @@ async function fetchPriceFromBinance(symbol) {
 // Fetch price from CoinGecko (primary)
 async function fetchPriceFromCoinGecko(coinId) {
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`;
-  console.log('[WALLET-BALANCE] Trying CoinGecko:', url);
+  walletBalanceLog('[WALLET-BALANCE] Trying CoinGecko:', url);
 
   const response = await fetch(url);
-  console.log('[WALLET-BALANCE] CoinGecko response status:', response.status);
+  walletBalanceLog('[WALLET-BALANCE] CoinGecko response status:', response.status);
 
   if (!response.ok) throw new Error(`CoinGecko HTTP ${response.status}`);
 
   const data = await response.json();
-  console.log('[WALLET-BALANCE] CoinGecko data:', data);
+  walletBalanceLog('[WALLET-BALANCE] CoinGecko data:', data);
 
   const price = data[coinId]?.usd || 0;
   if (!Number.isFinite(price) || price <= 0) throw new Error('Invalid price from CoinGecko');
@@ -88,7 +95,7 @@ async function fetchNativeTokenPrice() {
   if (nativePriceCache.chain === currentChain &&
       nativePriceCache.timestamp > 0 &&
       (now - nativePriceCache.timestamp) < nativePriceCache.CACHE_DURATION) {
-    console.log('[WALLET-BALANCE] Using cached price for', currentChain, ':', nativePriceCache.price,
+    walletBalanceLog('[WALLET-BALANCE] Using cached price for', currentChain, ':', nativePriceCache.price,
                 '(age:', Math.round((now - nativePriceCache.timestamp) / 1000), 'seconds)');
     return nativePriceCache.price;
   }
@@ -128,7 +135,7 @@ async function fetchNativeTokenPrice() {
   const cryptoCompareSymbol = cryptoCompareSymbols[currentChain] || 'ETH';
   const binanceSymbol = binanceSymbols[currentChain] || 'ETH';
 
-  console.log('[WALLET-BALANCE] Fetching price for chain:', currentChain);
+  walletBalanceLog('[WALLET-BALANCE] Fetching price for chain:', currentChain);
 
   let price = 0;
   let source = '';
@@ -137,7 +144,7 @@ async function fetchNativeTokenPrice() {
   try {
     price = await fetchPriceFromCoinGecko(coinGeckoId);
     source = 'CoinGecko';
-    console.log('[WALLET-BALANCE] Successfully fetched from CoinGecko:', price);
+    walletBalanceLog('[WALLET-BALANCE] Successfully fetched from CoinGecko:', price);
   } catch (error1) {
     console.warn('[WALLET-BALANCE] CoinGecko failed:', error1.message);
 
@@ -145,7 +152,7 @@ async function fetchNativeTokenPrice() {
     try {
       price = await fetchPriceFromCryptoCompare(cryptoCompareSymbol);
       source = 'CryptoCompare';
-      console.log('[WALLET-BALANCE] Successfully fetched from CryptoCompare:', price);
+      walletBalanceLog('[WALLET-BALANCE] Successfully fetched from CryptoCompare:', price);
     } catch (error2) {
       console.warn('[WALLET-BALANCE] CryptoCompare failed:', error2.message);
 
@@ -153,14 +160,14 @@ async function fetchNativeTokenPrice() {
       try {
         price = await fetchPriceFromBinance(binanceSymbol);
         source = 'Binance';
-        console.log('[WALLET-BALANCE] Successfully fetched from Binance:', price);
+        walletBalanceLog('[WALLET-BALANCE] Successfully fetched from Binance:', price);
       } catch (error3) {
         console.error('[WALLET-BALANCE] All price sources failed. CoinGecko:', error1.message,
                      'CryptoCompare:', error2.message, 'Binance:', error3.message);
 
         // If all fail, use stale cache if available
         if (nativePriceCache.chain === currentChain && nativePriceCache.price > 0) {
-          console.log('[WALLET-BALANCE] Using stale cached price due to all sources failing:', nativePriceCache.price);
+          walletBalanceLog('[WALLET-BALANCE] Using stale cached price due to all sources failing:', nativePriceCache.price);
           return nativePriceCache.price;
         }
         return 0;
@@ -173,7 +180,7 @@ async function fetchNativeTokenPrice() {
     nativePriceCache.price = price;
     nativePriceCache.timestamp = now;
     nativePriceCache.chain = currentChain;
-    console.log('[WALLET-BALANCE] Price cached for', currentChain, 'from', source);
+    walletBalanceLog('[WALLET-BALANCE] Price cached for', currentChain, 'from', source);
   }
 
   return price;
@@ -187,26 +194,26 @@ function getXenPrice() {
 
     // Try chain-specific key first, then fallback to global
     let priceStr = localStorage.getItem(chainPrefix + 'xenPrice');
-    console.log(`[WALLET-BALANCE] Looking for XEN price with key: ${chainPrefix}xenPrice, found:`, priceStr);
+    walletBalanceLog(`[WALLET-BALANCE] Looking for XEN price with key: ${chainPrefix}xenPrice, found:`, priceStr);
 
     if (!priceStr) {
       priceStr = localStorage.getItem('xenPrice');
-      console.log(`[WALLET-BALANCE] Fallback to xenPrice key, found:`, priceStr);
+      walletBalanceLog(`[WALLET-BALANCE] Fallback to xenPrice key, found:`, priceStr);
     }
 
     // Also try xenUsdPrice which might be used by main app
     if (!priceStr) {
       priceStr = localStorage.getItem(chainPrefix + 'xenUsdPrice');
-      console.log(`[WALLET-BALANCE] Trying ${chainPrefix}xenUsdPrice, found:`, priceStr);
+      walletBalanceLog(`[WALLET-BALANCE] Trying ${chainPrefix}xenUsdPrice, found:`, priceStr);
     }
 
     if (!priceStr) {
       priceStr = localStorage.getItem('xenUsdPrice');
-      console.log(`[WALLET-BALANCE] Trying xenUsdPrice, found:`, priceStr);
+      walletBalanceLog(`[WALLET-BALANCE] Trying xenUsdPrice, found:`, priceStr);
     }
 
     const price = parseFloat(priceStr) || 0;
-    console.log(`[WALLET-BALANCE] Final XEN price for ${currentChain}:`, price);
+    walletBalanceLog(`[WALLET-BALANCE] Final XEN price for ${currentChain}:`, price);
     return price;
   } catch (e) {
     console.error('[WALLET-BALANCE] Error getting XEN price:', e);
@@ -334,7 +341,7 @@ function calculateUSD(weiString, priceUSD) {
 
 // Update wallet balance display
 async function updateWalletBalanceDisplay() {
-  console.log('[WALLET-BALANCE] === updateWalletBalanceDisplay called ===');
+  walletBalanceLog('[WALLET-BALANCE] === updateWalletBalanceDisplay called ===');
 
   const card = document.getElementById('walletBalanceCard');
   const nativeLabel = document.getElementById('nativeTokenLabel');
@@ -343,7 +350,7 @@ async function updateWalletBalanceDisplay() {
   const xenBalance = document.getElementById('xenTokenBalance');
   const xenUsd = document.getElementById('xenTokenUsd');
 
-  console.log('[WALLET-BALANCE] DOM Elements:', {
+  walletBalanceLog('[WALLET-BALANCE] DOM Elements:', {
     card: !!card,
     nativeLabel: !!nativeLabel,
     nativeBalance: !!nativeBalance,
@@ -358,51 +365,51 @@ async function updateWalletBalanceDisplay() {
   }
 
   // Check if wallet is connected
-  console.log('[WALLET-BALANCE] Checking wallet connection...', {
+  walletBalanceLog('[WALLET-BALANCE] Checking wallet connection...', {
     connectedAccount: window.connectedAccount,
     web3Wallet: !!window.web3Wallet,
     ethereum: !!window.ethereum
   });
 
   if (!window.connectedAccount) {
-    console.log('[WALLET-BALANCE] No wallet connected, hiding card');
+    walletBalanceLog('[WALLET-BALANCE] No wallet connected, hiding card');
     card.style.display = 'none';
     return;
   }
 
   // Show card
-  console.log('[WALLET-BALANCE] Wallet connected! Showing card...');
+  walletBalanceLog('[WALLET-BALANCE] Wallet connected! Showing card...');
   card.style.display = 'block';
 
   // Update native token label based on current chain
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
   const currencySymbol = CHAIN_CURRENCY_SYMBOLS[currentChain] || 'ETH';
-  console.log('[WALLET-BALANCE] Current chain:', currentChain, 'Currency:', currencySymbol);
+  walletBalanceLog('[WALLET-BALANCE] Current chain:', currentChain, 'Currency:', currencySymbol);
   if (nativeLabel) nativeLabel.textContent = currencySymbol;
 
   // Set loading state
-  console.log('[WALLET-BALANCE] Setting loading state...');
+  walletBalanceLog('[WALLET-BALANCE] Setting loading state...');
   if (nativeBalance) nativeBalance.textContent = 'Loading...';
   if (nativeUsd) nativeUsd.textContent = '';
   if (xenBalance) xenBalance.textContent = 'Loading...';
   if (xenUsd) xenUsd.textContent = '';
 
   try {
-    console.log('[WALLET-BALANCE] Fetching prices...');
+    walletBalanceLog('[WALLET-BALANCE] Fetching prices...');
     // Fetch prices
     const [nativePrice, xenPrice] = await Promise.all([
       fetchNativeTokenPrice(),
       Promise.resolve(getXenPrice())
     ]);
-    console.log('[WALLET-BALANCE] Prices fetched:', { nativePrice, xenPrice });
+    walletBalanceLog('[WALLET-BALANCE] Prices fetched:', { nativePrice, xenPrice });
 
-    console.log('[WALLET-BALANCE] Fetching balances for:', window.connectedAccount);
+    walletBalanceLog('[WALLET-BALANCE] Fetching balances for:', window.connectedAccount);
     // Fetch balances
     const [nativeBal, xenBal] = await Promise.all([
       fetchNativeBalance(window.connectedAccount),
       fetchXenBalance(window.connectedAccount)
     ]);
-    console.log('[WALLET-BALANCE] Balances fetched (wei):', { nativeBal, xenBal });
+    walletBalanceLog('[WALLET-BALANCE] Balances fetched (wei):', { nativeBal, xenBal });
 
     // Update native token display
     if (nativeBalance) {
@@ -422,7 +429,7 @@ async function updateWalletBalanceDisplay() {
       xenUsd.textContent = formatUSD(xenUsdValue);
     }
 
-    console.debug('[WALLET-BALANCE] Updated:', {
+    walletBalanceLog('[WALLET-BALANCE] Updated:', {
       native: formatBalance(nativeBal),
       nativeUSD: formatUSD(calculateUSD(nativeBal, nativePrice)),
       xen: formatBalance(xenBal),
@@ -437,25 +444,25 @@ async function updateWalletBalanceDisplay() {
 
 // Initialize wallet balance display
 function initWalletBalanceDisplay() {
-  console.debug('[WALLET-BALANCE] Initializing display...');
+  walletBalanceLog('[WALLET-BALANCE] Initializing display...');
 
   // Attach refresh button handler
   const refreshBtn = document.getElementById('refreshBalancesBtn');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => {
-      console.debug('[WALLET-BALANCE] Manual refresh triggered');
+      walletBalanceLog('[WALLET-BALANCE] Manual refresh triggered');
       updateWalletBalanceDisplay();
     });
   }
 
   // Listen for wallet connection events from main_app.js
   document.addEventListener('walletConnected', () => {
-    console.debug('[WALLET-BALANCE] Wallet connected event received');
+    walletBalanceLog('[WALLET-BALANCE] Wallet connected event received');
     updateWalletBalanceDisplay();
   });
 
   document.addEventListener('walletDisconnected', () => {
-    console.debug('[WALLET-BALANCE] Wallet disconnected event received');
+    walletBalanceLog('[WALLET-BALANCE] Wallet disconnected event received');
     const card = document.getElementById('walletBalanceCard');
     if (card) card.style.display = 'none';
   });
@@ -467,7 +474,7 @@ function initWalletBalanceDisplay() {
       originalUpdate();
       setTimeout(() => {
         if (window.connectedAccount) {
-          console.debug('[WALLET-BALANCE] Updating after wallet connection');
+          walletBalanceLog('[WALLET-BALANCE] Updating after wallet connection');
           updateWalletBalanceDisplay();
         }
       }, 100);
@@ -482,7 +489,7 @@ function initWalletBalanceDisplay() {
         if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
           const isActive = mintTab.classList.contains('active');
           if (isActive && window.connectedAccount) {
-            console.debug('[WALLET-BALANCE] Tab became active, updating display');
+            walletBalanceLog('[WALLET-BALANCE] Tab became active, updating display');
             updateWalletBalanceDisplay();
           }
         }
@@ -494,10 +501,10 @@ function initWalletBalanceDisplay() {
 
   // Poll for wallet connection (fallback mechanism)
   let lastConnectedAccount = null;
-  setInterval(() => {
+  const pollWalletState = () => {
     if (window.connectedAccount !== lastConnectedAccount) {
       lastConnectedAccount = window.connectedAccount;
-      console.debug('[WALLET-BALANCE] Wallet state changed:', window.connectedAccount ? 'Connected' : 'Disconnected');
+      walletBalanceLog('[WALLET-BALANCE] Wallet state changed:', window.connectedAccount ? 'Connected' : 'Disconnected');
       if (window.connectedAccount) {
         const mintTab = document.getElementById('tab-mint');
         if (mintTab && mintTab.classList.contains('active')) {
@@ -508,28 +515,38 @@ function initWalletBalanceDisplay() {
         if (card) card.style.display = 'none';
       }
     }
-  }, 1000);
+  };
+
+  if (window.wenxen?.backgroundJobs) {
+    window.wenxen.backgroundJobs.start('walletStatePoll', pollWalletState, 1000, {
+      immediate: false,
+      lowPriority: true,
+      skipWhenHidden: true
+    });
+  } else {
+    setInterval(pollWalletState, 1000);
+  }
 
   // Initial update if wallet is already connected
   setTimeout(() => {
     if (window.connectedAccount) {
-      console.debug('[WALLET-BALANCE] Initial update with connected account:', window.connectedAccount);
+      walletBalanceLog('[WALLET-BALANCE] Initial update with connected account:', window.connectedAccount);
       updateWalletBalanceDisplay();
     } else {
-      console.debug('[WALLET-BALANCE] No wallet connected yet');
+      walletBalanceLog('[WALLET-BALANCE] No wallet connected yet');
     }
   }, 500);
 
-  console.debug('[WALLET-BALANCE] Display initialized');
+  walletBalanceLog('[WALLET-BALANCE] Display initialized');
 }
 
 // Initialize on DOM ready
-console.log('[WALLET-BALANCE] Script loaded, readyState:', document.readyState);
+walletBalanceLog('[WALLET-BALANCE] Script loaded, readyState:', document.readyState);
 if (document.readyState === 'loading') {
-  console.log('[WALLET-BALANCE] Waiting for DOMContentLoaded...');
+  walletBalanceLog('[WALLET-BALANCE] Waiting for DOMContentLoaded...');
   document.addEventListener('DOMContentLoaded', initWalletBalanceDisplay);
 } else {
-  console.log('[WALLET-BALANCE] DOM already ready, initializing now...');
+  walletBalanceLog('[WALLET-BALANCE] DOM already ready, initializing now...');
   initWalletBalanceDisplay();
 }
 
@@ -537,8 +554,8 @@ if (document.readyState === 'loading') {
 window.updateWalletBalanceDisplay = updateWalletBalanceDisplay;
 
 // Log that script is fully loaded
-console.log('[WALLET-BALANCE] Script fully loaded and exposed to window');
-console.log('[WALLET-BALANCE] Available functions:', {
+walletBalanceLog('[WALLET-BALANCE] Script fully loaded and exposed to window');
+walletBalanceLog('[WALLET-BALANCE] Available functions:', {
   updateWalletBalanceDisplay: typeof window.updateWalletBalanceDisplay,
   CHAIN_CURRENCY_SYMBOLS: typeof CHAIN_CURRENCY_SYMBOLS
 });
@@ -566,5 +583,5 @@ window.debugShowBalanceCard = function() {
   });
 };
 
-console.log('[WALLET-BALANCE] Debug function available: window.debugShowBalanceCard()');
-console.log('[WALLET-BALANCE] Manual update available: window.updateWalletBalanceDisplay()');
+walletBalanceLog('[WALLET-BALANCE] Debug function available: window.debugShowBalanceCard()');
+walletBalanceLog('[WALLET-BALANCE] Manual update available: window.updateWalletBalanceDisplay()');

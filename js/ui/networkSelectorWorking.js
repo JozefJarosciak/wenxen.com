@@ -1,11 +1,17 @@
 // Working Network Selector - Final Version
 import { chainManager, SUPPORTED_CHAINS } from '../config/chainConfig.js';
 
+const NETWORK_SELECTOR_DEBUG = false;
+const debugLog = (...args) => {
+  if (NETWORK_SELECTOR_DEBUG || window.DEBUG_NETWORK_SELECTOR) console.log(...args);
+};
+
 class NetworkSelectorUI {
   constructor() {
     this.isOpen = false;
     this.selectorBtn = null;
     this.dropdown = null;
+    this.initialized = false;
   }
 
   async initialize() {
@@ -26,6 +32,11 @@ class NetworkSelectorUI {
       console.error('NetworkSelector: Required elements not found');
       return;
     }
+
+    if (this.initialized) {
+      this.updateDisplay();
+      return;
+    }
     
     // Elements found, setting up
     
@@ -37,7 +48,7 @@ class NetworkSelectorUI {
     
     // Listen for chain changes
     chainManager.onChainChange(() => {
-      console.log('NetworkSelector: Chain changed, updating display');
+      debugLog('NetworkSelector: Chain changed, updating display');
       this.updateDisplay();
     });
     
@@ -49,6 +60,7 @@ class NetworkSelectorUI {
     }
     
     // Initialization complete
+    this.initialized = true;
   }
   
   setupEventHandlers() {
@@ -107,7 +119,7 @@ class NetworkSelectorUI {
     const currentChain = chainManager.getCurrentChain();
     
     if (targetChain && targetChain !== currentChain) {
-      console.log(`NetworkSelector: User selected ${targetChain} (current: ${currentChain})`);
+      debugLog(`NetworkSelector: User selected ${targetChain} (current: ${currentChain})`);
       
       // Close dropdown first
       this.closeDropdown();
@@ -123,7 +135,7 @@ class NetworkSelectorUI {
           
           if (walletChainIdNum !== targetChainId) {
             // Wallet is on different chain - prompt to switch wallet first
-            console.log(`Wallet on chain ${walletChainIdNum}, need to switch to ${targetChainId}`);
+            debugLog(`Wallet on chain ${walletChainIdNum}, need to switch to ${targetChainId}`);
             
             // Show the chain mismatch dialog but with reversed logic
             // We want to switch TO the target chain
@@ -131,19 +143,19 @@ class NetworkSelectorUI {
             
             if (switched) {
               // Wallet successfully switched, now switch the app
-              console.log('Wallet switched successfully, switching app chain');
+              debugLog('Wallet switched successfully, switching app chain');
               this.saveCurrentState();
               chainManager.setChain(targetChain);
               this.showSwitchingOverlay(targetChain);
               setTimeout(() => window.location.reload(), 500);
             } else {
               // User cancelled or switch failed - stay on current chain
-              console.log('Wallet switch cancelled or failed, staying on current chain');
+              debugLog('Wallet switch cancelled or failed, staying on current chain');
               this.updateDisplay(); // Refresh display to show current chain
             }
           } else {
             // Wallet already on target chain, just switch the app
-            console.log('Wallet already on target chain, switching app');
+            debugLog('Wallet already on target chain, switching app');
             this.saveCurrentState();
             chainManager.setChain(targetChain);
             this.showSwitchingOverlay(targetChain);
@@ -196,7 +208,7 @@ class NetworkSelectorUI {
     const chainKey = chainManager.getChainById(chainId);
     
     // Don't auto-sync - just update the network badge to show mismatch
-    console.log(`NetworkSelector: Wallet changed to chain ${chainId} (${chainKey || 'unsupported'})`);
+    debugLog(`NetworkSelector: Wallet changed to chain ${chainId} (${chainKey || 'unsupported'})`);
     
     // Update network badge to show wallet's chain if different
     if (typeof updateNetworkBadge === 'function') {
@@ -271,7 +283,12 @@ class NetworkSelectorUI {
     // Save RPCs
     const rpcInput = document.getElementById('customRPC');
     if (rpcInput?.value) {
-      const rpcList = rpcInput.value.trim().split('\n').filter(Boolean);
+      rpcInput.value = window.normalizeMultiLineValue
+        ? window.normalizeMultiLineValue(rpcInput.value, 'rpc')
+        : rpcInput.value.trim();
+      const rpcList = window.splitMultiLineValue
+        ? window.splitMultiLineValue(rpcInput.value, 'rpc')
+        : rpcInput.value.trim().split(/\s+|\n+/).filter(Boolean);
       // CRITICAL: Force save to current chain BEFORE switch happens
       chainManager.saveRPCEndpoints(rpcList, currentChain);
     }
@@ -279,6 +296,9 @@ class NetworkSelectorUI {
     // Save addresses
     const addressInput = document.getElementById('ethAddress');
     if (addressInput?.value) {
+      addressInput.value = window.normalizeMultiLineValue
+        ? window.normalizeMultiLineValue(addressInput.value, 'address')
+        : addressInput.value.trim();
       const key = chainManager.getStorageKey('ethAddress');
       localStorage.setItem(key, addressInput.value);
     }

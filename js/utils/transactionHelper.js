@@ -2,17 +2,79 @@
 // This module provides a simple wrapper for blockchain transactions with automatic rescan
 
 (function() {
+  function normalizeSubmittedTx(tx, hash = '') {
+    if (typeof tx === 'string') {
+      return {
+        transactionHash: tx,
+        hash: tx,
+        submitted: true,
+        pendingReceipt: true
+      };
+    }
+
+    const txHash = hash || tx?.transactionHash || tx?.hash || '';
+    if (!txHash) return tx || {};
+
+    return {
+      ...(tx || {}),
+      transactionHash: txHash,
+      hash: txHash,
+      submitted: true,
+      pendingReceipt: tx?.blockNumber == null
+    };
+  }
+
+  function waitForTransactionSubmission(txPromise) {
+    const canListen = txPromise && (typeof txPromise.once === 'function' || typeof txPromise.on === 'function');
+    if (!canListen) return Promise.resolve(txPromise);
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = tx => {
+        if (settled) return;
+        settled = true;
+        resolve(tx);
+      };
+      const fail = err => {
+        if (settled) return;
+        settled = true;
+        reject(err);
+      };
+      const listen = typeof txPromise.once === 'function'
+        ? txPromise.once.bind(txPromise)
+        : txPromise.on.bind(txPromise);
+
+      try {
+        listen('transactionHash', hash => settle(normalizeSubmittedTx(null, hash)));
+      } catch (_) {}
+      try {
+        listen('receipt', receipt => settle(normalizeSubmittedTx(receipt)));
+      } catch (_) {}
+      try {
+        listen('error', fail);
+      } catch (_) {}
+
+      // Keep consuming the underlying promise after an early tx-hash resolve so
+      // a later receipt/revert does not become an unhandled rejection.
+      Promise.resolve(txPromise)
+        .then(receipt => settle(normalizeSubmittedTx(receipt)))
+        .catch(fail);
+    });
+  }
+
   // Helper to execute transaction with auto-rescan
   async function executeWithAutoRescan(txPromise, txType, tokenId) {
     try {
-      const tx = await txPromise;
-      const txHash = tx.transactionHash || tx.hash;
+      const tx = await waitForTransactionSubmission(txPromise);
+      const txHash = tx?.transactionHash || tx?.hash;
       
       // Show toast if available
       if (typeof showToast === 'function') {
-        const message = tokenId 
-          ? `${txType} #${tokenId} submitted: ${txHash}`
-          : `${txType} submitted: ${txHash}`;
+        const message = txHash
+          ? (tokenId
+            ? `${txType} #${tokenId} submitted: ${txHash}`
+            : `${txType} submitted: ${txHash}`)
+          : `${txType} submitted`;
         showToast(message, "success");
       }
       
@@ -28,11 +90,6 @@
             scanBtn.click();
           }
         }, 6000);
-      }
-      
-      // Immediate UI refresh
-      if (typeof window.refreshUnified === 'function') {
-        window.refreshUnified().catch(() => {});
       }
       
       return tx;

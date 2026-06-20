@@ -6,6 +6,7 @@
     scheduled: false,
     enabled: false, // Disabled by default
     delay: 120000, // 2 minutes (120 seconds) default - Etherscan needs time to index
+    pendingTxs: new Set(),
 
     // Initialize from localStorage
     init() {
@@ -33,7 +34,13 @@
         return;
       }
 
-      if (this.scheduled) return; // Prevent multiple simultaneous rescans
+      const key = txHash || txType || String(Date.now());
+      this.pendingTxs.add(key);
+
+      if (this.scheduled) {
+        console.log(`[Auto-Rescan] Coalesced ${txType} into pending rescan (${this.pendingTxs.size} txs)`);
+        return;
+      }
 
       this.scheduled = true;
       const delaySeconds = Math.round(this.delay / 1000);
@@ -45,8 +52,10 @@
       }
 
       setTimeout(() => {
+        const pendingCount = this.pendingTxs.size;
+        this.pendingTxs.clear();
         this.scheduled = false;
-        this.triggerRescan(txType);
+        this.triggerRescan(`${txType}${pendingCount > 1 ? ` (${pendingCount} txs)` : ''}`);
       }, this.delay);
     },
 
@@ -91,11 +100,6 @@
 
         // Schedule auto-rescan (will check if enabled internally)
         this.scheduleRescan(txType, txHash);
-
-        // Immediate UI refresh
-        if (typeof window.refreshUnified === 'function') {
-          window.refreshUnified().catch(() => {});
-        }
 
         return tx;
       } catch (err) {

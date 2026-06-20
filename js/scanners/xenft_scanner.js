@@ -16,42 +16,20 @@ function getChainPrefix(chain) {
   return prefixMap[chain] || 'ETH';
 }
 
-// Fetch EndTorrent (bulkClaimMintReward) events for a user, with timestamps
-async function fetchEndTorrentActions(w3, user, fromBlock) {
-  const c = new w3.eth.Contract(window.xenftAbi, CONTRACT_ADDRESS);
-  const evs = await c.getPastEvents("EndTorrent", {
-    filter: { user },
-    fromBlock: Number(fromBlock || 0),
-    toBlock: "latest",
-  });
-
-  const actions = [];
-  for (const ev of evs) {
-    let ts = 0;
-    try {
-      const b = await w3.eth.getBlock(ev.blockNumber);
-      ts = Number(b?.timestamp || 0);
-    } catch {}
-    actions.push({
-      type: "bulkClaimMintReward",
-      tokenId: String(ev.returnValues.tokenId),
-      to: ev.returnValues.to,
-      hash: ev.transactionHash,      // IMPORTANT: 'hash' is what the table expects
-      timeStamp: ts,
-      blockNumber: ev.blockNumber,
-    });
-  }
-  return actions;
-}
-
-
 (function(){
-  // Get chain-specific contract address
-  const CONTRACT_ADDRESS = window.chainManager?.getContractAddress('XENFT_TORRENT') || 
-    window.appConfig?.contracts?.XENFT_TORRENT || 
-    "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
-  const DEFAULT_RPC = window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 
-    window.appConfig?.rpc?.DEFAULT_RPC || 
+  const XENFT_DEBUG = false;
+  const debugLog = (...args) => {
+    if (XENFT_DEBUG || window.DEBUG_XENFT) console.log(...args);
+  };
+
+  const FALLBACK_CONTRACT_ADDRESS = "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
+  const getContractAddress = () =>
+    window.chainManager?.getContractAddress('XENFT_TORRENT') ||
+    window.appConfig?.contracts?.XENFT_TORRENT ||
+    FALLBACK_CONTRACT_ADDRESS;
+  const getDefaultRpc = () =>
+    window.chainManager?.getCurrentConfig?.()?.rpcUrls?.default ||
+    window.appConfig?.rpc?.DEFAULT_RPC ||
     "https://ethereum-rpc.publicnode.com";
 
 
@@ -99,47 +77,152 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   }
 
   // --- INDEXEDDB ---
+  const DB_VERSION = 5;
+
+  function ensureSummaryStores(db, tx) {
+    const createIndexedStore = (storeName, indexes = []) => {
+      let store = null;
+      if (!db.objectStoreNames.contains(storeName)) {
+        store = db.createObjectStore(storeName, { keyPath: "id" });
+      } else if (tx) {
+        try { store = tx.objectStore(storeName); } catch (_) {}
+      }
+      if (store) {
+        for (const [indexName, keyPath] of indexes) {
+          if (!store.indexNames.contains(indexName)) {
+            store.createIndex(indexName, keyPath, { unique: false });
+          }
+        }
+      }
+    };
+    createIndexedStore('summaryByType', [['byType', 'type']]);
+    createIndexedStore('summaryByStatus', [['byType', 'type'], ['byStatus', 'status']]);
+    createIndexedStore('summaryByDay', [['byDate', 'date'], ['byType', 'type']]);
+    createIndexedStore('summaryByOwner', [['byOwner', 'owner'], ['byType', 'type']]);
+    if (!db.objectStoreNames.contains('summaryMetadata')) {
+      db.createObjectStore('summaryMetadata', { keyPath: "id" });
+    }
+  }
+
   function openDB() {
     return new Promise((resolve, reject) => {
       // Get chain-specific database name
       const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-      const chainPrefix = getChainPrefix(currentChain);
-      const dbName = `${chainPrefix}_DB_Xenft`;
+      const dbName = window.chainManager?.getDatabaseName?.('xenft', currentChain) || `${getChainPrefix(currentChain)}_DB_Xenft`;
       
-      const request = indexedDB.open(dbName, 3);
+      const request = indexedDB.open(dbName, DB_VERSION);
       request.onupgradeneeded = event => {
         const db = event.target.result;
+        const tx = event.target.transaction;
         if (!db.objectStoreNames.contains("xenfts")) {
-          db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+          const store = db.createObjectStore("xenfts", { keyPath: "Xenft_id" });
+          store.createIndex("byTokenId", "tokenId", { unique: false });
+        } else if (tx) {
+          const store = tx.objectStore("xenfts");
+          if (!store.indexNames.contains("byTokenId")) {
+            store.createIndex("byTokenId", "tokenId", { unique: false });
+          }
         }
         if (!db.objectStoreNames.contains("scanState")) {
           db.createObjectStore("scanState", { keyPath: "address" });
         }
-        if (!db.objectStoreNames.contains("processProgress")) {
+        if (db.objectStoreNames.contains("processProgress") && tx) {
+          const progressStore = tx.objectStore("processProgress");
+          if (progressStore.keyPath !== "address") {
+            db.deleteObjectStore("processProgress");
+            db.createObjectStore("processProgress", { keyPath: "address" });
+          }
+        } else if (!db.objectStoreNames.contains("processProgress")) {
           db.createObjectStore("processProgress", { keyPath: "address" });
         }
+        ensureSummaryStores(db, tx);
       };
       request.onsuccess = e => resolve(e.target.result);
       request.onerror = e => reject(e.target.error);
     });
   }
+  function normalizeXenftRecord(xenft) {
+    if (!xenft || typeof xenft !== 'object') return xenft;
+    const tokenId = xenft.tokenId ?? xenft.Xenft_id ?? xenft.ID;
+    if (tokenId != null && tokenId !== '') xenft.tokenId = String(tokenId).replace(/^xenft_/, '');
+    if (!xenft.Xenft_id && xenft.tokenId) xenft.Xenft_id = String(xenft.tokenId);
+    return xenft;
+  }
   function save(db, xenft) {
+    normalizeXenftRecord(xenft);
     return new Promise((resolve, reject) => {
       const tx = db.transaction("xenfts", "readwrite");
       tx.objectStore("xenfts").put(xenft).onsuccess = () => resolve();
       tx.onerror = e => reject(e);
     });
   }
-  function getAll(db) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("xenfts", "readonly");
-      tx.objectStore("xenfts").getAll().onsuccess = e => resolve(e.target.result || []);
-      tx.onerror = e => reject(e);
-    });
+  async function getAll(db) {
+    const out = [];
+    let range = null;
+    const batchSize = 500;
+
+    while (true) {
+      const { rows, keys } = await new Promise((resolve, reject) => {
+        const tx = db.transaction("xenfts", "readonly");
+        const store = tx.objectStore("xenfts");
+        const rowsReq = store.getAll(range, batchSize);
+        const keysReq = store.getAllKeys(range, batchSize);
+        let rows = null;
+        let keys = null;
+        const finish = () => {
+          if (rows && keys) resolve({ rows, keys });
+        };
+        rowsReq.onsuccess = e => {
+          rows = e.target.result || [];
+          finish();
+        };
+        keysReq.onsuccess = e => {
+          keys = e.target.result || [];
+          finish();
+        };
+        rowsReq.onerror = e => reject(e.target.error);
+        keysReq.onerror = e => reject(e.target.error);
+      });
+
+      if (!rows.length) break;
+      out.push(...rows.map(row => normalizeXenftRecord(row)));
+      if (rows.length < batchSize || !keys.length) break;
+      range = IDBKeyRange.lowerBound(keys[keys.length - 1], true);
+      await (window.yieldToUi?.() || new Promise(resolve => setTimeout(resolve, 0)));
+    }
+
+    return out;
   }
   async function getByTokenId(db, tokenId) {
-    const all = await getAll(db);
-    return all.find(t => t.tokenId == tokenId || t.Xenft_id == tokenId);
+    const key = String(tokenId);
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("xenfts", "readonly");
+      const store = tx.objectStore("xenfts");
+      const req = store.indexNames.contains("byTokenId")
+        ? store.index("byTokenId").get(key)
+        : store.get(key);
+      req.onsuccess = e => resolve(e.target.result || null);
+      req.onerror = e => reject(e.target.error);
+    });
+  }
+  function getTokenMap(db) {
+    return new Promise((resolve, reject) => {
+      const map = new Map();
+      const tx = db.transaction("xenfts", "readonly");
+      const req = tx.objectStore("xenfts").openCursor();
+      req.onsuccess = e => {
+        const cursor = e.target.result;
+        if (!cursor) {
+          resolve(map);
+          return;
+        }
+        const row = normalizeXenftRecord(cursor.value);
+        const key = String(row?.tokenId || row?.Xenft_id || "");
+        if (key) map.set(key, row);
+        cursor.continue();
+      };
+      req.onerror = e => reject(e.target.error);
+    });
   }
 
   // --- SCAN STATE MANAGEMENT ---
@@ -195,37 +278,6 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     });
   }
 
-  // Process progress tracking for crash recovery
-  async function getProcessProgress(db, address) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("processProgress", "readonly");
-      tx.objectStore("processProgress").get(address.toLowerCase()).onsuccess = e => resolve(e.target.result || null);
-      tx.onerror = e => reject(e.target.error);
-    });
-  }
-
-  async function saveProcessProgress(db, address, lastProcessedTokenId, totalProcessed) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("processProgress", "readwrite");
-      const progress = {
-        address: address.toLowerCase(),
-        lastProcessedTokenId: String(lastProcessedTokenId),
-        totalProcessed: Number(totalProcessed) || 0,
-        updatedAt: Date.now()
-      };
-      tx.objectStore("processProgress").put(progress).onsuccess = () => resolve();
-      tx.onerror = e => reject(e.target.error);
-    });
-  }
-
-  async function clearProcessProgress(db, address) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("processProgress", "readwrite");
-      tx.objectStore("processProgress").delete(address.toLowerCase()).onsuccess = () => resolve();
-      tx.onerror = e => reject(e.target.error);
-    });
-  }
-
   // --- LOG SCAN (bulkClaimMintReward -> EndTorrent) ---
   async function fetchEndTorrentActions(w3OrRpcList, addr, fromBlock) {
     // If we get an array, try each RPC until one works
@@ -236,10 +288,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           const result = await fetchEndTorrentActionsWithW3(w3, addr, fromBlock, rpc);
           if (result !== null) return result;
         } catch (e) {
-          console.log(`RPC ${rpc} failed for events, trying next...`);
+          debugLog(`RPC ${rpc} failed for events, trying next...`);
         }
       }
-      console.log('No RPC could fetch EndTorrent events. Events not critical for display.');
+      debugLog('No RPC could fetch EndTorrent events. Events not critical for display.');
       return [];
     } else {
       // Single web3 instance
@@ -248,12 +300,12 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   }
   
   async function fetchEndTorrentActionsWithW3(w3, addr, fromBlock, rpcName) {
-    const c = new w3.eth.Contract(window.xenftAbi, CONTRACT_ADDRESS);
+    const c = new w3.eth.Contract(window.xenftAbi, getContractAddress());
     let latest;
     try {
       latest = await w3.eth.getBlockNumber();
     } catch (e) {
-      console.log(`RPC ${rpcName} can't get block number`);
+      debugLog(`RPC ${rpcName} can't get block number`);
       return null;
     }
     
@@ -263,7 +315,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     try {
       // Skip if range too large
       if (latest - start > 1000000) {
-        console.log('Range too large for EndTorrent events, skipping.');
+        debugLog('Range too large for EndTorrent events, skipping.');
         return [];
       }
       
@@ -288,12 +340,12 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           if (chunkError.message && (chunkError.message.includes('413') || chunkError.message.includes('range'))) {
             if (CHUNK_SIZE > 100) {
               CHUNK_SIZE = Math.floor(CHUNK_SIZE / 10); // Reduce chunk size
-              console.log(`Reducing chunk size to ${CHUNK_SIZE} blocks`);
+              debugLog(`Reducing chunk size to ${CHUNK_SIZE} blocks`);
               continue; // Retry same range with smaller chunk
             }
           }
           failedChunks++;
-          console.log(`RPC ${rpcName} failed chunk ${currentBlock}-${toBlock}`);
+          debugLog(`RPC ${rpcName} failed chunk ${currentBlock}-${toBlock}`);
           
           // This RPC doesn't work well, signal to try another
           if (failedChunks >= 2) {
@@ -304,9 +356,9 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         currentBlock = toBlock + 1;
       }
       
-      console.log(`RPC ${rpcName} fetched ${events.length} EndTorrent events`);
+      debugLog(`RPC ${rpcName} fetched ${events.length} EndTorrent events`);
     } catch (e) {
-      console.log(`RPC ${rpcName} doesn't support getPastEvents`);
+      debugLog(`RPC ${rpcName} doesn't support getPastEvents`);
       return null;
     }
     
@@ -385,9 +437,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
   // xenft_scanner.js — getWorkingContract
   async function getWorkingContract(rpcList) {
     // Get chain-specific XENFT contract address dynamically
-    const xenftAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') || 
-      window.appConfig?.contracts?.XENFT_TORRENT || 
-      "0x0a252663DBCc0b073063D6420a40319e438Cfa59";
+    const xenftAddress = getContractAddress();
     
     for (let i = 0; i < rpcList.length; i++) {
       const rpc = rpcList[i].trim();
@@ -466,13 +516,20 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     address = cleanHexAddr(address);
     return new Promise((resolve, reject) => {
       const tx = db.transaction('processProgress', 'readwrite');
-      const progress = {
-        address,
-        lastProcessedTxIndex: Number(lastProcessedTxIndex) || 0,
-        lastProcessedTxHash: String(lastProcessedTxHash || ""),
-        totalProcessed: Number(totalProcessed) || 0,
-        updatedAt: Date.now()
-      };
+      const progress = totalProcessed === undefined
+        ? {
+          address,
+          lastProcessedTokenId: String(lastProcessedTxIndex || ""),
+          totalProcessed: Number(lastProcessedTxHash) || 0,
+          updatedAt: Date.now()
+        }
+        : {
+          address,
+          lastProcessedTxIndex: Number(lastProcessedTxIndex) || 0,
+          lastProcessedTxHash: String(lastProcessedTxHash || ""),
+          totalProcessed: Number(totalProcessed) || 0,
+          updatedAt: Date.now()
+        };
       tx.objectStore('processProgress').put(progress).onsuccess = () => resolve();
       tx.onerror = e => reject(e.target.error);
     });
@@ -489,10 +546,18 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
   // --- Chunked XENFT transfer fetching with incremental scanning ---
   async function fetchXenftTransfersInRange(userAddress, apiKey, startBlock, endBlock) {
-    const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-    const contractAddr = window.chainManager?.getContractAddress('XENFT_TORRENT') ||
-      (currentChain === 'BASE' ? '0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6' : '0x0a252663DBCc0b073063D6420a40319e438Cfa59');
-    const chainId = window.chainManager?.getCurrentConfig()?.id || (currentChain === 'BASE' ? 8453 : 1);
+    const contractAddr = getContractAddress();
+    const chainId = window.chainManager?.getCurrentConfig()?.id || 1;
+
+    if (window.explorerApiClient?.fetchTokenNftTxs) {
+      return window.explorerApiClient.fetchTokenNftTxs({
+        address: userAddress,
+        contractAddress: contractAddr,
+        startBlock,
+        endBlock,
+        apiKey
+      });
+    }
 
     // Use Etherscan V2 multichain API for all chains
     const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=tokennfttx&contractaddress=${contractAddr}&address=${userAddress}&startblock=${startBlock}&endblock=${endBlock}&page=1&offset=10000&sort=asc&apikey=${apiKey}`;
@@ -562,26 +627,26 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       if (forceRescan) {
         await clearScanState(db, addr);
         await clearProcessProgress(db, addr);
-        console.log(`[XENFT] Force rescan - cleared all scan state for ${addr}`);
+        debugLog(`[XENFT] Force rescan - cleared all scan state for ${addr}`);
       }
 
       // Get scan state for incremental scanning
       const scanState = await getScanState(db, addr);
       const lastTransactionBlock = scanState?.lastTransactionBlock || 0;
-      console.log(`[XENFT] Scan state for ${addr}:`, scanState, 'lastTransactionBlock:', lastTransactionBlock);
+      debugLog(`[XENFT] Scan state for ${addr}:`, scanState, 'lastTransactionBlock:', lastTransactionBlock);
 
       // Get chain-specific deployment block
-      const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
-      console.log(`[XENFT] Deployment block for ${currentChain}:`, deploymentBlock);
+      const deploymentBlock = window.chainManager?.getDeploymentBlock?.('XENFT_TORRENT') || window.chainManager?.getXenDeploymentBlock?.() || 15704871;
+      debugLog(`[XENFT] Deployment block for ${currentChain}:`, deploymentBlock);
 
       // Use safety buffer approach: always rescan last 10k blocks (~1 day)
       const safeStartBlock = lastTransactionBlock > 0
         ? Math.max(lastTransactionBlock - SAFETY_BUFFER_BLOCKS, deploymentBlock)
         : deploymentBlock;
-      console.log(`[XENFT] Safe start block calculated:`, safeStartBlock, `(lastTxBlock: ${lastTransactionBlock}, buffer: ${SAFETY_BUFFER_BLOCKS} blocks)`);
+      debugLog(`[XENFT] Safe start block calculated:`, safeStartBlock, `(lastTxBlock: ${lastTransactionBlock}, buffer: ${SAFETY_BUFFER_BLOCKS} blocks)`);
 
       // Get current block using Web3 directly
-      const rpcEndpoints = window.chainManager?.getRPCEndpoints() || [DEFAULT_RPC];
+      const rpcEndpoints = window.chainManager?.getRPCEndpoints() || [getDefaultRpc()];
       let currentBlock;
 
       // Try to get current block from any working RPC
@@ -632,10 +697,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           window.progressUI.setStage(`Scanning blocks ${blockStart}-${blockEnd} (chunk ${chunkIndex}/${totalChunks})`, chunkIndex, totalChunks);
         }
 
-        console.log(`[XENFT] Fetching chunk ${chunkIndex}/${totalChunks}: blocks ${blockStart}-${blockEnd}`);
+        debugLog(`[XENFT] Fetching chunk ${chunkIndex}/${totalChunks}: blocks ${blockStart}-${blockEnd}`);
         try {
           const chunkTransfers = await fetchXenftTransfersInRange(addr, etherscanApiKey, blockStart, blockEnd);
-          console.log(`[XENFT] Chunk ${chunkIndex}/${totalChunks} returned ${chunkTransfers ? chunkTransfers.length : 0} transfers`);
+          debugLog(`[XENFT] Chunk ${chunkIndex}/${totalChunks} returned ${chunkTransfers ? chunkTransfers.length : 0} transfers`);
 
           if (chunkTransfers && chunkTransfers.length > 0) {
             allTransfers.push(...chunkTransfers);
@@ -695,7 +760,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       // IMPORTANT: If incremental scan found no new transfers, we still need to check
       // existing tokens in the database for status updates (like claims)
       if (tokenIds.length === 0 && !forceRescan) {
-        console.log(`[XENFT] No new transfers found - checking database for tokens needing refresh`);
+        debugLog(`[XENFT] No new transfers found - checking database for tokens needing refresh`);
         const existingTokens = await getAll(db);
         const now = Math.floor(Date.now() / 1000);
         const REFRESH_WINDOW_DAYS = 7;
@@ -721,10 +786,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           .map(t => t.tokenId || t.Xenft_id);
 
         if (tokensNeedingRefresh.length > 0) {
-          console.log(`[XENFT] Found ${tokensNeedingRefresh.length} tokens needing refresh (within 7 days of maturity or past maturity)`);
+          debugLog(`[XENFT] Found ${tokensNeedingRefresh.length} tokens needing refresh (within 7 days of maturity or past maturity)`);
           tokenIds = tokensNeedingRefresh;
         } else {
-          console.log(`[XENFT] No tokens need refreshing - all are either far future or already claimed`);
+          debugLog(`[XENFT] No tokens need refreshing - all are either far future or already claimed`);
         }
       }
 
@@ -753,14 +818,18 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
     const addressProgressText = document.getElementById("addressProgressText");
 
     // Uses same inputs UI as Cointool settings
-    const addressInput = (document.getElementById("ethAddress")?.value || "").trim();
-    if (!addressInput) { alert("Enter at least one Ethereum address (Settings)."); return; }
+    const addressEl = document.getElementById("ethAddress");
+    const rpcEl = document.getElementById("customRPC");
+    const addressInput = (window.normalizeMultiLineValue ? window.normalizeMultiLineValue(addressEl?.value || "", 'address') : (addressEl?.value || "")).trim();
+    if (addressEl) addressEl.value = addressInput;
+    if (!addressInput) { alert("Enter at least one wallet address in Settings."); return; }
 
-    const rpcInput = (document.getElementById("customRPC")?.value || DEFAULT_RPC).trim();
-    const rpcEndpoints = rpcInput.split("\n").map(s=>s.trim()).filter(Boolean);
+    const rpcInput = (window.normalizeMultiLineValue ? window.normalizeMultiLineValue(rpcEl?.value || getDefaultRpc(), 'rpc') : (rpcEl?.value || getDefaultRpc())).trim();
+    if (rpcEl) rpcEl.value = rpcInput;
+    const rpcEndpoints = window.splitMultiLineValue ? window.splitMultiLineValue(rpcInput, 'rpc') : rpcInput.split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);
     if (rpcEndpoints.length === 0) { alert("Enter at least one RPC endpoint."); return; }
 
-    const addresses = addressInput.split("\n").map(s=>s.trim()).filter(Boolean);
+    const addresses = window.splitMultiLineValue ? window.splitMultiLineValue(addressInput, 'address') : addressInput.split(/\s+|\n+/).map(s=>s.trim()).filter(Boolean);
 
     let contract;
     try { contract = await getWorkingContract(rpcEndpoints); }
@@ -786,7 +855,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         const etherscanApiKey = document.getElementById('etherscanApiKey')?.value?.trim();
         if (!etherscanApiKey) {
           console.error(`XENFT Scanner - Etherscan API key required for ${currentChain} scanning`);
-          alert(`Please add an Etherscan API key in Settings to scan ${currentChain} XENFTs`);
+          alert(`Please add an Etherscan Multichain API key in Settings to scan ${currentChain} XENFTs`);
           continue;
         }
 
@@ -832,7 +901,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         processProgress = await getProcessProgress(db, addr);
       } else {
         await clearProcessProgress(db, addr);
-        console.log(`[XENFT] Force rescan enabled - cleared process progress for ${addr}`);
+        debugLog(`[XENFT] Force rescan enabled - cleared process progress for ${addr}`);
       }
 
       let startFromIndex = 0;
@@ -840,20 +909,22 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         const resumeIndex = tokenIds.findIndex(id => String(id) === String(processProgress.lastProcessedTokenId));
         if (resumeIndex !== -1) {
           startFromIndex = resumeIndex + 1; // Start after the last processed token
-          console.log(`[XENFT] Resuming from token ${startFromIndex}/${tokenIds.length} (ID: ${processProgress.lastProcessedTokenId})`);
+          debugLog(`[XENFT] Resuming from token ${startFromIndex}/${tokenIds.length} (ID: ${processProgress.lastProcessedTokenId})`);
         }
       }
 
       const tokensToProcess = tokenIds.slice(startFromIndex);
+      const existingByTokenId = await getTokenMap(db);
       let processed = startFromIndex;
       let _startedAt = Date.now();
       let _lastUi = 0;
       for (const tokenId of tokensToProcess) {
         try {
-          const existing = await getByTokenId(db, tokenId);
+          const tokenKey = String(tokenId);
+          const existing = existingByTokenId.get(tokenKey) || await getByTokenId(db, tokenKey);
 
           // DEBUG: Track specific token
-          if (tokenId == 64010 || tokenId == 64091) {
+          if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
             console.log(`[XENFT DEBUG] ========== Processing Token ${tokenId} ==========`);
             console.log(`[XENFT DEBUG] Token ${tokenId} - Existing in DB:`, existing ? 'YES' : 'NO');
             if (existing) {
@@ -883,7 +954,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           const isFutureMaturing = existing ? (maturityTs > now) : false;
 
           // DEBUG: Track specific token
-          if (tokenId == 64010 || tokenId == 64091) {
+          if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
             console.log(`[XENFT DEBUG] Token ${tokenId} - Current timestamp:`, now);
             console.log(`[XENFT DEBUG] Token ${tokenId} - Maturity timestamp:`, maturityTs);
             console.log(`[XENFT DEBUG] Token ${tokenId} - Is redeemed (from DB):`, isRedeemed);
@@ -896,14 +967,14 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
             const daysUntilMaturity = (maturityTs - now) / (24 * 60 * 60);
             if (daysUntilMaturity > REFRESH_WINDOW_DAYS) {
               // DEBUG: Track specific token
-              if (tokenId == 64010 || tokenId == 64091) {
+              if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
                 console.log(`[XENFT DEBUG] Token ${tokenId} - SKIPPING: Future maturing (${daysUntilMaturity.toFixed(2)} days away)`);
               }
               // Skip tokens maturing more than 7 days in the future
               continue;
             } else {
               // DEBUG: Track specific token
-              if (tokenId == 64010 || tokenId == 64091) {
+              if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
                 console.log(`[XENFT DEBUG] Token ${tokenId} - Within 7 day window (${daysUntilMaturity.toFixed(2)} days), will refresh`);
               }
             }
@@ -916,7 +987,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           // This ensures we catch status changes like claiming
 
           // DEBUG: Track specific token
-          if (tokenId == 64010 || tokenId == 64091) {
+          if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
             console.log(`[XENFT DEBUG] Token ${tokenId} - Proceeding to fetch blockchain data...`);
           }
 
@@ -924,7 +995,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           
           // Get the correct contract address for the current chain
           const currentChain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
-          const xenftContractAddress = window.chainManager?.getContractAddress('XENFT_TORRENT') || CONTRACT_ADDRESS;
+          const xenftContractAddress = getContractAddress();
           console.log(`XENFT Scanner - Processing token ${tokenId} with contract ${xenftContractAddress}`);
           
           for (const rpc of rpcEndpoints) {
@@ -958,7 +1029,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               const mintInfo = decodeMintInfo(mintInfoRaw);
 
               // DEBUG: Track specific token
-              if (tokenId == 64010 || tokenId == 64091) {
+              if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
                 console.log(`[XENFT DEBUG] Token ${tokenId} - Blockchain mintInfo:`, mintInfo);
                 console.log(`[XENFT DEBUG] Token ${tokenId} - Blockchain redeemed value:`, mintInfo.redeemed);
               }
@@ -1021,7 +1092,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               if (!Array.isArray(detail.actions)) detail.actions = [];
 
               // DEBUG: Track specific token before saving
-              if (tokenId == 64010 || tokenId == 64091) {
+              if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
                 console.log(`[XENFT DEBUG] Token ${tokenId} - Saving to DB with detail:`, {
                   Xenft_id: detail.Xenft_id,
                   tokenId: detail.tokenId,
@@ -1032,9 +1103,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               }
 
               await save(db, detail);
+              existingByTokenId.set(String(detail.tokenId || detail.Xenft_id), detail);
 
               // DEBUG: Track specific token after saving
-              if (tokenId == 64010 || tokenId == 64091) {
+              if (XENFT_DEBUG && (tokenId == 64010 || tokenId == 64091)) {
                 const savedRecord = await getByTokenId(db, tokenId);
                 console.log(`[XENFT DEBUG] Token ${tokenId} - Verified DB record after save:`, {
                   Xenft_id: savedRecord?.Xenft_id,
@@ -1070,7 +1142,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
       // After processing all tokens for this address, scan for EndTorrent (claim) events
       try {
-        console.log(`[XENFT DEBUG] ========== Starting EndTorrent Event Scan for ${addr} ==========`);
+        debugLog(`[XENFT DEBUG] ========== Starting EndTorrent Event Scan for ${addr} ==========`);
         if (window.progressUI) {
           window.progressUI.setStage('Scanning for claim events...', 1, 1);
         }
@@ -1080,20 +1152,20 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
         const lastTransactionBlock = scanState?.lastTransactionBlock || 0;
 
         // Scan from deployment block or last transaction block (whichever is later)
-        const deploymentBlock = window.chainManager?.getXenDeploymentBlock() || 15704871;
+        const deploymentBlock = window.chainManager?.getDeploymentBlock?.('XENFT_TORRENT') || window.chainManager?.getXenDeploymentBlock?.() || 15704871;
         let startBlock = lastTransactionBlock > 0
           ? Math.max(lastTransactionBlock - 100000, deploymentBlock)  // Look back 100k blocks max
           : deploymentBlock;
 
-        console.log(`[XENFT DEBUG] EndTorrent scan - Starting from block:`, startBlock, `(deployment: ${deploymentBlock}, lastTx: ${lastTransactionBlock})`);
+        debugLog(`[XENFT DEBUG] EndTorrent scan - Starting from block:`, startBlock, `(deployment: ${deploymentBlock}, lastTx: ${lastTransactionBlock})`);
 
         // Try all RPCs for event fetching
         const actions = await fetchEndTorrentActions(rpcEndpoints, addr, startBlock);
-        console.log(`[XENFT] Found ${actions.length} EndTorrent (claim) events for ${addr}`);
+        debugLog(`[XENFT] Found ${actions.length} EndTorrent (claim) events for ${addr}`);
 
         // DEBUG: Log all claim events
         if (actions.length > 0) {
-          console.log(`[XENFT DEBUG] All claim events:`, actions);
+          debugLog(`[XENFT DEBUG] All claim events:`, actions);
         }
 
         if (actions.length) {
@@ -1103,18 +1175,18 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
           }, {});
 
           // DEBUG: Show which tokens have claim events
-          console.log(`[XENFT DEBUG] Tokens with claim events:`, Object.keys(byToken));
+          debugLog(`[XENFT DEBUG] Tokens with claim events:`, Object.keys(byToken));
 
           const rows = await getAll(db);
-          console.log(`[XENFT DEBUG] Total rows in DB for processing:`, rows.length);
+          debugLog(`[XENFT DEBUG] Total rows in DB for processing:`, rows.length);
 
           for (const row of rows) {
             if ((row.owner || "").toLowerCase() !== addr.toLowerCase()) continue;
-            const tid = String(row.Xenft_id || row.tokenId || "");
+            const tid = String(row.tokenId || row.Xenft_id || "");
             const acts = byToken[tid] || [];
 
             // DEBUG: Track specific tokens
-            if (tid == '64010' || tid == '64091') {
+            if (XENFT_DEBUG && (tid == '64010' || tid == '64091')) {
               console.log(`[XENFT DEBUG] Token ${tid} - Found in DB for event processing`);
               console.log(`[XENFT DEBUG] Token ${tid} - Has claim events:`, acts.length > 0);
               console.log(`[XENFT DEBUG] Token ${tid} - Events:`, acts);
@@ -1131,10 +1203,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
               // If there's a claim action, mark as redeemed
               if (acts.some(a => a.type === "bulkClaimMintReward")) {
                 row.redeemed = 1;
-                console.log(`[XENFT] Marking token ${tid} as claimed (redeemed=1)`);
+                debugLog(`[XENFT] Marking token ${tid} as claimed (redeemed=1)`);
 
                 // DEBUG: Track specific tokens
-                if (tid == '64010' || tid == '64091') {
+                if (XENFT_DEBUG && (tid == '64010' || tid == '64091')) {
                   console.log(`[XENFT DEBUG] Token ${tid} - SETTING REDEEMED = 1`);
                   console.log(`[XENFT DEBUG] Token ${tid} - About to save row:`, {
                     Xenft_id: row.Xenft_id,
@@ -1145,9 +1217,10 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
                 }
               }
               await save(db, row);
+              existingByTokenId.set(String(row.tokenId || row.Xenft_id), row);
 
               // DEBUG: Verify save for specific tokens
-              if (tid == '64010' || tid == '64091') {
+              if (XENFT_DEBUG && (tid == '64010' || tid == '64091')) {
                 const verifyRow = await getByTokenId(db, tid);
                 console.log(`[XENFT DEBUG] Token ${tid} - Verified after event save:`, {
                   Xenft_id: verifyRow?.Xenft_id,
@@ -1159,7 +1232,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
             }
           }
         }
-        console.log(`[XENFT DEBUG] ========== EndTorrent Event Scan Complete ==========`);
+        debugLog(`[XENFT DEBUG] ========== EndTorrent Event Scan Complete ==========`);
       } catch (e) {
         console.warn("[XENFT] EndTorrent event scan failed:", e);
         console.error("[XENFT DEBUG] Event scan error details:", e.stack);
@@ -1176,7 +1249,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
       const addr = addresses[i];
       await clearProcessProgress(db, addr);
     }
-    console.log(`[XENFT] Scan completed successfully for all addresses - cleared process progress`);
+    debugLog(`[XENFT] Scan completed successfully for all addresses - cleared process progress`);
 
     tokenProgressText.textContent = "Address scanning complete.";
     setTimeout(() => {
@@ -1196,7 +1269,7 @@ async function fetchEndTorrentActions(w3, user, fromBlock) {
 
   // Export
   window.xenft = {
-    CONTRACT_ADDRESS,
+    get CONTRACT_ADDRESS() { return getContractAddress(); },
     openDB,
     getAll,
     scan,

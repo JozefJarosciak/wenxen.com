@@ -6,8 +6,9 @@
 // Update UI labels based on current chain
 function updateChainSpecificLabels() {
   const currentChain = window.chainManager?.getCurrentChain() || 'ETHEREUM';
-  const chainName = currentChain === 'BASE' ? 'Base' : 'Ethereum';
-  const explorerName = currentChain === 'BASE' ? 'BaseScan' : 'Etherscan';
+  const chainConfig = window.chainManager?.getCurrentConfig?.() || {};
+  const chainName = chainConfig.name || currentChain;
+  const explorerName = chainConfig.explorer?.name || 'Explorer';
 
   if (!window.__rpcLastValuesByChain) {
     window.__rpcLastValuesByChain = {};
@@ -45,7 +46,9 @@ function updateChainSpecificLabels() {
   if (rpcTextarea && window.chainManager) {
     const actualChain = window.chainManager.getCurrentChain();
     const chainRPCs = window.chainManager.getRPCEndpoints();
-    const rpcString = chainRPCs.join('\n');
+    const rpcString = window.normalizeMultiLineValue
+      ? window.normalizeMultiLineValue(chainRPCs.join('\n'), 'rpc')
+      : chainRPCs.join('\n');
     rpcTextarea.value = rpcString;
     window.__setRpcLastValueForChain(actualChain, rpcString);
   }
@@ -269,14 +272,24 @@ async function updateXENTotalBadge(includeWalletBalances = true) {
   const badge = document.getElementById("estXenTotal");
   if (!badge || typeof cointoolTable === 'undefined' || !cointoolTable) return;
 
-  const activeData = cointoolTable.getData(); // Use all data, not just filtered
-  console.log(`[XEN Badge] Updating with ${activeData.length} total rows (all data), includeWalletBalances: ${includeWalletBalances}`);
+  // Check if "All" filter is active - if so, count ALL visible rows regardless of status
+  const activeChip = document.querySelector('.filter-chips .chip.active');
+  const isAllFilterActive = activeChip && (activeChip.dataset.filter === '' || !activeChip.dataset.filter);
+  const isMeaningfulFilterValue = value => {
+    const text = String(value ?? '').trim();
+    return text !== '' && text !== 'All';
+  };
+  const headerFilters = typeof cointoolTable.getHeaderFilters === 'function'
+    ? (cointoolTable.getHeaderFilters() || [])
+    : [];
+  const hasHeaderFilters = headerFilters.some(filter => isMeaningfulFilterValue(filter?.value));
+  const hasProgrammaticFilters = typeof cointoolTable.getFilters === 'function' && cointoolTable.getFilters().length > 0;
+  const activeData = isAllFilterActive && !hasHeaderFilters && !hasProgrammaticFilters
+    ? (cointoolTable.getData() || [])
+    : (cointoolTable.getData("active") || []);
+  console.log(`[XEN Badge] Updating with ${activeData.length} ${isAllFilterActive && !hasHeaderFilters && !hasProgrammaticFilters ? 'total' : 'filtered'} rows, includeWalletBalances: ${includeWalletBalances}`);
   let total = 0n;
   const addressBreakdown = {};
-
-  // Check if "All" filter is active - if so, count ALL visible rows regardless of status
-  const activeChip = document.querySelector('.chip.active');
-  const isAllFilterActive = activeChip && (activeChip.dataset.filter === '' || !activeChip.dataset.filter);
 
   // Process mint/stake data first
   let maturingCount = 0;

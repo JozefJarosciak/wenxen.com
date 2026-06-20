@@ -17,12 +17,30 @@ Everything runs **100% in your browser**, with no centralized servers, meaning y
     - XENFTs
     - XENFT Stakes
     - XEN stakes across supported chains
+    - Historical and future mints discovered from wallet addresses
 
 - ⚡ **On-Chain Actions** (directly in the interface)
     - Claim or create XENFTs
     - Claim or create Cointool mints
     - Claim or create XENFT Stakes
     - Batch-claim multiple Cointool mints at once
+    - Local submitted-state tracking for pending or wallet-queued claims
+
+- 📅 **Dashboard & Calendar**
+    - Month/day filtering for maturing, claimable, and historical mints
+    - Breakdown tables by mint type and address
+    - Progress bars for mint maturity and stake timelines
+    - CSV/JSON export for filtered table views
+
+- 🚀 **Large Wallet Performance**
+    - Browser-local IndexedDB storage with summary indexes
+    - Background processing for large mint histories
+    - Fast reloads for wallets with hundreds of thousands of mints
+
+- 🛠️ **Settings & Recovery**
+    - Per-chain addresses, API keys, custom RPCs, and RPC latency checks
+    - Compressed backup export/import for large local databases
+    - Chain-aware Cointool remint defaults and gas/network utilities
 
 *(Future updates will extend support to additional XEN-related contracts.)*
 
@@ -60,5 +78,5 @@ Everything runs **100% in your browser**, with no centralized servers, meaning y
 
 ## Built With
 
-Tabulator · Chart.js · ECharts · Flatpickr · Web3.js  
-Wallet connectivity via MetaMask & Rabby  
+Tabulator · Chart.js · ECharts · Flatpickr · Web3.js
+Wallet connectivity via MetaMask & Rabby

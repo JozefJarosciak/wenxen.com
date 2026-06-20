@@ -5,6 +5,9 @@ export class DangerZoneDropdown {
     this.descriptionDiv = null;
     this.currentChain = null;
     this.currentOptions = [];
+    this.initialized = false;
+    this.chainListenerAttached = false;
+    this.changeHandler = () => this.updateDescription();
   }
 
   initialize() {
@@ -15,18 +18,23 @@ export class DangerZoneDropdown {
       return;
     }
 
+    if (this.initialized) {
+      this.updateDropdown();
+      return;
+    }
+
     console.log('[Danger Zone] Initializing danger zone dropdown');
 
     // Update dropdown when chain changes
     this.updateDropdown();
 
     // Update description when selection changes
-    this.dropdown.addEventListener('change', () => {
-      this.updateDescription();
-    });
+    this.dropdown.removeEventListener('change', this.changeHandler);
+    this.dropdown.addEventListener('change', this.changeHandler);
 
     // Listen for chain changes via chainManager
-    if (window.chainManager) {
+    if (window.chainManager && !this.chainListenerAttached) {
+      this.chainListenerAttached = true;
       window.chainManager.onChainChange(() => {
         console.log('[Danger Zone] Chain changed, updating dropdown');
         this.updateDropdown();
@@ -37,13 +45,18 @@ export class DangerZoneDropdown {
       setTimeout(() => {
         if (window.chainManager) {
           console.log('[Danger Zone] ChainManager now available, setting up listener');
-          window.chainManager.onChainChange(() => {
-            console.log('[Danger Zone] Chain changed (delayed setup), updating dropdown');
-            this.updateDropdown();
-          });
+          if (!this.chainListenerAttached) {
+            this.chainListenerAttached = true;
+            window.chainManager.onChainChange(() => {
+              console.log('[Danger Zone] Chain changed (delayed setup), updating dropdown');
+              this.updateDropdown();
+            });
+          }
         }
       }, 1000);
     }
+
+    this.initialized = true;
   }
 
   updateDropdown() {
@@ -60,9 +73,8 @@ export class DangerZoneDropdown {
     }
     this.currentChain = chain;
 
-    const isEthereum = chain === 'ETHEREUM';
-    const chainName = isEthereum ? 'Ethereum' : 'Base';
-    const prefix = isEthereum ? 'ETH_' : 'BASE_';
+    const chainName = window.chainManager?.getCurrentConfig?.()?.name || chain;
+    const prefix = window.chainManager?.getDatabasePrefix?.(chain) || 'ETH';
 
     console.log(`[Danger Zone] Setting up dropdown for ${chainName} (prefix: ${prefix})`);
 
@@ -154,17 +166,3 @@ export class DangerZoneDropdown {
 
 // Create and export singleton
 export const dangerZoneDropdown = new DangerZoneDropdown();
-
-// Auto-initialize when DOM is ready
-if (typeof window !== 'undefined') {
-  const initDropdown = () => {
-    dangerZoneDropdown.initialize();
-  };
-  
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initDropdown);
-  } else {
-    // DOM already loaded
-    setTimeout(initDropdown, 100);
-  }
-}
