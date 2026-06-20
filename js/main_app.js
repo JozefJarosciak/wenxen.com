@@ -2790,7 +2790,7 @@ function getActionableIdsForRow(rowData){
   // reports any matured stake as actionable, masking the Claimed status.
   if (rowData?.SourceType === 'Stake' || rowData?.SourceType === 'Stake XENFT') {
     const acts = Array.isArray(rowData.Actions) ? rowData.Actions : [];
-    const hasWithdraw = acts.some(a => a && a.type === 'withdraw');
+    const hasWithdraw = acts.some(a => a && (a.type === 'withdraw' || a.type === 'endStake'));
     if (hasWithdraw || Number(rowData.redeemed) === 1) return [];
     const nowSec = Math.floor(Date.now() / 1000);
     const maturityTs = Number(rowData.Maturity_Timestamp || rowData.maturityTs || 0);
@@ -5548,6 +5548,14 @@ function populateTable(mints) {
 
           if (isLegacyCointoolRow(rowData) && live === 'Unknown') {
             return 'Needs Rescan';
+          }
+
+          if (String(rowData.SourceType || '') === 'Stake XENFT') {
+            if (live === 'Claimed') return 'Claimed';
+            if (live !== 'Claimable') return live;
+            if (!ownsRow) return 'Claimable';
+            if (localSubmission?.allSubmitted) return formatLocalClaimSubmissionStatus(localSubmission);
+            return `<span class="claim-button" title="Click to end Stake XENFT #${rowData.Mint_id_Start}.">Claimable</span> ${formatManualClaimSubmissionButton()}`;
           }
 
           if (localSubmission) {

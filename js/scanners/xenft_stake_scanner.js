@@ -1,6 +1,6 @@
 // === Stake XENFTs module (Etherscan-Optimized with Incremental Scanning) ===========================
 // Scans the Stake XENFT contract and stores rows in IndexedDB.
-// Exposes window.xenftStake = { CONTRACT_ADDRESS, openDB, getAll, scan }.
+// Exposes window.xenftStake = { CONTRACT_ADDRESS, openDB, getAll, scan, reconcile }.
 //
 // Key behavior per user request:
 //   • Uses incremental scanning (resume from last block) for speed.
@@ -703,14 +703,19 @@
     }, 1200);
   }
 
-  async function reconcile(addresses = getAddressesFromSettings()) {
-    const list = Array.isArray(addresses) ? addresses : [addresses];
+  async function reconcile(addresses) {
+    const configured = addresses === undefined ? getAddressesFromSettings() : addresses;
+    let list = Array.isArray(configured) ? configured : [configured];
     const w3 = newWeb3();
     const db = await openDB();
     const contractAddr = getContractAddress();
     const c = new w3.eth.Contract(window.xenftStakeAbi, contractAddr);
     let changed = 0;
     try {
+      if (!list.filter(Boolean).length) {
+        const rows = await getAll(db);
+        list = Array.from(new Set(rows.map(row => cleanHexAddr(row?.owner)).filter(Boolean)));
+      }
       for (const address of list.filter(Boolean)) {
         changed += await reconcileStoredRowsForAddress(db, w3, c, address);
       }

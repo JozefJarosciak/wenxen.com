@@ -1791,6 +1791,22 @@ function setMaturityHeaderFilterFromDate(dt) {
     if (!window.xenftStake || typeof window.xenftStake.getAll !== "function") return [];
     let db = null;
     try {
+      if (typeof window.xenftStake.reconcile === "function") {
+        const now = Date.now();
+        if (!window.__xenftStakeReconcilePromise && (!window.__xenftStakeReconcileAt || now - window.__xenftStakeReconcileAt > 120000)) {
+          window.__xenftStakeReconcilePromise = window.xenftStake.reconcile()
+            .then(result => {
+              window.__xenftStakeReconcileAt = Date.now();
+              return result;
+            })
+            .catch(error => {
+              console.warn("Stake XENFT reconciliation failed", error);
+              return 0;
+            })
+            .finally(() => { window.__xenftStakeReconcilePromise = null; });
+        }
+        if (window.__xenftStakeReconcilePromise) await window.__xenftStakeReconcilePromise;
+      }
       db = await window.xenftStake.openDB();
       var rows = await window.xenftStake.getAll(db);
       if (Array.isArray(rows)) {
