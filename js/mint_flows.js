@@ -6,6 +6,11 @@
 const getXenAddress = () => window.chainManager?.getContractAddress('XEN_CRYPTO') || '0x06450dEe7FD2Fb8E39061434BAbCFC05599a6Fb8';
 const getDefaultRPC = () => window.chainManager?.getCurrentConfig()?.rpcUrls?.default || 'https://ethereum-rpc.publicnode.com';
 const getChainStorageKey = (baseKey) => window.chainManager?.getStorageKey?.(baseKey) || `ETHEREUM_${baseKey}`;
+const XEN_WEI = 1000000000000000000n;
+const XEN_APY_START = 20;
+const XEN_APY_END = 2;
+const XEN_APY_DAYS_STEP = 90;
+const XEN_SECONDS_IN_DAY = 86400;
 
 // fmtTs function now provided by js/utils/dateUtils.js module
 
@@ -40,12 +45,14 @@ function updateStakeTermPreview() {
   const termDays = Math.min(1000, Math.max(1, parseInt(document.getElementById('stakeTermDays').value || '1', 10)));
   const el = document.getElementById('stakeDatePreview');
   if (el) el.textContent = formatTermDate(termDays);
+  updateStakeCalculator();
 }
 
 function updateStakeXenftTermPreview() {
   const termDays = Math.min(1000, Math.max(1, parseInt(document.getElementById('stakeXenftTermDays').value || '1', 10)));
   const el = document.getElementById('stakeXenftDatePreview');
   if (el) el.textContent = formatTermDate(termDays);
+  updateStakeCalculator();
 }
 
 // Stake XENFT helper functions
@@ -124,6 +131,7 @@ function updateStakeXenftStartEnabled() {
   }
   
   if (btn) btn.disabled = !ok;
+  updateStakeCalculator();
 }
 
 function roundStakeXenftAmountFieldToWhole() {
@@ -135,6 +143,7 @@ function roundStakeXenftAmountFieldToWhole() {
   if (!Number.isFinite(n)) return;
   const rounded = Math.floor(n);
   el.value = String(Math.max(0, rounded));
+  updateStakeCalculator();
 }
 
 function attachStakeXenftPercentHandlers() {
@@ -155,6 +164,7 @@ function attachStakeXenftPercentHandlers() {
     if (amountEl) amountEl.value = rounded;
     console.debug('[STAKE-XENFT] Percent click set amount to', pct + '% =', rounded, 'XEN');
     updateStakeXenftStartEnabled();
+    updateStakeCalculator();
   });
 }
 
@@ -516,6 +526,7 @@ function updateStakeStartEnabled(){
   }
   
   if (btn) btn.disabled = !ok;
+  updateStakeCalculator();
 }
 
 async function prefillStakeAmountFromBalance(showAlert){
@@ -576,6 +587,7 @@ function attachStakePercentHandlers(){
     if (amountEl) amountEl.value = rounded;
     console.debug('[STAKE] Percent click set amount to', pct + '% =', rounded, 'XEN');
     updateStakeStartEnabled();
+    updateStakeCalculator();
   });
 }
 
@@ -588,6 +600,171 @@ function roundStakeAmountFieldToWhole(){
   if (!Number.isFinite(n)) return;
   const rounded = Math.floor(n);
   el.value = String(Math.max(0, rounded));
+  updateStakeCalculator();
+}
+
+function parseXenAmountToWei(value) {
+  const clean = String(value || '').replace(/,/g, '').trim();
+  if (!clean || clean === '.' || !/^\d*(?:\.\d*)?$/.test(clean)) return null;
+  const parts = clean.split('.');
+  const whole = parts[0] || '0';
+  const frac = (parts[1] || '').slice(0, 18).padEnd(18, '0');
+  try {
+    return BigInt(whole) * XEN_WEI + BigInt(frac || '0');
+  } catch (_) {
+    return null;
+  }
+}
+
+function groupDigits(value) {
+  return String(value || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function formatXenWei(wei, maxDecimals = 0) {
+  if (wei == null) return '0';
+  let amount = BigInt(wei);
+  const sign = amount < 0n ? '-' : '';
+  if (amount < 0n) amount = -amount;
+  const whole = amount / XEN_WEI;
+  const frac = amount % XEN_WEI;
+  if (maxDecimals <= 0) return sign + groupDigits(whole.toString());
+  const fracText = frac.toString().padStart(18, '0').slice(0, maxDecimals).replace(/0+$/, '');
+  return sign + groupDigits(whole.toString()) + (fracText ? `.${fracText}` : '');
+}
+
+function weiToDisplayNumber(wei) {
+  if (wei == null) return 0;
+  const amount = BigInt(wei);
+  const sign = amount < 0n ? -1 : 1;
+  const abs = amount < 0n ? -amount : amount;
+  return sign * (Number(abs / XEN_WEI) + Number(abs % XEN_WEI) / 1e18);
+}
+
+function formatStakeUsd(wei) {
+  const price = getStakeCalculatorXenPrice();
+  if (!price) return 'Price unavailable';
+  const amount = weiToDisplayNumber(wei);
+  if (!Number.isFinite(amount)) return 'Price unavailable';
+  if (typeof window.formatUSD === 'function') return window.formatUSD(amount * price);
+  return (amount * price).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+}
+
+function getStakeCalculatorXenPrice() {
+  try {
+    if (typeof xenUsdPrice === 'number' && xenUsdPrice > 0) return xenUsdPrice;
+  } catch (_) {}
+  if (typeof window.xenUsdPrice === 'number' && window.xenUsdPrice > 0) return window.xenUsdPrice;
+  const chain = window.chainManager?.getCurrentChain?.() || 'ETHEREUM';
+  const candidates = [
+    `${chain}_xenPrice`,
+    `${chain}_xenUsdPrice`,
+    'xenPrice',
+    'xenUsdPrice'
+  ];
+  for (const key of candidates) {
+    const value = Number(localStorage.getItem(key));
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return null;
+}
+
+function getStakeCalculatorChainConfig() {
+  return window.chainManager?.getCurrentConfig?.() || null;
+}
+
+function getStakeCalculatorGenesisTs() {
+  const config = getStakeCalculatorChainConfig();
+  const configured = Number(config?.constants?.XEN_GENESIS_TIMESTAMP || 0);
+  return Number.isFinite(configured) && configured > 0 ? configured : 1665250163;
+}
+
+function calculateXenStakeApy(nowSec = Math.floor(Date.now() / 1000)) {
+  const genesisTs = getStakeCalculatorGenesisTs();
+  const elapsed = Math.max(0, nowSec - genesisTs);
+  const stepSec = XEN_APY_DAYS_STEP * XEN_SECONDS_IN_DAY;
+  const decrease = Math.floor(elapsed / stepSec);
+  const apy = Math.max(XEN_APY_END, XEN_APY_START - decrease);
+  const nextDropTs = apy <= XEN_APY_END ? null : genesisTs + (decrease + 1) * stepSec;
+  return { apy, genesisTs, nextDropTs };
+}
+
+function calculateXenStakeRewardWei(amountWei, apy, termDays) {
+  if (!amountWei || amountWei <= 0n || !Number.isFinite(apy) || !Number.isFinite(termDays)) return 0n;
+  const rate = (BigInt(apy) * BigInt(termDays) * 1000000n) / 365n;
+  return (amountWei * rate) / 100000000n;
+}
+
+function formatStakeCalculatorDate(date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function formatStakeCalculatorTs(ts) {
+  if (!Number.isFinite(ts) || ts <= 0) return '-';
+  return formatStakeCalculatorDate(new Date(ts * 1000));
+}
+
+function getStakeCalculatorMode() {
+  const action = document.getElementById('mintAction')?.value || 'mint';
+  if (action !== 'stake' && action !== 'stake-xenft') return null;
+  return action;
+}
+
+function getStakeCalculatorInputs(mode) {
+  const amountId = mode === 'stake-xenft' ? 'stakeXenftAmount' : 'stakeAmount';
+  const termId = mode === 'stake-xenft' ? 'stakeXenftTermDays' : 'stakeTermDays';
+  const amountRaw = document.getElementById(amountId)?.value || '';
+  const parsedTerm = parseInt(document.getElementById(termId)?.value || '1', 10);
+  const termDays = Math.max(1, Math.min(1000, Number.isFinite(parsedTerm) ? parsedTerm : 1));
+  return {
+    amountRaw,
+    amountWei: parseXenAmountToWei(amountRaw) || 0n,
+    termDays
+  };
+}
+
+function updateStakeCalculator() {
+  const calc = document.getElementById('stakeCalculator');
+  const mode = getStakeCalculatorMode();
+  if (!calc || !mode) {
+    if (calc) calc.style.display = 'none';
+    return;
+  }
+
+  const { amountWei, termDays } = getStakeCalculatorInputs(mode);
+  const { apy, nextDropTs } = calculateXenStakeApy();
+  const rewardWei = calculateXenStakeRewardWei(amountWei, apy, termDays);
+  const endDate = new Date(Date.now() + termDays * XEN_SECONDS_IN_DAY * 1000);
+  const chainName = getStakeCalculatorChainConfig()?.name || 'Ethereum';
+  const roiHundredths = amountWei > 0n ? ((rewardWei * 10000n) + (amountWei / 2n)) / amountWei : 0n;
+  const roi = (Number(roiHundredths) / 100).toFixed(2) + '%';
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  calc.style.display = 'block';
+  setText('stakeCalcMode', mode === 'stake-xenft' ? 'Mint Stake XENFT' : 'Stake XEN');
+  setText('stakeCalcYield', `${formatXenWei(rewardWei, 0)} XEN`);
+  setText('stakeCalcYieldValue', formatStakeUsd(rewardWei));
+  setText('stakeCalcRoi', roi);
+  setText('stakeCalcChain', chainName);
+  setText('stakeCalcTerm', String(termDays));
+  setText('stakeCalcEndDate', formatStakeCalculatorDate(endDate));
+  setText('stakeCalcAmount', `${formatXenWei(amountWei, 0)} XEN`);
+  setText('stakeCalcAmountValue', formatStakeUsd(amountWei));
+  setText('stakeCalcApy', `${apy}%`);
+
+  const daysToDrop = nextDropTs ? Math.max(0, Math.floor((nextDropTs - Math.floor(Date.now() / 1000)) / XEN_SECONDS_IN_DAY)) : null;
+  const apyNote = nextDropTs
+    ? `Current ${chainName} APY: ${apy}% (Drops in ${daysToDrop} day${daysToDrop === 1 ? '' : 's'} on ${formatStakeCalculatorTs(nextDropTs)})`
+    : `Current ${chainName} APY: ${apy}% (minimum APY reached)`;
+  setText('stakeCalcApyDrop', apyNote);
 }
 
 
@@ -786,6 +963,7 @@ async function startMintingFlow(){
       
       if (showStake) prefillStakeAmountFromBalance();
       if (showStakeXenft) prefillStakeXenftAmountFromBalance();
+      updateStakeCalculator();
     };
     if (sel) { sel.addEventListener('change', onChange); onChange(); }
   })();
@@ -796,6 +974,11 @@ async function startMintingFlow(){
   window.updateMintStartEnabled = updateMintStartEnabled;
   window.updateStakeStartEnabled = updateStakeStartEnabled;
   window.updateStakeXenftStartEnabled = updateStakeXenftStartEnabled;
+  window.updateStakeCalculator = updateStakeCalculator;
   window.updateWalletActionState = updateWalletActionState;
+  if (window.chainManager?.onChainChange) {
+    window.chainManager.onChainChange(() => setTimeout(updateStakeCalculator, 0));
+  }
   updateWalletActionState();
+  updateStakeCalculator();
 })();

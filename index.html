@@ -641,6 +641,54 @@
       <button id="startStakeXenftBtn" class="btn-mint">Mint Stake XENFT</button>
       <div id="stakeXenftConnectHint" class="muted mint-inline-hint">Connect your wallet to mint.</div>
     </div>
+
+    <section id="stakeCalculator" class="stake-calculator" aria-live="polite">
+      <div class="stake-calculator-header">
+        <h3>XEN Stake Calculator</h3>
+        <span id="stakeCalcMode" class="stake-calculator-mode">Stake XEN</span>
+      </div>
+      <div class="stake-calculator-metrics">
+        <div class="stake-calculator-metric">
+          <span>Yield</span>
+          <strong id="stakeCalcYield">0 XEN</strong>
+        </div>
+        <div class="stake-calculator-metric">
+          <span>Yield Value</span>
+          <strong id="stakeCalcYieldValue">-</strong>
+        </div>
+        <div class="stake-calculator-metric">
+          <span>ROI</span>
+          <strong id="stakeCalcRoi">0.00%</strong>
+        </div>
+      </div>
+      <div class="stake-calculator-details">
+        <div>
+          <span>Selected Blockchain</span>
+          <strong id="stakeCalcChain">Ethereum</strong>
+        </div>
+        <div>
+          <span>Stake Duration (1-1,000 days)</span>
+          <strong><span id="stakeCalcTerm">1</span> days</strong>
+        </div>
+        <div>
+          <span>End Date</span>
+          <strong id="stakeCalcEndDate">-</strong>
+        </div>
+        <div>
+          <span>Amount of XEN to Stake</span>
+          <strong id="stakeCalcAmount">0 XEN</strong>
+        </div>
+        <div>
+          <span>Value</span>
+          <strong id="stakeCalcAmountValue">-</strong>
+        </div>
+        <div>
+          <span>APY (2-20%)</span>
+          <strong id="stakeCalcApy">-</strong>
+        </div>
+      </div>
+      <div id="stakeCalcApyDrop" class="stake-calculator-note"></div>
+    </section>
   </section>
 
   <!-- XEN Stats Tab -->

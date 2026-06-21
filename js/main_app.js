@@ -2434,6 +2434,7 @@ async function fetchXenUsdPrice(){
   if (window._xenTooltipRefresh) {
     window._xenTooltipRefresh();
   }
+  try { window.updateStakeCalculator?.(); } catch {}
   updateXenPriceStatus();
   try { updateVmuChart(); } catch {}
 

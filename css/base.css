@@ -1608,7 +1608,8 @@ body.dark-mode #tab-settings .button-like:hover {
 #stakeXenftControls,
 #stakeXenftPercentOptions,
 #stakeXenftActions,
-#stakeXenftConnectHint {
+#stakeXenftConnectHint,
+#stakeCalculator {
   display: none;
 }
 
@@ -1667,6 +1668,90 @@ body.dark-mode #tab-settings .button-like:hover {
   font-size: 0.85em;
   padding: 0 4px;
   opacity: 0.9;
+}
+
+.stake-calculator {
+  max-width: 720px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--border, #374151);
+  border-radius: 8px;
+  background: var(--panel, #111827);
+}
+
+.stake-calculator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stake-calculator-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.stake-calculator-mode {
+  color: var(--muted, #9ca3af);
+  font-size: 0.85rem;
+}
+
+.stake-calculator-metrics,
+.stake-calculator-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stake-calculator-metric,
+.stake-calculator-details > div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: var(--input-bg, rgba(15, 23, 42, 0.45));
+}
+
+.stake-calculator-details {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.stake-calculator-metric > span,
+.stake-calculator-details > div > span {
+  display: block;
+  color: var(--muted, #9ca3af);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.stake-calculator strong {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.stake-calculator-metric strong {
+  color: #22c55e;
+}
+
+.stake-calculator-note {
+  margin-top: 10px;
+  color: var(--muted, #9ca3af);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .stake-calculator-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stake-calculator-metrics,
+  .stake-calculator-details {
+    grid-template-columns: 1fr;
+  }
 }
 
 
