@@ -54,22 +54,46 @@ function getAllChainDatabaseNames() {
   return getSupportedChainKeys().flatMap(chain => Object.values(getDatabaseNamesForChain(chain)));
 }
 
+function postTaskYield(resolve) {
+  if (typeof MessageChannel === 'function') {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      try { channel.port1.close(); } catch (_) {}
+      try { channel.port2.close(); } catch (_) {}
+      resolve();
+    };
+    channel.port2.postMessage(0);
+    return;
+  }
+  setTimeout(resolve, 0);
+}
+
 function yieldToUi() {
   return new Promise(resolve => {
+    // requestIdleCallback can starve in hidden tabs. Scans use this helper
+    // as a cooperative yield, so use a normal task when Chrome backgrounds us.
+    if (document.hidden) {
+      postTaskYield(resolve);
+      return;
+    }
     if (typeof requestIdleCallback === 'function') {
       requestIdleCallback(() => resolve(), { timeout: 50 });
     } else {
-      setTimeout(resolve, 0);
+      postTaskYield(resolve);
     }
   });
 }
 
 function waitForNextPaint() {
   return new Promise(resolve => {
+    if (document.hidden) {
+      postTaskYield(resolve);
+      return;
+    }
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => requestAnimationFrame(resolve));
     } else {
-      setTimeout(resolve, 0);
+      postTaskYield(resolve);
     }
   });
 }

@@ -100,6 +100,32 @@
     return { fmt: dt.toFormat('yyyy LLL dd, hh:mm a'), key: dt.toFormat('yyyy-MM-dd') };
   }
 
+  function scanTaskYield() {
+    if (typeof window.yieldToUi === 'function') return window.yieldToUi();
+    return new Promise(resolve => {
+      if (typeof MessageChannel === 'function') {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+          try { channel.port1.close(); } catch (_) {}
+          try { channel.port2.close(); } catch (_) {}
+          resolve();
+        };
+        channel.port2.postMessage(0);
+        return;
+      }
+      setTimeout(resolve, 0);
+    });
+  }
+
+  function scanDelay(ms) {
+    const delay = Math.max(0, Number(ms) || 0);
+    if (delay === 0) return scanTaskYield();
+    // Hidden Chrome tabs clamp short timers to much larger waits. These tiny
+    // waits are only cooperative pacing, not RPC cooldowns, so keep scans moving.
+    if (document.hidden && delay <= 125) return scanTaskYield();
+    return new Promise(resolve => setTimeout(resolve, delay));
+  }
+
   function classifyInnerData(dataHex) {
     const s = lc(dataHex);
     if (!s) return 'unknown';
@@ -788,7 +814,7 @@
       if (processed === 1 || processed % 5 === 0 || processed === txs.length) {
         ui?.setStage?.(`Cointool: processing tx ${processed}/${txs.length} (${updates.size} proxies updated)`, processed, txs.length);
         // Yield to the browser so the progress bar repaints.
-        await new Promise(r => setTimeout(r, 0));
+        await scanDelay(0);
       }
 
       const decoded = decodeCointoolTx(web3, tx, countersBySalt);
@@ -1072,13 +1098,13 @@
         if (probed === toVerify.length || Date.now() - lastLog > 300) {
           lastLog = Date.now();
           ui?.setStage?.(`Verifying proxy state ${probed}/${toVerify.length} (${corrections.size} corrections, ${pool.liveSize()}/${pool.size()} RPCs live)`, probed, toVerify.length);
-          await new Promise(r => setTimeout(r, 0));
+          await scanDelay(0);
         }
         // Always pace between batches so we don't burst into 429s.
         // Adaptive pacing: 50–250ms based on how stressed the pool looks.
         const stressed = pool.summary().some(p => p.failures > 2 && !p.banned);
         const delay = stressed ? 250 : 50;
-        await new Promise(r => setTimeout(r, delay + Math.floor(Math.random() * 50)));
+        await scanDelay(delay + Math.floor(Math.random() * 50));
         // If we lost too many RPCs, pause to give them a chance to recover.
         if (pool.liveSize() === 0) {
           console.warn('[COINTOOL] All RPCs cooling/banned — pausing 5s');
