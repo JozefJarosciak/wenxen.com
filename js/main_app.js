@@ -8563,6 +8563,11 @@ function updateCalendar() {
   });
 }
 
+window.addEventListener("wenxen:calendar-day-change", () => {
+  try { updateCalendar(); } catch (_) {}
+  try { window.cointoolTable?.refreshFilter?.(); } catch (_) {}
+});
+
 
 
 // --- *** NEW: WALLET CONNECTION & CLAIMING LOGIC *** ---

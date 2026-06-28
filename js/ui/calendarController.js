@@ -1,6 +1,10 @@
 (function () {
   let instance = null;
   let dateCounts = Object.create(null);
+  let lastTodayKey = "";
+  let dayRolloverTimer = null;
+  let autoSelectedToday = true;
+  let internalDateRefresh = false;
   let options = {
     firstDayOfWeek: 1,
     hideOtherMonthDays: true,
@@ -38,6 +42,25 @@
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
+  }
+
+  function getTodayKey() {
+    return buildDayKey(new Date());
+  }
+
+  function getNextLocalDayDelay() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(24, 0, 2, 0);
+    return Math.max(1000, next.getTime() - now.getTime());
+  }
+
+  function scheduleDayRolloverCheck() {
+    if (dayRolloverTimer) clearTimeout(dayRolloverTimer);
+    dayRolloverTimer = setTimeout(() => {
+      refreshTodayState("timer");
+      scheduleDayRolloverCheck();
+    }, getNextLocalDayDelay());
   }
 
   function fixHeader(fpInstance) {
@@ -86,10 +109,13 @@
     dayElem.style.overflow = "visible";
 
     dayElem.onclick = function () {
+      autoSelectedToday = false;
       callHandler("onDateClick", dayElem.dateObj || dt, instance);
     };
 
     const key = buildDayKey(dt);
+    dayElem.classList.toggle("today", key === getTodayKey());
+
     const count = dateCounts[key];
     if (!count) return;
 
@@ -114,10 +140,65 @@
 
     badge.addEventListener("click", function (event) {
       event.stopPropagation();
+      autoSelectedToday = false;
       callHandler("onDateClick", dayElem.dateObj || dt, instance);
     });
 
     dayElem.appendChild(badge);
+  }
+
+  function patchInstanceMethods(fp) {
+    if (!fp || fp.__wenxenCalendarPatched) return;
+
+    if (typeof fp.setDate === "function") {
+      const originalSetDate = fp.setDate.bind(fp);
+      fp.setDate = function (...args) {
+        if (!internalDateRefresh) autoSelectedToday = false;
+        return originalSetDate(...args);
+      };
+    }
+
+    if (typeof fp.clear === "function") {
+      const originalClear = fp.clear.bind(fp);
+      fp.clear = function (...args) {
+        if (!internalDateRefresh) autoSelectedToday = false;
+        return originalClear(...args);
+      };
+    }
+
+    fp.__wenxenCalendarPatched = true;
+  }
+
+  function refreshTodayState(reason, force) {
+    const todayKey = getTodayKey();
+    const changed = todayKey !== lastTodayKey;
+    if (!force && !changed) return false;
+
+    const previousKey = lastTodayKey;
+    lastTodayKey = todayKey;
+
+    const fp = instance;
+    if (fp) {
+      try { fp.now = new Date(); } catch (_) {}
+      if (autoSelectedToday && typeof fp.setDate === "function") {
+        internalDateRefresh = true;
+        try { fp.setDate(new Date(), false); } catch (_) {}
+        internalDateRefresh = false;
+      }
+      try { fp.redraw(); } catch (_) {}
+      fixHeader(fp);
+      syncGlobals();
+    }
+
+    if (changed && previousKey) {
+      try {
+        window.dispatchEvent(new CustomEvent("wenxen:calendar-day-change", {
+          detail: { previousKey, todayKey, reason: reason || "unknown" }
+        }));
+      } catch (_) {}
+    }
+
+    return changed;
   }
 
   function ensureInstance(nextOptions) {
@@ -137,6 +218,7 @@
       locale: { firstDayOfWeek: options.firstDayOfWeek },
       onDayCreate,
       onChange: function (selectedDates) {
+        if (!internalDateRefresh) autoSelectedToday = false;
         if (selectedDates && selectedDates.length) {
           callHandler("onDateChange", selectedDates[0], instance);
         } else {
@@ -159,6 +241,9 @@
       }
     });
 
+    patchInstanceMethods(instance);
+    lastTodayKey = getTodayKey();
+    scheduleDayRolloverCheck();
     syncGlobals();
     return instance;
   }
@@ -182,9 +267,15 @@
     init: ensureInstance,
     update,
     get: getInstance,
+    refreshTodayState(force) {
+      const changed = refreshTodayState("manual", force === true);
+      scheduleDayRolloverCheck();
+      return changed;
+    },
     redraw() {
       const fp = getInstance();
       if (!fp) return null;
+      refreshTodayState("redraw", false);
       try { fp.redraw(); } catch (_) {}
       fixHeader(fp);
       return fp;
@@ -206,6 +297,21 @@
   window.getActiveCalendar = function () {
     return api.get();
   };
+
+  window.addEventListener("focus", () => {
+    refreshTodayState("focus");
+    scheduleDayRolloverCheck();
+  });
+  window.addEventListener("pageshow", () => {
+    refreshTodayState("pageshow");
+    scheduleDayRolloverCheck();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      refreshTodayState("visibility");
+      scheduleDayRolloverCheck();
+    }
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => api.init(), { once: true });
