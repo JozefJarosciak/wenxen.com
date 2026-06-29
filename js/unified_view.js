@@ -2132,6 +2132,7 @@ function setMaturityHeaderFilterFromDate(dt) {
         } else {
           await window.cointoolTable.replaceData(merged);
         }
+        try { window.updateDashboardEmptyState?.(merged.length); } catch(_) {}
         window.wenxen?.perf?.set?.('lastTableApplyMs', Math.round((performance?.now?.() || Date.now()) - tableApplyStarted));
         window.wenxen?.perf?.set?.('totalUnifiedRowCount', merged.length);
         pendingCointoolChunkTableRows = null;
@@ -2199,6 +2200,7 @@ function setMaturityHeaderFilterFromDate(dt) {
     } else {
       await window.cointoolTable.replaceData(rows);
     }
+    try { window.updateDashboardEmptyState?.(Array.isArray(rows) ? rows.length : undefined); } catch(_) {}
     window.__cointoolChunkTableAppliedAt = Date.now();
     window.__cointoolChunkTableApplyDeferred = false;
     window.wenxen?.perf?.set?.('lastTableApplyMs', Math.round((performance?.now?.() || Date.now()) - applyStarted));

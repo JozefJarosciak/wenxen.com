@@ -963,6 +963,7 @@ async function applyTableRows(table, rows, options = {}) {
     } finally {
       if (options.suppressDerived) window.__suppressTableDerivedUpdates = previousSuppress;
     }
+    updateDashboardEmptyState(rows.length);
     if (!options.suppressDerived) {
       scheduleTableDerivedUpdates('table-replace', { badge: !!options.badge });
     }
@@ -1012,6 +1013,7 @@ async function applyTableRows(table, rows, options = {}) {
     }
   }
 
+  updateDashboardEmptyState(rows.length);
   scheduleTableDerivedUpdates('table-diff', { badge: !!options.badge });
 }
 
@@ -5290,15 +5292,44 @@ function getActiveCalendar() {
 
 // --- TABULATOR TABLE ---
 let cointoolTable;
+
+function getDashboardEmptyStateRowCount(rowCount) {
+  const explicitCount = Number(rowCount);
+  const counts = [];
+  if (Number.isFinite(explicitCount)) counts.push(explicitCount);
+  if (Array.isArray(window._allUnifiedRows)) counts.push(window._allUnifiedRows.length);
+
+  const table = window.cointoolTable || cointoolTable;
+  if (table) {
+    try {
+      if (typeof table.getDataCount === 'function') {
+        const tableCount = Number(table.getDataCount());
+        if (Number.isFinite(tableCount)) counts.push(tableCount);
+      }
+    } catch {}
+
+    if (typeof table.getData === 'function') {
+      for (const mode of ['all', 'active', undefined]) {
+        try {
+          const rows = mode === undefined ? table.getData() : table.getData(mode);
+          if (Array.isArray(rows)) counts.push(rows.length);
+        } catch {}
+      }
+    }
+  }
+
+  return counts.some(count => count > 0) ? Math.max(...counts) : 0;
+}
+
 function updateDashboardEmptyState(rowCount) {
   const emptyState = document.getElementById('dashboardEmptyState');
   if (!emptyState) return;
 
-  const count = Number.isFinite(rowCount)
-    ? rowCount
-    : (typeof cointoolTable?.getData === 'function' ? cointoolTable.getData('all').length : 0);
+  const count = getDashboardEmptyStateRowCount(rowCount);
   emptyState.hidden = count > 0;
 }
+
+window.updateDashboardEmptyState = updateDashboardEmptyState;
 
 function populateTable(mints) {
   const rowCount = Array.isArray(mints) ? mints.length : 0;
@@ -6072,8 +6103,14 @@ Total: ${fmtTok(totalTok)}${fmtUsd(totalTok)}`;
     scheduleNormalTableUpdates('dataFiltered', { badge: initialDataLoaded });
   });
   cointoolTable.on("renderComplete", () => scheduleNormalTableUpdates('renderComplete'));
-  cointoolTable.on("dataProcessed", () => scheduleNormalTableUpdates('dataProcessed'));
-  cointoolTable.on("dataLoaded", () => scheduleNormalTableUpdates('dataLoaded'));
+  cointoolTable.on("dataProcessed", () => {
+    updateDashboardEmptyState();
+    scheduleNormalTableUpdates('dataProcessed');
+  });
+  cointoolTable.on("dataLoaded", (data) => {
+    updateDashboardEmptyState(Array.isArray(data) ? data.length : undefined);
+    scheduleNormalTableUpdates('dataLoaded');
+  });
   cointoolTable.on("dataSorted", () => scheduleNormalTableUpdates('dataSorted'));
   try { cointoolTable.on("headerFilterChanged", () => scheduleNormalTableUpdates('headerFilterChanged', { badge: initialDataLoaded })); } catch {}
   try { cointoolTable.on("filterChanged", () => scheduleNormalTableUpdates('filterChanged', { badge: initialDataLoaded })); } catch {}
